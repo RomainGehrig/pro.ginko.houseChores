@@ -24,3 +24,14 @@ export function escapeHtml(str) {
   div.textContent = str
   return div.innerHTML
 }
+
+export function formatDateTime(ts) {
+  if (!ts) return 'n/a'
+  return new Date(ts).toLocaleString(undefined, {
+    weekday: 'short',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}

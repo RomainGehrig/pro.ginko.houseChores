@@ -11,3 +11,5 @@ export const listExecutionsByTask = async (taskId) => {
   const all = await freezr.query('taskExecutions', {}, { sort: { _date_modified: -1 } })
   return all.filter(e => e.taskId === taskId && e.outcome !== 'cancelled')
 }
+
+export const listAllExecutions = () => freezr.query('taskExecutions', {}, { sort: { _date_modified: -1 } })
