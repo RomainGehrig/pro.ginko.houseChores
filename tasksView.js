@@ -2,8 +2,9 @@ import { listAllTasks, createTask, updateTask } from './taskData.js'
 import { enrichTasks } from './aiEnrich.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
 import {
+  buildProposedTaskEditorModel,
   buildTaskEditorModel,
-  resolveSuggestedCategoryId,
+  resolveCategorySnapshotName,
   sanitizeLocationIds,
   selectableReferences,
   validateCategoryId
@@ -87,33 +88,30 @@ async function handleEnrich() {
 function renderProposed() {
   const container = document.getElementById('proposedCards')
   const snapshot = categoryLocationStore.getSnapshot()
-  const categories = selectableReferences(snapshot.categories)
-  const locations = selectableReferences(snapshot.locations)
   const proposed = tasksCache.filter(t => t.status === 'proposed')
   container.innerHTML = proposed.length
-    ? proposed.map(task => proposedCardHtml(task, categories, locations)).join('')
+    ? proposed.map(task => proposedCardHtml(task, snapshot)).join('')
     : '<p class="empty">No tasks awaiting review.</p>'
 }
 
-function proposedCardHtml(task, categories, locations) {
-  const categoryId = task.categoryId ||
-    resolveSuggestedCategoryId(task.suggestedCategory, categories) ||
-    resolveSuggestedCategoryId(task.category, categories)
+function proposedCardHtml(task, snapshot) {
+  const model = buildProposedTaskEditorModel(task, snapshot)
+  const categoryId = model.categoryId
   const duration = task.suggestedDuration || task.estimatedDuration || ''
   const recurrence = task.suggestedRecurrenceDays ?? task.recurrence ?? ''
-  const categoryOptions = categories.map(category =>
+  const categoryOptions = model.categoryOptions.map(category =>
     '<option value="' + escapeAttribute(category._id) + '"' +
       (category._id === categoryId ? ' selected' : '') + '>' +
-      escapeHtml(String(category.name)) + '</option>'
+      escapeHtml(String(category.name)) + referenceStateSuffix(category) + '</option>'
   ).join('')
-  const selectedLocationIds = new Set(task.locationIds || [])
-  const locationOptions = locations.length
-    ? locations.map(location =>
+  const selectedLocationIds = new Set(model.locationIds)
+  const locationOptions = model.locationOptions.length
+    ? model.locationOptions.map(location =>
         '<label class="task-location"><input class="f-location" name="locationIds" type="checkbox" value="' +
           escapeAttribute(location._id) + '"' + (selectedLocationIds.has(location._id) ? ' checked' : '') + '> ' +
-          escapeHtml(String(location.name)) + '</label>'
+          escapeHtml(String(location.name)) + referenceStateSuffix(location) + '</label>'
       ).join('')
-    : '<span class="empty">No active locations available.</span>'
+    : '<span class="empty">No locations available.</span>'
   return (
     '<div class="task-card" data-id="' + escapeAttribute(task._id) + '">' +
       '<div class="task-name">' + escapeHtml(task.name) + '</div>' +
@@ -124,6 +122,12 @@ function proposedCardHtml(task, categories, locations) {
       '<button class="approve-btn">Approve</button>' +
     '</div>'
   )
+}
+
+function referenceStateSuffix (reference) {
+  if (reference.status === 'archived') return ' (Archived)'
+  if (reference.unresolved) return ' (Unavailable)'
+  return ''
 }
 
 function renderActive() {
@@ -160,14 +164,15 @@ function taskEditorHtml(task, snapshot) {
   const categoryOptions = model.categoryOptions.map(category =>
     '<option value="' + escapeAttribute(category._id) + '"' +
       (category._id === model.categoryId ? ' selected' : '') + '>' +
-      escapeHtml(String(category.name)) + (category.status === 'archived' ? ' (Archived)' : '') + '</option>'
+      escapeHtml(String(category.name)) + referenceStateSuffix(category) + '</option>'
   ).join('')
   const locationOptions = model.locationOptions.length
     ? model.locationOptions.map(location =>
         '<label class="location-option"><input class="task-edit-location" name="locationIds" type="checkbox" value="' +
           escapeAttribute(location._id) + '"' + (selectedLocationIds.has(location._id) ? ' checked' : '') + '> ' +
           '<span>' + escapeHtml(String(location.name)) + '</span>' +
-          (location.status === 'archived' ? ' <span class="archived-badge">Archived</span>' : '') + '</label>'
+          (location.status === 'archived' ? ' <span class="archived-badge">Archived</span>' : '') +
+          (location.unresolved ? ' <span class="archived-badge">Unavailable</span>' : '') + '</label>'
       ).join('')
     : '<span class="empty">No locations available.</span>'
 
@@ -200,14 +205,13 @@ async function handleProposedClick(evt) {
   const selectedLocationIds = [...card.querySelectorAll('.f-location:checked')].map(input => input.value)
   const categoryId = validateCategoryId(selectedCategoryId, categories, task.categoryId)
   const locationIds = sanitizeLocationIds(selectedLocationIds, locations, task.locationIds || [])
-  const category = categories.find(item => item._id === categoryId) || null
   const duration = Number(card.querySelector('.f-duration').value) || null
   const recurrenceVal = card.querySelector('.f-recurrence').value
   const recurrence = recurrenceVal ? Number(recurrenceVal) : null
 
   await updateTask(id, {
     categoryId,
-    category: category?.name || null,
+    category: resolveCategorySnapshotName(task, categoryId, categories),
     locationIds,
     estimatedDuration: duration,
     recurrence,
@@ -266,7 +270,6 @@ async function handleActiveClick(evt) {
   const requestedLocationIds = [...card.querySelectorAll('.task-edit-location:checked')].map(input => input.value)
   const categoryId = validateCategoryId(requestedCategoryId, categories, task.categoryId)
   const locationIds = sanitizeLocationIds(requestedLocationIds, locations, task.locationIds || [])
-  const category = categories.find(item => item._id === categoryId) || null
   const errorElement = card.querySelector('.task-card-error')
   taskEditorError = ''
   errorElement.textContent = ''
@@ -274,7 +277,7 @@ async function handleActiveClick(evt) {
   try {
     await updateTask(id, {
       categoryId,
-      category: category?.name || null,
+      category: resolveCategorySnapshotName(task, categoryId, categories),
       locationIds
     })
   } catch (err) {

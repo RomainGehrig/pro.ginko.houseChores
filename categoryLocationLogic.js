@@ -113,6 +113,14 @@ export function resolveSuggestedCategoryId (suggestedName, categories) {
   return category?._id || null
 }
 
+export function resolveCategorySnapshotName (task, categoryId, categories) {
+  if (!categoryId) return null
+  const category = categories.find(item => item._id === categoryId)
+  if (category) return category.name
+  if (categoryId === task?.categoryId) return task?.category || null
+  return null
+}
+
 export function selectableReferences (records, existingIds = []) {
   const preservedIds = new Set(existingIds || [])
   return records
@@ -121,14 +129,19 @@ export function selectableReferences (records, existingIds = []) {
 }
 
 export function validateCategoryId (requestedId, categories, existingId = null) {
+  if (!requestedId) return null
+  if (requestedId === existingId) return requestedId
   const category = categories.find(item => item._id === requestedId)
   if (!category) return null
-  if (category.status !== 'archived' || requestedId === existingId) return requestedId
+  if (category.status !== 'archived') return requestedId
   return null
 }
 
 export function sanitizeLocationIds (requestedIds, locations, existingIds = []) {
-  const allowedIds = new Set(selectableReferences(locations, existingIds).map(location => location._id))
+  const allowedIds = new Set(selectableReferences(locations).map(location => location._id))
+  ;(existingIds || []).forEach(id => {
+    if (id) allowedIds.add(id)
+  })
   const seen = new Set()
   return (requestedIds || []).filter(id => {
     if (!allowedIds.has(id) || seen.has(id)) return false
@@ -148,9 +161,43 @@ export function buildTaskEditorModel (task, snapshot) {
   return {
     categoryId,
     locationIds,
-    categoryOptions: selectableReferences(categories, categoryId ? [categoryId] : []),
-    locationOptions: selectableReferences(locations, locationIds)
+    categoryOptions: assignmentOptions(
+      categories,
+      categoryId ? [categoryId] : [],
+      () => task?.category || 'Unknown category'
+    ),
+    locationOptions: assignmentOptions(locations, locationIds, () => 'Unknown location')
   }
+}
+
+export function buildProposedTaskEditorModel (task, snapshot) {
+  const model = buildTaskEditorModel(task, snapshot)
+  if (model.categoryId) return model
+
+  const categories = snapshot?.categories || []
+  return {
+    ...model,
+    categoryId: resolveSuggestedCategoryId(task?.suggestedCategory, categories) ||
+      resolveSuggestedCategoryId(task?.category, categories)
+  }
+}
+
+function assignmentOptions (records, assignedIds, unknownName) {
+  const options = selectableReferences(records, assignedIds)
+  const knownIds = new Set(records.map(record => record._id))
+  const seen = new Set(options.map(record => record._id))
+
+  ;(assignedIds || []).forEach(id => {
+    if (!id || knownIds.has(id) || seen.has(id)) return
+    seen.add(id)
+    options.push({
+      _id: id,
+      name: unknownName(id),
+      status: 'unknown',
+      unresolved: true
+    })
+  })
+  return options
 }
 
 function compareReferences (left, right) {

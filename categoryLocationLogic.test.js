@@ -4,6 +4,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  buildProposedTaskEditorModel,
   buildTaskEditorModel,
   DEFAULT_CATEGORIES,
   listMissingLegacyCategoryNames,
@@ -11,6 +12,7 @@ import {
   planDefaultCategories,
   planLegacyCategoryBackfills,
   prepareReferenceName,
+  resolveCategorySnapshotName,
   resolveReference,
   resolveSuggestedCategoryId,
   sanitizeLocationIds,
@@ -113,6 +115,26 @@ test('validates category and location assignments against active references', ()
   )
 })
 
+test('preserves unresolved current assignments until they are explicitly removed', () => {
+  assert.equal(validateCategoryId('missing-category', [], 'missing-category'), 'missing-category')
+  assert.equal(validateCategoryId(null, [], 'missing-category'), null)
+  assert.deepEqual(
+    sanitizeLocationIds(['missing-location'], [], ['missing-location']),
+    ['missing-location']
+  )
+  assert.deepEqual(sanitizeLocationIds([], [], ['missing-location']), [])
+})
+
+test('keeps the legacy category snapshot when its stable id is temporarily unresolved', () => {
+  const task = { categoryId: 'missing-category', category: 'Legacy fallback' }
+  assert.equal(resolveCategorySnapshotName(task, 'missing-category', []), 'Legacy fallback')
+  assert.equal(resolveCategorySnapshotName(task, null, []), null)
+  assert.equal(resolveCategorySnapshotName(task, 'renamed-category', [{
+    _id: 'renamed-category',
+    name: 'Current name'
+  }]), 'Current name')
+})
+
 test('resolves category suggestions only against active names', () => {
   const categories = [
     { _id: 'c-clean', name: 'Clean / Reset' },
@@ -163,10 +185,63 @@ test('builds active-task editor choices with assigned archived references only',
   const model = buildTaskEditorModel(task, { categories, locations })
 
   assert.equal(model.categoryId, 'archived-category')
-  assert.deepEqual(model.locationIds, ['active-location', 'archived-assigned'])
+  assert.deepEqual(model.locationIds, ['active-location', 'archived-assigned', 'missing-location'])
   assert.deepEqual(model.categoryOptions.map(item => item._id), ['active-category', 'archived-category'])
-  assert.deepEqual(model.locationOptions.map(item => item._id), ['active-location', 'archived-assigned'])
+  assert.deepEqual(model.locationOptions.map(item => item._id), ['active-location', 'archived-assigned', 'missing-location'])
+  assert.deepEqual(model.locationOptions.at(-1), {
+    _id: 'missing-location',
+    name: 'Unknown location',
+    status: 'unknown',
+    unresolved: true
+  })
   assert.deepEqual(task, originalTask)
   assert.deepEqual(categories, originalCategories)
   assert.deepEqual(locations, originalLocations)
+})
+
+test('normalizes missing task locationIds to an empty editor selection', () => {
+  assert.deepEqual(buildTaskEditorModel({ categoryId: null }, {
+    categories: [],
+    locations: []
+  }).locationIds, [])
+})
+
+test('builds proposed choices that retain archived and unresolved assignments', () => {
+  const archivedModel = buildProposedTaskEditorModel({
+    categoryId: 'archived-category',
+    category: 'Old category snapshot',
+    locationIds: ['archived-location']
+  }, {
+    categories: [
+      { _id: 'active-category', name: 'Current', status: 'active', displayOrder: 0 },
+      { _id: 'archived-category', name: 'Retired', status: 'archived', displayOrder: 1 }
+    ],
+    locations: [
+      { _id: 'active-location', name: 'Kitchen', status: 'active', displayOrder: 0 },
+      { _id: 'archived-location', name: 'Attic', status: 'archived', displayOrder: 1 }
+    ]
+  })
+  assert.equal(archivedModel.categoryId, 'archived-category')
+  assert.deepEqual(archivedModel.categoryOptions.map(item => item._id), ['active-category', 'archived-category'])
+  assert.deepEqual(archivedModel.locationOptions.map(item => item._id), ['active-location', 'archived-location'])
+
+  const degradedModel = buildProposedTaskEditorModel({
+    categoryId: 'missing-category',
+    category: 'Legacy fallback',
+    locationIds: ['missing-location']
+  }, { categories: [], locations: [] })
+  assert.equal(degradedModel.categoryId, 'missing-category')
+  assert.deepEqual(degradedModel.locationIds, ['missing-location'])
+  assert.deepEqual(degradedModel.categoryOptions, [{
+    _id: 'missing-category',
+    name: 'Legacy fallback',
+    status: 'unknown',
+    unresolved: true
+  }])
+  assert.deepEqual(degradedModel.locationOptions, [{
+    _id: 'missing-location',
+    name: 'Unknown location',
+    status: 'unknown',
+    unresolved: true
+  }])
 })
