@@ -27,7 +27,9 @@
     { "path": "doingView.js", "Description": "Renders the timer-based doing mode, records executions, and handles the early-finish filler-task offer." },
     { "path": "reviewView.js", "Description": "Renders the post-session review for correcting durations/ratings and suggesting updated duration estimates." },
     { "path": "historyLogic.js", "Description": "Pure functions joining sessions, executions and tasks into read-only history summaries." },
-    { "path": "historyView.js", "Description": "Renders the session history accordion and wires expand/collapse." }
+    { "path": "historyView.js", "Description": "Renders the session history accordion and wires expand/collapse." },
+    { "path": "categoryLocationLogic.js", "Description": "Pure rules for stable category and location references, seeding, migration, and assignment validation." },
+    { "path": "categoryLocationLogic.test.js", "Description": "Node tests covering category and location reference rules and legacy migration plans." }
   ],
   "app_tables": {
     "tasks": {
