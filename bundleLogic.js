@@ -24,6 +24,29 @@ export function buildBundle(tasks, budgetMinutes, categoryFilterId) {
   return bundle
 }
 
+export function buildBundleProposal (tasks, budgetMinutes, categoryFilterId, categories) {
+  const capturedCategoryId = categoryFilterId || null
+  const category = categories.find(item => item._id === capturedCategoryId)
+  return {
+    tasks: buildBundle(tasks, budgetMinutes, capturedCategoryId).map(task => ({ ...task })),
+    timeBudgetMinutes: budgetMinutes,
+    categoryFilterId: capturedCategoryId,
+    categoryFilter: category?.name || null
+  }
+}
+
+export function buildSessionDraft (proposal, startTime) {
+  return {
+    timeBudgetMinutes: proposal.timeBudgetMinutes,
+    categoryFilterId: proposal.categoryFilterId,
+    categoryFilter: proposal.categoryFilter,
+    taskBundle: proposal.tasks.map(task => task._id),
+    startTime,
+    endTime: null,
+    status: 'active'
+  }
+}
+
 export function findFillerTask(tasks, excludeIds, remainingMinutes, categoryFilterId) {
   const eligible = tasks.filter(t =>
     !excludeIds.includes(t._id) &&

@@ -1,5 +1,5 @@
 import { getActiveTasks } from './tasksView.js'
-import { buildBundle } from './bundleLogic.js'
+import { buildBundleProposal, buildSessionDraft } from './bundleLogic.js'
 import { createSession } from './sessionData.js'
 import { buildBundlePreviewHtml } from './taskPresentationLogic.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
@@ -10,7 +10,7 @@ import { startDoing } from './doingView.js'
 
 let selectedMinutes = null
 let selectedCategoryId = ''
-let currentBundle = []
+let currentProposal = null
 
 export function initSessionView() {
   document.querySelectorAll('.time-btn').forEach(btn => {
@@ -60,13 +60,19 @@ function handlePropose() {
     alert('Choose or enter a time budget first.')
     return
   }
-  currentBundle = buildBundle(getActiveTasks(), selectedMinutes, selectedCategoryId || null)
+  currentProposal = buildBundleProposal(
+    getActiveTasks(),
+    selectedMinutes,
+    selectedCategoryId || null,
+    selectableReferences(categoryLocationStore.getSnapshot().categories)
+  )
   renderBundlePreview()
 }
 
 function renderBundlePreview() {
   const preview = document.getElementById('bundlePreview')
   const startBtn = document.getElementById('startSessionBtn')
+  const currentBundle = currentProposal?.tasks || []
   if (!currentBundle.length) {
     preview.innerHTML = '<p class="empty">No tasks fit this time budget. Try a longer time or check your task list.</p>'
     startBtn.style.display = 'none'
@@ -77,24 +83,16 @@ function renderBundlePreview() {
 }
 
 async function handleStart() {
-  const selectedCategory = selectableReferences(categoryLocationStore.getSnapshot().categories)
-    .find(category => category._id === selectedCategoryId)
-  const session = await createSession({
-    timeBudgetMinutes: selectedMinutes,
-    categoryFilterId: selectedCategoryId || null,
-    categoryFilter: selectedCategory?.name || null,
-    taskBundle: currentBundle.map(t => t._id),
-    startTime: Date.now(),
-    endTime: null,
-    status: 'active'
-  })
+  if (!currentProposal?.tasks.length) return
+  const sessionDraft = buildSessionDraft(currentProposal, Date.now())
+  const session = await createSession(sessionDraft)
   state.currentSession = {
     _id: session._id,
-    timeBudgetMinutes: selectedMinutes,
-    categoryFilterId: selectedCategoryId || null,
-    categoryFilter: selectedCategory?.name || null
+    timeBudgetMinutes: currentProposal.timeBudgetMinutes,
+    categoryFilterId: currentProposal.categoryFilterId,
+    categoryFilter: currentProposal.categoryFilter
   }
-  state.currentBundle = currentBundle
+  state.currentBundle = [...currentProposal.tasks]
   state.currentBundleIndex = 0
   setNavVisible('doing', true)
   showView('doing')
