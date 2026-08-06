@@ -22,6 +22,7 @@
     { "path": "sessionData.js", "Description": "DB calls for the sessions collection." },
     { "path": "bundleLogic.js", "Description": "Pure functions that prioritize tasks and greedily build a time-boxed bundle." },
     { "path": "aiEnrich.js", "Description": "Calls the LLM to suggest category/duration/recurrence for new tasks, plus a duration-history heuristic." },
+    { "path": "aiEnrich.test.js", "Description": "Node tests covering dynamic AI enrichment prompt construction." },
     { "path": "tasksView.js", "Description": "Renders and wires the task list, add-task form, AI enrichment trigger, and approval flow." },
     { "path": "sessionView.js", "Description": "Renders and wires the time-budget/category picker and bundle proposal, then starts a session." },
     { "path": "doingView.js", "Description": "Renders the timer-based doing mode, records executions, and handles the early-finish filler-task offer." },
@@ -41,15 +42,15 @@
       "description": "Chores/admin tasks, from raw intake through approval and ongoing scheduling.",
       "schema": {
         "name": { "type": "String", "description": "Task name as entered by the user." },
-        "category": { "type": "String", "description": "Legacy category display name retained as a fallback during migration." },
-        "categoryId": { "type": "String", "description": "Stable _id of the assigned category, or null when unassigned." },
-        "locationIds": { "type": "Array", "description": "Distinct stable _ids of assigned locations; empty when unassigned." },
+        "category": { "type": "String", "description": "Compatibility snapshot of the assigned category name, retained for legacy consumers." },
+        "categoryId": { "type": "String", "description": "Stable _id of the approved category, initialized to null when unassigned." },
+        "locationIds": { "type": "Array", "description": "Distinct stable _ids of approved locations, initialized empty when unassigned." },
         "estimatedDuration": { "type": "String", "description": "Approved estimated duration in minutes (numeric)." },
         "recurrence": { "type": "String", "description": "Approved recurrence interval in days, or null for a one-off task (numeric)." },
         "lastCompletedDate": { "type": "String", "description": "Timestamp (ms) the task was last completed, or null." },
         "nextDueDate": { "type": "String", "description": "Timestamp (ms) the task is next due (numeric)." },
         "status": { "type": "String", "description": "One of: proposed, approved_recurring, active, archived." },
-        "suggestedCategory": { "type": "String", "description": "AI-suggested category, pending user approval." },
+        "suggestedCategory": { "type": "String", "description": "AI-suggested active category name, pending user approval." },
         "suggestedDuration": { "type": "String", "description": "AI-suggested duration in minutes, pending user approval (numeric)." },
         "suggestedRecurrenceDays": { "type": "String", "description": "AI-suggested recurrence in days, pending user approval (numeric)." }
       }

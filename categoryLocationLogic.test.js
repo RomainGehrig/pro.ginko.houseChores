@@ -11,6 +11,7 @@ import {
   planLegacyCategoryBackfills,
   prepareReferenceName,
   resolveReference,
+  resolveSuggestedCategoryId,
   sanitizeLocationIds,
   selectableReferences,
   validateCategoryId
@@ -109,4 +110,15 @@ test('validates category and location assignments against active references', ()
     ),
     ['active-location', 'archived-assigned']
   )
+})
+
+test('resolves category suggestions only against active names', () => {
+  const categories = [
+    { _id: 'c-clean', name: 'Clean / Reset', status: 'active' },
+    { _id: 'c-old', name: 'Old category', status: 'archived' }
+  ]
+
+  assert.equal(resolveSuggestedCategoryId(' clean / RESET ', categories), 'c-clean')
+  assert.equal(resolveSuggestedCategoryId('Old category', categories), null)
+  assert.equal(resolveSuggestedCategoryId('Invented category', categories), null)
 })

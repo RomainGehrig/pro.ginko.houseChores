@@ -3,6 +3,8 @@ export const listAllTasks = () => freezr.query('tasks', {}, { sort: { _date_modi
 export const createTask = (name) => freezr.create('tasks', {
   name,
   category: null,
+  categoryId: null,
+  locationIds: [],
   estimatedDuration: null,
   recurrence: null,
   lastCompletedDate: null,

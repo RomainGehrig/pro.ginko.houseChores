@@ -105,6 +105,15 @@ export function resolveReference (records, id, legacyName, unknownLabel) {
   }
 }
 
+export function resolveSuggestedCategoryId (suggestedName, categories) {
+  const normalizedName = normalizeReferenceName(suggestedName)
+  const category = categories.find(item =>
+    item.status === 'active' &&
+    (item.normalizedName || normalizeReferenceName(item.name)) === normalizedName
+  )
+  return category?._id || null
+}
+
 export function selectableReferences (records, existingIds = []) {
   const preservedIds = new Set(existingIds || [])
   return records
