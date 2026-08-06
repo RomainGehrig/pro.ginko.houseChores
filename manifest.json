@@ -29,14 +29,19 @@
     { "path": "historyLogic.js", "Description": "Pure functions joining sessions, executions and tasks into read-only history summaries." },
     { "path": "historyView.js", "Description": "Renders the session history accordion and wires expand/collapse." },
     { "path": "categoryLocationLogic.js", "Description": "Pure rules for stable category and location references, seeding, migration, and assignment validation." },
-    { "path": "categoryLocationLogic.test.js", "Description": "Node tests covering category and location reference rules and legacy migration plans." }
+    { "path": "categoryLocationLogic.test.js", "Description": "Node tests covering category and location reference rules and legacy migration plans." },
+    { "path": "categoryLocationData.js", "Description": "DB calls for user-managed category and location reference collections." },
+    { "path": "categoryLocationStore.js", "Description": "Loads, seeds, and migrates category/location references before dependent views render." },
+    { "path": "categoryLocationStore.test.js", "Description": "Node tests covering idempotent reference initialization and degraded data loading." }
   ],
   "app_tables": {
     "tasks": {
       "description": "Chores/admin tasks, from raw intake through approval and ongoing scheduling.",
       "schema": {
         "name": { "type": "String", "description": "Task name as entered by the user." },
-        "category": { "type": "String", "description": "Approved category (one of the fixed category list)." },
+        "category": { "type": "String", "description": "Legacy category display name retained as a fallback during migration." },
+        "categoryId": { "type": "String", "description": "Stable _id of the assigned category, or null when unassigned." },
+        "locationIds": { "type": "Array", "description": "Distinct stable _ids of assigned locations; empty when unassigned." },
         "estimatedDuration": { "type": "String", "description": "Approved estimated duration in minutes (numeric)." },
         "recurrence": { "type": "String", "description": "Approved recurrence interval in days, or null for a one-off task (numeric)." },
         "lastCompletedDate": { "type": "String", "description": "Timestamp (ms) the task was last completed, or null." },
@@ -45,6 +50,25 @@
         "suggestedCategory": { "type": "String", "description": "AI-suggested category, pending user approval." },
         "suggestedDuration": { "type": "String", "description": "AI-suggested duration in minutes, pending user approval (numeric)." },
         "suggestedRecurrenceDays": { "type": "String", "description": "AI-suggested recurrence in days, pending user approval (numeric)." }
+      }
+    },
+    "categories": {
+      "description": "User-managed task categories, including seeded defaults and archived values.",
+      "schema": {
+        "name": { "type": "String", "description": "Trimmed category display name." },
+        "normalizedName": { "type": "String", "description": "Lowercase whitespace-normalized category uniqueness key." },
+        "status": { "type": "String", "description": "One of: active, archived." },
+        "displayOrder": { "type": "String", "description": "Numeric ordering value; newly added records append." },
+        "seedKey": { "type": "String", "description": "Stable built-in default key, or null for custom categories." }
+      }
+    },
+    "locations": {
+      "description": "User-managed flat location references for task assignments.",
+      "schema": {
+        "name": { "type": "String", "description": "Trimmed location display name." },
+        "normalizedName": { "type": "String", "description": "Lowercase whitespace-normalized location uniqueness key." },
+        "status": { "type": "String", "description": "One of: active, archived." },
+        "displayOrder": { "type": "String", "description": "Numeric ordering value; newly added records append." }
       }
     },
     "taskExecutions": {
