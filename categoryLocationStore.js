@@ -7,6 +7,7 @@ import {
   listMissingLegacyCategoryNames,
   planDefaultCategories,
   planLegacyCategoryBackfills,
+  prepareReferenceName,
   selectableReferences
 } from './categoryLocationLogic.js'
 
@@ -17,6 +18,20 @@ const sortReferences = records => selectableReferences(records, records.map(reco
 export function createCategoryLocationStore ({ referenceData, taskData }) {
   let state = { categories: [], locations: [], initialized: false, error: null }
   const listeners = new Set()
+  const kinds = {
+    category: {
+      key: 'categories',
+      list: referenceData.listCategories,
+      create: referenceData.createCategory,
+      update: referenceData.updateCategory
+    },
+    location: {
+      key: 'locations',
+      list: referenceData.listLocations,
+      create: referenceData.createLocation,
+      update: referenceData.updateLocation
+    }
+  }
 
   const publish = () => {
     state = {
@@ -35,6 +50,38 @@ export function createCategoryLocationStore ({ referenceData, taskData }) {
       errors.push(errorMessage(error))
       return undefined
     }
+  }
+
+  const refreshKind = async kind => {
+    const { key, list } = kinds[kind]
+    const records = await list()
+    state = { ...state, [key]: records, error: null }
+    return publish()
+  }
+
+  const addReference = async (kind, name) => {
+    const { key, create } = kinds[kind]
+    const preparedName = prepareReferenceName(name, state[key])
+    const displayOrder = state[key].reduce((maximum, record) =>
+      Number.isFinite(record.displayOrder) ? Math.max(maximum, record.displayOrder) : maximum
+    , -1) + 1
+    await create({ ...preparedName, status: 'active', displayOrder })
+    return refreshKind(kind)
+  }
+
+  const updateReference = async (kind, id, fields) => {
+    const { key, update } = kinds[kind]
+    if (!state[key].some(record => record._id === id)) {
+      throw new Error(`${kind === 'category' ? 'Category' : 'Location'} not found.`)
+    }
+    await update(id, fields)
+    return refreshKind(kind)
+  }
+
+  const renameReference = (kind, id, name) => {
+    const { key } = kinds[kind]
+    const preparedName = prepareReferenceName(name, state[key], id)
+    return updateReference(kind, id, preparedName)
   }
 
   let initializationPromise = null
@@ -148,6 +195,38 @@ export function createCategoryLocationStore ({ referenceData, taskData }) {
     subscribe (listener) {
       listeners.add(listener)
       return () => listeners.delete(listener)
+    },
+
+    addCategory (name) {
+      return addReference('category', name)
+    },
+
+    renameCategory (id, name) {
+      return renameReference('category', id, name)
+    },
+
+    archiveCategory (id) {
+      return updateReference('category', id, { status: 'archived' })
+    },
+
+    restoreCategory (id) {
+      return updateReference('category', id, { status: 'active' })
+    },
+
+    addLocation (name) {
+      return addReference('location', name)
+    },
+
+    renameLocation (id, name) {
+      return renameReference('location', id, name)
+    },
+
+    archiveLocation (id) {
+      return updateReference('location', id, { status: 'archived' })
+    },
+
+    restoreLocation (id) {
+      return updateReference('location', id, { status: 'active' })
     }
   }
 }

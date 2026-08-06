@@ -153,3 +153,73 @@ test('initialization degrades when an adapter throws synchronously', async () =>
   assert.equal(snapshot.categories.length, 7)
   assert.match(snapshot.error, /synchronous location failure/)
 })
+
+test('location lifecycle normalizes names, refreshes state, and publishes once per write', async () => {
+  const fake = createFakeApis()
+  const store = createCategoryLocationStore(fake)
+  await store.initialize()
+  let publications = 0
+  store.subscribe(() => { publications++ })
+
+  const added = await store.addLocation(' Kitchen ')
+  const locationId = added.locations[0]._id
+  assert.deepEqual(added.locations[0], {
+    _id: locationId,
+    name: 'Kitchen',
+    normalizedName: 'kitchen',
+    status: 'active',
+    displayOrder: 0
+  })
+  assert.equal(publications, 1)
+
+  const cachedBeforeDuplicate = store.getSnapshot()
+  await assert.rejects(() => store.addLocation('KITCHEN'), /already exists/i)
+  assert.equal(publications, 1)
+  assert.strictEqual(store.getSnapshot(), cachedBeforeDuplicate)
+
+  await store.renameLocation(locationId, 'Galley')
+  assert.equal(store.getSnapshot().locations[0].name, 'Galley')
+  assert.equal(store.getSnapshot().locations[0].normalizedName, 'galley')
+  await store.archiveLocation(locationId)
+  assert.equal(store.getSnapshot().locations[0].status, 'archived')
+  await store.restoreLocation(locationId)
+  assert.equal(store.getSnapshot().locations[0].status, 'active')
+  assert.equal(publications, 4)
+
+  await assert.rejects(() => store.renameLocation('missing', 'Pantry'), /not found/i)
+})
+
+test('category lifecycle normalizes names, refreshes state, and publishes once per write', async () => {
+  const fake = createFakeApis()
+  const store = createCategoryLocationStore(fake)
+  await store.initialize()
+  let publications = 0
+  store.subscribe(() => { publications++ })
+
+  const added = await store.addCategory(' Household ')
+  const category = added.categories.find(item => item.normalizedName === 'household')
+  assert.deepEqual(category, {
+    _id: category._id,
+    name: 'Household',
+    normalizedName: 'household',
+    status: 'active',
+    displayOrder: 6
+  })
+  assert.equal(publications, 1)
+
+  const cachedBeforeDuplicate = store.getSnapshot()
+  await assert.rejects(() => store.addCategory('HOUSEHOLD'), /already exists/i)
+  assert.equal(publications, 1)
+  assert.strictEqual(store.getSnapshot(), cachedBeforeDuplicate)
+
+  await store.renameCategory(category._id, 'Home')
+  assert.equal(store.getSnapshot().categories.find(item => item._id === category._id).name, 'Home')
+  assert.equal(store.getSnapshot().categories.find(item => item._id === category._id).normalizedName, 'home')
+  await store.archiveCategory(category._id)
+  assert.equal(store.getSnapshot().categories.find(item => item._id === category._id).status, 'archived')
+  await store.restoreCategory(category._id)
+  assert.equal(store.getSnapshot().categories.find(item => item._id === category._id).status, 'active')
+  assert.equal(publications, 4)
+
+  await assert.rejects(() => store.archiveCategory('missing'), /not found/i)
+})
