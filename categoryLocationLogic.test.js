@@ -114,11 +114,29 @@ test('validates category and location assignments against active references', ()
 
 test('resolves category suggestions only against active names', () => {
   const categories = [
-    { _id: 'c-clean', name: 'Clean / Reset', status: 'active' },
+    { _id: 'c-clean', name: 'Clean / Reset' },
     { _id: 'c-old', name: 'Old category', status: 'archived' }
   ]
 
   assert.equal(resolveSuggestedCategoryId(' clean / RESET ', categories), 'c-clean')
   assert.equal(resolveSuggestedCategoryId('Old category', categories), null)
   assert.equal(resolveSuggestedCategoryId('Invented category', categories), null)
+})
+
+test('keeps statusless legacy references in task choices and AI category names', () => {
+  const categories = [
+    { _id: 'c-legacy', name: 'Legacy category', displayOrder: 0 },
+    { _id: 'c-active', name: 'Current category', status: 'active', displayOrder: 1 },
+    { _id: 'c-archived', name: 'Old category', status: 'archived', displayOrder: 2 }
+  ]
+  const locations = [
+    { _id: 'l-legacy', name: 'Legacy room', displayOrder: 0 },
+    { _id: 'l-active', name: 'Current room', status: 'active', displayOrder: 1 },
+    { _id: 'l-archived', name: 'Old room', status: 'archived', displayOrder: 2 }
+  ]
+
+  const activeCategories = selectableReferences(categories)
+  assert.deepEqual(activeCategories.map(category => category._id), ['c-legacy', 'c-active'])
+  assert.deepEqual(activeCategories.map(category => category.name), ['Legacy category', 'Current category'])
+  assert.deepEqual(selectableReferences(locations).map(location => location._id), ['l-legacy', 'l-active'])
 })

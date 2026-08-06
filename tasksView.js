@@ -4,6 +4,7 @@ import { categoryLocationStore } from './categoryLocationStore.js'
 import {
   resolveSuggestedCategoryId,
   sanitizeLocationIds,
+  selectableReferences,
   validateCategoryId
 } from './categoryLocationLogic.js'
 import { escapeAttribute } from './categoryLocationView.js'
@@ -50,7 +51,7 @@ async function handleAddTasks() {
 
 async function handleEnrich() {
   const statusEl = document.getElementById('enrichStatus')
-  const categories = activeReferences(categoryLocationStore.getSnapshot().categories)
+  const categories = selectableReferences(categoryLocationStore.getSnapshot().categories)
   if (!categories.length) {
     statusEl.textContent = noActiveCategoryMessage
     return
@@ -82,8 +83,8 @@ async function handleEnrich() {
 function renderProposed() {
   const container = document.getElementById('proposedCards')
   const snapshot = categoryLocationStore.getSnapshot()
-  const categories = activeReferences(snapshot.categories)
-  const locations = activeReferences(snapshot.locations)
+  const categories = selectableReferences(snapshot.categories)
+  const locations = selectableReferences(snapshot.locations)
   const proposed = tasksCache.filter(t => t.status === 'proposed')
   container.innerHTML = proposed.length
     ? proposed.map(task => proposedCardHtml(task, categories, locations)).join('')
@@ -176,12 +177,8 @@ async function handleProposedClick(evt) {
   await refreshTasksView()
 }
 
-function activeReferences(references) {
-  return references.filter(reference => reference.status === 'active')
-}
-
 function syncEnrichmentAvailability() {
-  const hasActiveCategories = activeReferences(categoryLocationStore.getSnapshot().categories).length > 0
+  const hasActiveCategories = selectableReferences(categoryLocationStore.getSnapshot().categories).length > 0
   const button = document.getElementById('enrichBtn')
   const status = document.getElementById('enrichStatus')
   button.disabled = !hasActiveCategories

@@ -107,8 +107,7 @@ export function resolveReference (records, id, legacyName, unknownLabel) {
 
 export function resolveSuggestedCategoryId (suggestedName, categories) {
   const normalizedName = normalizeReferenceName(suggestedName)
-  const category = categories.find(item =>
-    item.status === 'active' &&
+  const category = selectableReferences(categories).find(item =>
     (item.normalizedName || normalizeReferenceName(item.name)) === normalizedName
   )
   return category?._id || null
