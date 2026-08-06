@@ -18,9 +18,13 @@ export function formatTimer(seconds) {
 }
 
 export function escapeHtml(str) {
-  const div = document.createElement('div')
-  div.textContent = str
-  return div.innerHTML
+  return String(str).replace(/[&<>"']/g, character => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[character])
 }
 
 export function formatDateTime(ts) {

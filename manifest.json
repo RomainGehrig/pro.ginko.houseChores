@@ -17,6 +17,8 @@
     { "path": "viewRouter.js", "Description": "Shows/hides the four top-level views and toggles nav button visibility/highlighting." },
     { "path": "state.js", "Description": "Shared mutable state for the in-progress session and task bundle." },
     { "path": "helpers.js", "Description": "Formatting utilities for dates, durations, timer text, and HTML escaping." },
+    { "path": "taskPresentationLogic.js", "Description": "Pure task presentation helpers that resolve stable category names and safely escape stored values." },
+    { "path": "taskPresentationLogic.test.js", "Description": "Node tests covering safe task markup and renamed stable-category display." },
     { "path": "taskData.js", "Description": "DB calls for the tasks collection (list/create/update)." },
     { "path": "executionData.js", "Description": "DB calls for the taskExecutions collection." },
     { "path": "sessionData.js", "Description": "DB calls for the sessions collection." },

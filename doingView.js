@@ -4,7 +4,9 @@ import { updateTask } from './taskData.js'
 import { updateSession } from './sessionData.js'
 import { getActiveTasks, refreshTasksView } from './tasksView.js'
 import { findFillerTask } from './bundleLogic.js'
-import { formatTimer, formatDuration, escapeHtml } from './helpers.js'
+import { formatTimer, formatDuration } from './helpers.js'
+import { buildDoingTaskHtml } from './taskPresentationLogic.js'
+import { categoryLocationStore } from './categoryLocationStore.js'
 import { showView, setNavVisible } from './viewRouter.js'
 import { startReview } from './reviewView.js'
 
@@ -36,17 +38,12 @@ function renderCurrentTask() {
   }
 
   taskStartTime = Date.now()
-  content.innerHTML =
-    '<div class="doing-progress">Task ' + (state.currentBundleIndex + 1) + ' of ' + state.currentBundle.length + '</div>' +
-    '<h2>' + escapeHtml(task.name) + '</h2>' +
-    '<div class="task-meta">' + (task.category || 'Uncategorized') + ' \u00b7 target ' + formatDuration(task.estimatedDuration) + '</div>' +
-    '<div class="timer" id="timerDisplay">00:00</div>' +
-    '<div class="doing-actions">' +
-      '<button id="doneBtn">Done</button>' +
-      '<button id="alreadyDoneBtn">Already Done</button>' +
-      '<button id="cancelBtn">Cancel</button>' +
-      '<button id="endSessionBtn">End Session</button>' +
-    '</div>'
+  content.innerHTML = buildDoingTaskHtml(
+    task,
+    state.currentBundleIndex,
+    state.currentBundle.length,
+    categoryLocationStore.getSnapshot().categories
+  )
 
   document.getElementById('doneBtn').addEventListener('click', () => finishTask('done'))
   document.getElementById('alreadyDoneBtn').addEventListener('click', () => finishTask('already_done'))

@@ -9,7 +9,8 @@ import {
   validateCategoryId
 } from './categoryLocationLogic.js'
 import { escapeAttribute } from './categoryLocationView.js'
-import { formatDate, formatDuration, escapeHtml } from './helpers.js'
+import { escapeHtml } from './helpers.js'
+import { buildActiveTaskDetailsHtml } from './taskPresentationLogic.js'
 
 let tasksCache = []
 let editingTaskId = null
@@ -138,9 +139,7 @@ function activeTaskCardHtml(task, snapshot) {
   const isEditing = task._id === editingTaskId
   const content = isEditing
     ? taskEditorHtml(task, snapshot)
-    : '<div class="task-meta">' + escapeHtml(task.category || 'Uncategorized') + ' \u00b7 ' + formatDuration(task.estimatedDuration) +
-      (task.recurrence ? ' \u00b7 every ' + task.recurrence + 'd' : '') + '</div>' +
-      '<div class="task-meta">Next due: ' + formatDate(task.nextDueDate) + '</div>'
+    : buildActiveTaskDetailsHtml(task, snapshot.categories)
   const actions = isEditing
     ? '<button class="save-task-edit-btn" type="button">Save</button>' +
       '<button class="cancel-task-edit-btn" type="button">Cancel</button>'

@@ -1,7 +1,7 @@
 import { getActiveTasks } from './tasksView.js'
 import { buildBundle } from './bundleLogic.js'
 import { createSession } from './sessionData.js'
-import { formatDuration, formatDate } from './helpers.js'
+import { buildBundlePreviewHtml } from './taskPresentationLogic.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
 import { selectableReferences } from './categoryLocationLogic.js'
 import { state } from './state.js'
@@ -72,11 +72,7 @@ function renderBundlePreview() {
     startBtn.style.display = 'none'
     return
   }
-  const total = currentBundle.reduce((sum, t) => sum + t.estimatedDuration, 0)
-  preview.innerHTML = '<h3>Proposed bundle (' + formatDuration(total) + ')</h3><ul>' +
-    currentBundle.map(t => '<li>' + t.name + ' - ' + formatDuration(t.estimatedDuration) +
-      ' <span class="task-meta">(due ' + formatDate(t.nextDueDate) + ')</span></li>').join('') +
-    '</ul>'
+  preview.innerHTML = buildBundlePreviewHtml(currentBundle)
   startBtn.style.display = 'inline-block'
 }
 
