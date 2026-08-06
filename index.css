@@ -170,3 +170,81 @@ button:hover {
   font-size: 12px;
   margin: 6px 0;
 }
+.history-row {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  margin-bottom: 10px;
+}
+
+.history-head {
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.history-head:hover {
+  background: #f9f9f9;
+}
+
+.history-title {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.history-caret {
+  color: #666;
+}
+
+.history-when {
+  font-weight: bold;
+}
+
+.history-summary {
+  margin-top: 2px;
+  padding-left: 20px;
+}
+
+.history-tag {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: #eee;
+  color: #666;
+}
+
+.history-detail {
+  display: none;
+  padding: 0 12px 10px 32px;
+}
+
+.history-row.expanded .history-detail {
+  display: block;
+}
+
+.history-entry {
+  padding: 6px 0;
+  border-top: 1px solid #f0f0f0;
+}
+
+.history-entry-line {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.history-entry-name {
+  flex: 1;
+}
+
+.history-entry-outcome {
+  font-size: 12px;
+  color: #666;
+}
+
+.history-entry-time {
+  font-size: 12px;
+  color: #666;
+  min-width: 52px;
+  text-align: right;
+}

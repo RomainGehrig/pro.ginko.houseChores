@@ -7,7 +7,7 @@
       "html_file": "index.html",
       "css_files": ["index.css"],
       "modules": ["index.js"],
-      "Description": "Single-page chore planner: task intake with AI enrichment/approval, time-boxed bundle proposal, timer-based doing mode, and post-session review."
+      "Description": "Single-page chore planner: task intake with AI enrichment/approval, time-boxed bundle proposal, timer-based doing mode, post-session review, and a read-only history of past sessions."
     }
   },
   "display_name": "houseChores",
@@ -25,7 +25,9 @@
     { "path": "tasksView.js", "Description": "Renders and wires the task list, add-task form, AI enrichment trigger, and approval flow." },
     { "path": "sessionView.js", "Description": "Renders and wires the time-budget/category picker and bundle proposal, then starts a session." },
     { "path": "doingView.js", "Description": "Renders the timer-based doing mode, records executions, and handles the early-finish filler-task offer." },
-    { "path": "reviewView.js", "Description": "Renders the post-session review for correcting durations/ratings and suggesting updated duration estimates." }
+    { "path": "reviewView.js", "Description": "Renders the post-session review for correcting durations/ratings and suggesting updated duration estimates." },
+    { "path": "historyLogic.js", "Description": "Pure functions joining sessions, executions and tasks into read-only history summaries." },
+    { "path": "historyView.js", "Description": "Renders the session history accordion and wires expand/collapse." }
   ],
   "app_tables": {
     "tasks": {

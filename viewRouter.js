@@ -1,4 +1,4 @@
-const VIEWS = ['tasks', 'session', 'doing', 'review']
+const VIEWS = ['tasks', 'session', 'doing', 'review', 'history']
 
 export function showView(name) {
   VIEWS.forEach(v => {
