@@ -61,7 +61,15 @@ function render (snapshot) {
   if (snapshot.error) {
     manager.open = true
     showStatus(snapshot.error, 'error')
+  } else if (snapshot.warning) {
+    manager.open = true
+    showStatus(snapshot.warning, 'warning')
   }
+}
+
+export function mutationFeedback (snapshot, successMessage) {
+  if (snapshot?.warning) return { message: snapshot.warning, state: 'warning' }
+  return { message: successMessage, state: 'success' }
 }
 
 function renderReferenceList (kind, references) {
@@ -170,8 +178,9 @@ async function runMutation (mutation, successMessage) {
   setBusy(true)
   clearStatus()
   try {
-    await mutation()
-    showStatus(successMessage, 'success')
+    const snapshot = await mutation()
+    const feedback = mutationFeedback(snapshot, successMessage)
+    showStatus(feedback.message, feedback.state)
   } catch (error) {
     showStatus(error.message || 'Could not save changes.', 'error')
   } finally {

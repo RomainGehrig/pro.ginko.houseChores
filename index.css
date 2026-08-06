@@ -139,6 +139,10 @@
   white-space: pre-line;
 }
 
+.inline-status[data-state="warning"] {
+  color: #8a5a00;
+}
+
 .is-archived {
   color: #666;
   opacity: 0.72;

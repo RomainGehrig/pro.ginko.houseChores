@@ -128,6 +128,52 @@ test('initialization retains successful default writes when the first category r
   assert.match(snapshot.error, /category refresh unavailable/)
 })
 
+test('initialization merges metadata-only default creates before a failed refresh', async () => {
+  const fake = createFakeApis()
+  fake.tasks[0].category = 'Fix'
+  const createCategory = fake.referenceData.createCategory
+  fake.referenceData.createCategory = async data => {
+    const created = await createCategory(data)
+    return { _id: created._id, _date_modified: 123 }
+  }
+  const listCategories = fake.referenceData.listCategories
+  let categoryListCalls = 0
+  fake.referenceData.listCategories = async () => {
+    categoryListCalls++
+    if (categoryListCalls === 2) throw new Error('category refresh unavailable')
+    return listCategories()
+  }
+  const store = createCategoryLocationStore(fake)
+
+  await store.initialize()
+  const snapshot = store.getSnapshot()
+
+  assert.equal(fake.categories.filter(item => item.normalizedName === 'fix').length, 1)
+  assert.equal(snapshot.categories.filter(item => item.normalizedName === 'fix').length, 1)
+  assert.equal(fake.tasks[0].categoryId, snapshot.categories.find(item => item.normalizedName === 'fix')._id)
+  assert.match(snapshot.error, /category refresh unavailable/)
+})
+
+test('assigns increasing display order to custom categories created during migration', async () => {
+  const fake = createFakeApis()
+  fake.tasks.push({
+    ...clone(fake.tasks[0]),
+    _id: 'task-yard',
+    category: 'Yard',
+    categoryId: null
+  })
+  const store = createCategoryLocationStore(fake)
+
+  await store.initialize()
+
+  assert.deepEqual(
+    store.getSnapshot().categories
+      .filter(item => ['garden', 'yard'].includes(item.normalizedName))
+      .map(item => item.displayOrder),
+    [6, 7]
+  )
+})
+
 test('concurrent initialization calls share one migration', async () => {
   const fake = createFakeApis()
   const store = createCategoryLocationStore(fake)
@@ -203,7 +249,7 @@ test('category lifecycle normalizes names, refreshes state, and publishes once p
     name: 'Household',
     normalizedName: 'household',
     status: 'active',
-    displayOrder: 6
+    displayOrder: 7
   })
   assert.equal(publications, 1)
 
@@ -222,4 +268,120 @@ test('category lifecycle normalizes names, refreshes state, and publishes once p
   assert.equal(publications, 4)
 
   await assert.rejects(() => store.archiveCategory('missing'), /not found/i)
+})
+
+test('write failure leaves lifecycle cache unchanged and does not publish', async () => {
+  const fake = createFakeApis()
+  const createLocation = fake.referenceData.createLocation
+  let failWrites = false
+  fake.referenceData.createLocation = async data => {
+    if (failWrites) throw new Error('location write failed')
+    return createLocation(data)
+  }
+  const store = createCategoryLocationStore(fake)
+  await store.initialize()
+  const cachedBeforeWrite = store.getSnapshot()
+  assert.equal(cachedBeforeWrite.warning, null)
+  let publications = 0
+  store.subscribe(() => { publications++ })
+  failWrites = true
+
+  await assert.rejects(() => store.addLocation('Kitchen'), /location write failed/)
+
+  assert.strictEqual(store.getSnapshot(), cachedBeforeWrite)
+  assert.equal(store.getSnapshot().warning, null)
+  assert.equal(publications, 0)
+})
+
+test('metadata-only create remains confirmed when its refresh fails', async () => {
+  const fake = createFakeApis()
+  const createLocation = fake.referenceData.createLocation
+  const listLocations = fake.referenceData.listLocations
+  let createCalls = 0
+  let metadataOnly = false
+  let failRefresh = false
+  fake.referenceData.createLocation = async data => {
+    createCalls++
+    const created = await createLocation(data)
+    return metadataOnly ? { _id: created._id, _date_modified: 456 } : created
+  }
+  fake.referenceData.listLocations = async () => {
+    if (failRefresh) throw new Error('location refresh failed')
+    return listLocations()
+  }
+  const store = createCategoryLocationStore(fake)
+  await store.initialize()
+  metadataOnly = true
+  failRefresh = true
+  createCalls = 0
+  let publications = 0
+  store.subscribe(() => { publications++ })
+
+  const snapshot = await store.addLocation(' Kitchen ')
+
+  assert.deepEqual(snapshot.locations[0], {
+    _id: snapshot.locations[0]._id,
+    _date_modified: 456,
+    name: 'Kitchen',
+    normalizedName: 'kitchen',
+    status: 'active',
+    displayOrder: 0
+  })
+  assert.equal(snapshot.error, null)
+  assert.match(snapshot.warning, /saved.*refresh.*location refresh failed/i)
+  assert.equal(publications, 1)
+
+  await assert.rejects(() => store.addLocation('KITCHEN'), /already exists/i)
+  assert.equal(createCalls, 1)
+  assert.equal(publications, 1)
+})
+
+test('successful create enters confirmed cache while its refresh is still pending', async () => {
+  const fake = createFakeApis()
+  const listLocations = fake.referenceData.listLocations
+  let holdRefresh = false
+  let releaseRefresh
+  let signalRefreshStarted
+  const refreshStarted = new Promise(resolve => { signalRefreshStarted = resolve })
+  fake.referenceData.listLocations = async () => {
+    if (!holdRefresh) return listLocations()
+    signalRefreshStarted()
+    return new Promise(resolve => {
+      releaseRefresh = async () => resolve(await listLocations())
+    })
+  }
+  const store = createCategoryLocationStore(fake)
+  await store.initialize()
+  holdRefresh = true
+
+  const mutation = store.addLocation('Kitchen')
+  await refreshStarted
+
+  assert.equal(store.getSnapshot().locations[0].name, 'Kitchen')
+
+  await releaseRefresh()
+  await mutation
+})
+
+test('successful update remains confirmed when its refresh fails', async () => {
+  const fake = createFakeApis()
+  const listLocations = fake.referenceData.listLocations
+  let failRefresh = false
+  fake.referenceData.listLocations = async () => {
+    if (failRefresh) throw new Error('updated location refresh failed')
+    return listLocations()
+  }
+  const store = createCategoryLocationStore(fake)
+  const added = await store.initialize().then(() => store.addLocation('Kitchen'))
+  const locationId = added.locations[0]._id
+  failRefresh = true
+  let publications = 0
+  store.subscribe(() => { publications++ })
+
+  const snapshot = await store.renameLocation(locationId, 'Galley')
+
+  assert.equal(snapshot.locations[0].name, 'Galley')
+  assert.equal(snapshot.locations[0].normalizedName, 'galley')
+  assert.match(snapshot.warning, /saved.*refresh.*updated location refresh failed/i)
+  assert.equal(publications, 1)
 })

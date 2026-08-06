@@ -7,6 +7,23 @@ import * as referenceView from './categoryLocationView.js'
 
 const { splitReferences } = referenceView
 
+test('prefers a post-write refresh warning over a generic mutation success message', () => {
+  assert.deepEqual(
+    referenceView.mutationFeedback(
+      { warning: 'Location saved, but the refreshed list is unavailable.' },
+      'Location added.'
+    ),
+    {
+      message: 'Location saved, but the refreshed list is unavailable.',
+      state: 'warning'
+    }
+  )
+  assert.deepEqual(referenceView.mutationFeedback({ warning: null }, 'Location added.'), {
+    message: 'Location added.',
+    state: 'success'
+  })
+})
+
 test('splits active and archived references without treating missing status as archived', () => {
   assert.deepEqual(
     splitReferences([

@@ -15,8 +15,12 @@ const errorMessage = error => error instanceof Error ? error.message : String(er
 
 const sortReferences = records => selectableReferences(records, records.map(record => record._id))
 
+const nextDisplayOrder = records => records.reduce((maximum, record) =>
+  Number.isFinite(record.displayOrder) ? Math.max(maximum, record.displayOrder) : maximum
+, -1) + 1
+
 export function createCategoryLocationStore ({ referenceData, taskData }) {
-  let state = { categories: [], locations: [], initialized: false, error: null }
+  let state = { categories: [], locations: [], initialized: false, error: null, warning: null }
   const listeners = new Set()
   const kinds = {
     category: {
@@ -52,30 +56,50 @@ export function createCategoryLocationStore ({ referenceData, taskData }) {
     }
   }
 
-  const refreshKind = async kind => {
+  const refreshAfterWrite = async (kind, confirmedRecords) => {
     const { key, list } = kinds[kind]
-    const records = await list()
-    state = { ...state, [key]: records, error: null }
+    try {
+      const records = await list()
+      state = { ...state, [key]: records, error: null, warning: null }
+    } catch (error) {
+      const label = kind === 'category' ? 'Category' : 'Location'
+      state = {
+        ...state,
+        [key]: confirmedRecords,
+        error: null,
+        warning: `${label} saved, but could not refresh the ${key} list: ${errorMessage(error)}`
+      }
+    }
     return publish()
   }
 
   const addReference = async (kind, name) => {
     const { key, create } = kinds[kind]
     const preparedName = prepareReferenceName(name, state[key])
-    const displayOrder = state[key].reduce((maximum, record) =>
-      Number.isFinite(record.displayOrder) ? Math.max(maximum, record.displayOrder) : maximum
-    , -1) + 1
-    await create({ ...preparedName, status: 'active', displayOrder })
-    return refreshKind(kind)
+    const fields = {
+      ...preparedName,
+      status: 'active',
+      displayOrder: nextDisplayOrder(state[key])
+    }
+    const metadata = await create(fields)
+    const confirmedRecords = [...state[key], { ...fields, ...metadata }]
+    state = { ...state, [key]: confirmedRecords, error: null, warning: null }
+    return refreshAfterWrite(kind, confirmedRecords)
   }
 
   const updateReference = async (kind, id, fields) => {
     const { key, update } = kinds[kind]
-    if (!state[key].some(record => record._id === id)) {
+    const existing = state[key].find(record => record._id === id)
+    if (!existing) {
       throw new Error(`${kind === 'category' ? 'Category' : 'Location'} not found.`)
     }
-    await update(id, fields)
-    return refreshKind(kind)
+    const metadata = await update(id, fields)
+    const confirmedRecords = state[key].map(record => record._id === id
+      ? { ...existing, ...fields, ...metadata }
+      : record
+    )
+    state = { ...state, [key]: confirmedRecords, error: null, warning: null }
+    return refreshAfterWrite(kind, confirmedRecords)
   }
 
   const renameReference = (kind, id, name) => {
@@ -121,15 +145,16 @@ export function createCategoryLocationStore ({ referenceData, taskData }) {
         if (defaults) {
           await recordStageError(errors, async () => {
             for (const adoption of defaults.adoptions) {
-              await referenceData.updateCategory(adoption.id, adoption.fields)
+              const metadata = await referenceData.updateCategory(adoption.id, adoption.fields)
               state.categories = state.categories.map(category =>
-                category._id === adoption.id ? { ...category, ...adoption.fields } : category
+                category._id === adoption.id ? { ...category, ...adoption.fields, ...metadata } : category
               )
             }
           })
           await recordStageError(errors, async () => {
             for (const category of defaults.creates) {
-              state.categories = [...state.categories, await referenceData.createCategory(category)]
+              const metadata = await referenceData.createCategory(category)
+              state.categories = [...state.categories, { ...category, ...metadata }]
             }
           })
           const refreshedCategories = await recordStageError(errors, () => referenceData.listCategories())
@@ -142,13 +167,17 @@ export function createCategoryLocationStore ({ referenceData, taskData }) {
         let customCategoryCreated = false
         if (missingLegacyCategories) {
           await recordStageError(errors, async () => {
+            let displayOrder = nextDisplayOrder(state.categories)
             for (const category of missingLegacyCategories) {
-              state.categories = [...state.categories, await referenceData.createCategory({
+              const fields = {
                 ...category,
                 status: 'active',
-                displayOrder: null,
+                displayOrder,
                 seedKey: null
-              })]
+              }
+              const metadata = await referenceData.createCategory(fields)
+              state.categories = [...state.categories, { ...fields, ...metadata }]
+              displayOrder++
               customCategoryCreated = true
             }
           })
@@ -173,7 +202,8 @@ export function createCategoryLocationStore ({ referenceData, taskData }) {
       state = {
         ...state,
         initialized: true,
-        error: errors.length ? errors.join('\n') : null
+        error: errors.length ? errors.join('\n') : null,
+        warning: null
       }
       return publish()
   }
