@@ -32,7 +32,9 @@
     { "path": "categoryLocationLogic.test.js", "Description": "Node tests covering category and location reference rules and legacy migration plans." },
     { "path": "categoryLocationData.js", "Description": "DB calls for user-managed category and location reference collections." },
     { "path": "categoryLocationStore.js", "Description": "Loads, seeds, and migrates category/location references before dependent views render." },
-    { "path": "categoryLocationStore.test.js", "Description": "Node tests covering idempotent reference initialization and degraded data loading." }
+    { "path": "categoryLocationStore.test.js", "Description": "Node tests covering idempotent reference initialization and degraded data loading." },
+    { "path": "categoryLocationView.js", "Description": "Renders and wires the category and location management panel." },
+    { "path": "categoryLocationView.test.js", "Description": "Node tests covering category and location management-list helpers." }
   ],
   "app_tables": {
     "tasks": {

@@ -4,6 +4,8 @@ import { initDoingView } from './doingView.js'
 import { initReviewView } from './reviewView.js'
 import { initHistoryView, refreshHistoryView } from './historyView.js'
 import { showView } from './viewRouter.js'
+import { categoryLocationStore } from './categoryLocationStore.js'
+import { initCategoryLocationView } from './categoryLocationView.js'
 
 document.querySelectorAll('.nav-btn').forEach(btn => {
   btn.addEventListener('click', () => {
@@ -13,6 +15,8 @@ document.querySelectorAll('.nav-btn').forEach(btn => {
 })
 
 async function init() {
+  await categoryLocationStore.initialize()
+  initCategoryLocationView()
   await initTasksView()
   initSessionView()
   initDoingView()

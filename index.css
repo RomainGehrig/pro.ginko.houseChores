@@ -54,6 +54,113 @@
   margin-bottom: 8px;
 }
 
+.reference-manager {
+  margin-bottom: 24px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.reference-manager summary {
+  cursor: pointer;
+  font-weight: bold;
+}
+
+.reference-columns {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 20px;
+  margin-top: 14px;
+}
+
+.reference-columns h3 {
+  margin: 0 0 8px;
+  font-size: 16px;
+}
+
+.reference-add-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.reference-add-form input {
+  min-width: 0;
+  flex: 1;
+}
+
+.reference-row,
+.reference-edit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid #f0f0f0;
+}
+
+.reference-row > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.reference-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+.reference-edit-row .reference-name-input {
+  min-width: 0;
+  flex: 1;
+}
+
+.reference-archived {
+  margin-top: 8px;
+}
+
+.reference-archived summary {
+  cursor: pointer;
+  color: #666;
+}
+
+.inline-status {
+  min-height: 1.2em;
+  margin-top: 8px;
+  font-size: 13px;
+}
+
+.inline-status[data-state="success"] {
+  color: #176b2c;
+}
+
+.inline-status[data-state="error"] {
+  color: #a12121;
+  white-space: pre-line;
+}
+
+.is-archived {
+  color: #666;
+  opacity: 0.72;
+}
+
+.reference-manager.is-busy {
+  opacity: 0.7;
+}
+
+.reference-manager.is-busy button,
+.reference-manager.is-busy input,
+.reference-manager button:disabled,
+.reference-manager input:disabled {
+  cursor: wait;
+}
+
+@media (min-width: 560px) {
+  .reference-columns {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .task-section {
   margin-bottom: 24px;
 }

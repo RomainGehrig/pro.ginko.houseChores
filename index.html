@@ -11,6 +11,29 @@
   </header>
 
   <section id="view-tasks" class="view">
+    <details id="referenceManager" class="reference-manager">
+      <summary>Categories &amp; locations</summary>
+      <div id="referenceManagerStatus" class="inline-status" role="status"></div>
+      <div class="reference-columns">
+        <section aria-labelledby="categoriesHeading">
+          <h3 id="categoriesHeading">Categories</h3>
+          <form id="addCategoryForm" class="reference-add-form">
+            <input id="newCategoryName" aria-label="New category name" autocomplete="off">
+            <button type="submit">Add</button>
+          </form>
+          <div id="categoryManagerList"></div>
+        </section>
+        <section aria-labelledby="locationsHeading">
+          <h3 id="locationsHeading">Locations</h3>
+          <form id="addLocationForm" class="reference-add-form">
+            <input id="newLocationName" aria-label="New location name" autocomplete="off">
+            <button type="submit">Add</button>
+          </form>
+          <div id="locationManagerList"></div>
+        </section>
+      </div>
+    </details>
+
     <div class="add-task-box">
       <h2>Add Tasks</h2>
       <textarea id="newTaskInput" placeholder="One task per line, e.g.&#10;Clean bathroom&#10;Pay electricity bill"></textarea>
