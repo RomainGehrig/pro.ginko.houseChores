@@ -7,6 +7,19 @@ import * as referenceView from './categoryLocationView.js'
 
 const { splitReferences } = referenceView
 
+test('returns the store snapshot after applying a successful post-write UI update', async () => {
+  const snapshot = { warning: 'Category saved, but the refreshed list is unavailable.' }
+  let updated = false
+
+  const result = await referenceView.applyReferenceMutation(
+    async () => snapshot,
+    () => { updated = true }
+  )
+
+  assert.equal(updated, true)
+  assert.equal(result, snapshot)
+})
+
 test('prefers a post-write refresh warning over a generic mutation success message', () => {
   assert.deepEqual(
     referenceView.mutationFeedback(

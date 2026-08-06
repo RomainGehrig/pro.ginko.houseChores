@@ -72,6 +72,12 @@ export function mutationFeedback (snapshot, successMessage) {
   return { message: successMessage, state: 'success' }
 }
 
+export async function applyReferenceMutation (write, applyUiUpdate) {
+  const snapshot = await write()
+  applyUiUpdate()
+  return snapshot
+}
+
 function renderReferenceList (kind, references) {
   const container = document.getElementById(kind === 'category' ? 'categoryManagerList' : 'locationManagerList')
   const groups = splitReferences(references)
@@ -127,10 +133,10 @@ async function handleSubmit (event) {
   const kind = form.id === 'addCategoryForm' ? 'category' : 'location'
   const config = referenceConfig[kind]
   const input = document.getElementById(config.inputId)
-  await runMutation(async () => {
-    await config.add(input.value)
-    input.value = ''
-  }, config.label + ' added.')
+  await runMutation(() => applyReferenceMutation(
+    () => config.add(input.value),
+    () => { input.value = '' }
+  ), config.label + ' added.')
 }
 
 async function handleClick (event) {
@@ -156,11 +162,13 @@ async function handleClick (event) {
   }
   if (action === 'save') {
     const input = row.querySelector('.reference-name-input')
-    await runMutation(async () => {
-      await config.rename(id, input.value)
-      editingReference = null
-      render(categoryLocationStore.getSnapshot())
-    }, config.label + ' renamed.')
+    await runMutation(() => applyReferenceMutation(
+      () => config.rename(id, input.value),
+      () => {
+        editingReference = null
+        render(categoryLocationStore.getSnapshot())
+      }
+    ), config.label + ' renamed.')
     return
   }
   if (action === 'archive') {
