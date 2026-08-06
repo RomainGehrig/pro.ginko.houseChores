@@ -37,17 +37,18 @@ export function createCategoryLocationStore ({ referenceData, taskData }) {
     }
   }
 
-  return {
-    async initialize () {
+  let initializationPromise = null
+
+  const runInitialization = async () => {
       const errors = []
       let categoriesLoaded = false
       let tasksLoaded = false
       let tasks = []
 
       const reads = await Promise.allSettled([
-        referenceData.listCategories(),
-        referenceData.listLocations(),
-        taskData.listAllTasks()
+        Promise.resolve().then(() => referenceData.listCategories()),
+        Promise.resolve().then(() => referenceData.listLocations()),
+        Promise.resolve().then(() => taskData.listAllTasks())
       ])
 
       if (reads[0].status === 'fulfilled') {
@@ -74,11 +75,14 @@ export function createCategoryLocationStore ({ referenceData, taskData }) {
           await recordStageError(errors, async () => {
             for (const adoption of defaults.adoptions) {
               await referenceData.updateCategory(adoption.id, adoption.fields)
+              state.categories = state.categories.map(category =>
+                category._id === adoption.id ? { ...category, ...adoption.fields } : category
+              )
             }
           })
           await recordStageError(errors, async () => {
             for (const category of defaults.creates) {
-              await referenceData.createCategory(category)
+              state.categories = [...state.categories, await referenceData.createCategory(category)]
             }
           })
           const refreshedCategories = await recordStageError(errors, () => referenceData.listCategories())
@@ -92,12 +96,12 @@ export function createCategoryLocationStore ({ referenceData, taskData }) {
         if (missingLegacyCategories) {
           await recordStageError(errors, async () => {
             for (const category of missingLegacyCategories) {
-              await referenceData.createCategory({
+              state.categories = [...state.categories, await referenceData.createCategory({
                 ...category,
                 status: 'active',
                 displayOrder: null,
                 seedKey: null
-              })
+              })]
               customCategoryCreated = true
             }
           })
@@ -125,6 +129,16 @@ export function createCategoryLocationStore ({ referenceData, taskData }) {
         error: errors.length ? errors.join('\n') : null
       }
       return publish()
+  }
+
+  return {
+    initialize () {
+      if (!initializationPromise) {
+        initializationPromise = runInitialization().finally(() => {
+          initializationPromise = null
+        })
+      }
+      return initializationPromise
     },
 
     getSnapshot () {

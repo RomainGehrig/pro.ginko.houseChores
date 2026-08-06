@@ -107,3 +107,49 @@ test('initialization publishes loaded data when locations fail to load', async (
   assert.equal(snapshot.categories.length, 7)
   assert.match(snapshot.error, /locations are unavailable/)
 })
+
+test('initialization retains successful default writes when the first category refresh fails', async () => {
+  const fake = createFakeApis()
+  const listCategories = fake.referenceData.listCategories
+  let categoryListCalls = 0
+  fake.referenceData.listCategories = async () => {
+    categoryListCalls++
+    if (categoryListCalls === 2) throw new Error('category refresh unavailable')
+    return listCategories()
+  }
+  fake.tasks[0].category = 'Fix'
+  const store = createCategoryLocationStore(fake)
+
+  await store.initialize()
+  const snapshot = store.getSnapshot()
+
+  assert.equal(snapshot.categories.filter(item => item.normalizedName === 'fix').length, 1)
+  assert.equal(fake.tasks[0].categoryId, snapshot.categories.find(item => item.normalizedName === 'fix')._id)
+  assert.match(snapshot.error, /category refresh unavailable/)
+})
+
+test('concurrent initialization calls share one migration', async () => {
+  const fake = createFakeApis()
+  const store = createCategoryLocationStore(fake)
+
+  await Promise.all([store.initialize(), store.initialize()])
+
+  assert.equal(fake.categories.length, 7)
+  assert.equal(fake.categories.filter(item => item.normalizedName === 'garden').length, 1)
+  assert.equal(fake.taskUpdates.length, 1)
+})
+
+test('initialization degrades when an adapter throws synchronously', async () => {
+  const fake = createFakeApis()
+  fake.referenceData.listLocations = () => {
+    throw new Error('synchronous location failure')
+  }
+  const store = createCategoryLocationStore(fake)
+
+  await store.initialize()
+  const snapshot = store.getSnapshot()
+
+  assert.equal(snapshot.initialized, true)
+  assert.equal(snapshot.categories.length, 7)
+  assert.match(snapshot.error, /synchronous location failure/)
+})
