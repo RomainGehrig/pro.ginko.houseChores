@@ -20,6 +20,21 @@ test('returns the store snapshot after applying a successful post-write UI updat
   assert.equal(result, snapshot)
 })
 
+test('does not apply post-write UI updates when the write fails', async () => {
+  const writeError = new Error('write failed')
+  let updated = false
+
+  await assert.rejects(
+    referenceView.applyReferenceMutation(
+      async () => { throw writeError },
+      () => { updated = true }
+    ),
+    writeError
+  )
+
+  assert.equal(updated, false)
+})
+
 test('prefers a post-write refresh warning over a generic mutation success message', () => {
   assert.deepEqual(
     referenceView.mutationFeedback(
