@@ -12,11 +12,12 @@ import {
 import { escapeAttribute } from './categoryLocationView.js'
 import { escapeHtml } from './helpers.js'
 import { buildActiveTaskDetailsHtml } from './taskPresentationLogic.js'
+import { saveTaskWithRefresh } from './taskSaveLogic.js'
 
 let tasksCache = []
 let editingTaskId = null
 let taskEditorError = ''
-const noActiveCategoryMessage = 'Add an active category before using AI enrichment.'
+const noActiveCategoryMessage = 'Add a category before using AI enrichment.'
 
 export async function initTasksView() {
   document.getElementById('addTasksBtn').addEventListener('click', handleAddTasks)
@@ -120,6 +121,7 @@ function proposedCardHtml(task, snapshot) {
       '<label>Duration (min) <input class="f-duration" name="estimatedDuration" type="number" min="1" value="' + escapeAttribute(duration) + '"></label>' +
       '<label>Recurrence (days, blank = one-off) <input class="f-recurrence" name="recurrence" type="number" min="1" value="' + escapeAttribute(recurrence) + '"></label>' +
       '<button class="approve-btn">Approve</button>' +
+      '<div class="task-card-error" role="alert"></div>' +
     '</div>'
   )
 }
@@ -197,6 +199,7 @@ function renderArchived() {
 async function handleProposedClick(evt) {
   if (!evt.target.classList.contains('approve-btn')) return
   const card = evt.target.closest('.task-card')
+  if (card.dataset.saving === 'true') return
   const id = card.dataset.id
   const task = tasksCache.find(item => item._id === id)
   if (!task) return
@@ -209,7 +212,7 @@ async function handleProposedClick(evt) {
   const recurrenceVal = card.querySelector('.f-recurrence').value
   const recurrence = recurrenceVal ? Number(recurrenceVal) : null
 
-  await updateTask(id, {
+  const fields = {
     categoryId,
     category: resolveCategorySnapshotName(task, categoryId, categories),
     locationIds,
@@ -220,8 +223,19 @@ async function handleProposedClick(evt) {
     suggestedRecurrenceDays: null,
     status: recurrence ? 'approved_recurring' : 'active',
     nextDueDate: Date.now()
-  })
-  await refreshTasksView()
+  }
+  const errorElement = card.querySelector('.task-card-error')
+  errorElement.textContent = ''
+  setTaskCardBusy(card, true)
+  try {
+    const result = await saveTaskWithRefresh(
+      () => updateTask(id, fields),
+      refreshTasksView
+    )
+    if (!result.ok) errorElement.textContent = result.message
+  } finally {
+    setTaskCardBusy(card, false)
+  }
 }
 
 function syncEnrichmentAvailability() {
@@ -236,6 +250,7 @@ function syncEnrichmentAvailability() {
 async function handleActiveClick(evt) {
   const card = evt.target.closest('.task-card')
   if (!card) return
+  if (card.dataset.saving === 'true') return
   const id = card.dataset.id
 
   if (evt.target.classList.contains('archive-btn')) {
@@ -273,19 +288,33 @@ async function handleActiveClick(evt) {
   const errorElement = card.querySelector('.task-card-error')
   taskEditorError = ''
   errorElement.textContent = ''
-
+  setTaskCardBusy(card, true)
   try {
-    await updateTask(id, {
-      categoryId,
-      category: resolveCategorySnapshotName(task, categoryId, categories),
-      locationIds
-    })
-  } catch (err) {
-    taskEditorError = err?.message || 'Could not save task assignments.'
-    errorElement.textContent = taskEditorError
-    return
+    const result = await saveTaskWithRefresh(
+      () => updateTask(id, {
+        categoryId,
+        category: resolveCategorySnapshotName(task, categoryId, categories),
+        locationIds
+      }),
+      refreshTasksView
+    )
+    if (!result.ok) {
+      taskEditorError = result.message
+      errorElement.textContent = taskEditorError
+      return
+    }
+    editingTaskId = null
+    renderActive()
+  } finally {
+    setTaskCardBusy(card, false)
   }
+}
 
-  editingTaskId = null
-  await refreshTasksView()
+function setTaskCardBusy (card, busy) {
+  card.dataset.saving = String(busy)
+  card.classList.toggle('is-saving', busy)
+  card.setAttribute('aria-busy', String(busy))
+  card.querySelectorAll('button, input, select').forEach(control => {
+    control.disabled = busy
+  })
 }

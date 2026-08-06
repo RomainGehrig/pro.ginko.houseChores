@@ -244,6 +244,10 @@
   min-height: 1em;
 }
 
+.task-card.is-saving {
+  opacity: 0.72;
+}
+
 .empty {
   color: #888;
   font-style: italic;

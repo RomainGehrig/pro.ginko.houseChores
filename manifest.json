@@ -19,6 +19,8 @@
     { "path": "helpers.js", "Description": "Formatting utilities for dates, durations, timer text, and HTML escaping." },
     { "path": "taskPresentationLogic.js", "Description": "Pure task presentation helpers that resolve stable category names and safely escape stored values." },
     { "path": "taskPresentationLogic.test.js", "Description": "Node tests covering safe task markup and renamed stable-category display." },
+    { "path": "taskSaveLogic.js", "Description": "Pure task-save orchestration that distinguishes write failures from post-write refresh failures." },
+    { "path": "taskSaveLogic.test.js", "Description": "Node tests covering task write and post-write refresh failure boundaries." },
     { "path": "taskData.js", "Description": "DB calls for the tasks collection (list/create/update)." },
     { "path": "executionData.js", "Description": "DB calls for the taskExecutions collection." },
     { "path": "sessionData.js", "Description": "DB calls for the sessions collection." },
