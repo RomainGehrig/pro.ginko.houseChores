@@ -1,1 +1,1 @@
-@freezr-context.md
+@AGENTS.md
