@@ -11,13 +11,15 @@ import {
 } from './categoryLocationLogic.js'
 import { escapeAttribute } from './categoryLocationView.js'
 import { escapeHtml } from './helpers.js'
-import { buildActiveTaskDetailsHtml } from './taskPresentationLogic.js'
+import {
+  buildActiveTaskDetailsHtml,
+  buildEnrichmentAvailability
+} from './taskPresentationLogic.js'
 import { saveTaskWithRefresh } from './taskSaveLogic.js'
 
 let tasksCache = []
 let editingTaskId = null
 let taskEditorError = ''
-const noActiveCategoryMessage = 'Add a category before using AI enrichment.'
 
 export async function initTasksView() {
   document.getElementById('addTasksBtn').addEventListener('click', handleAddTasks)
@@ -58,8 +60,9 @@ async function handleAddTasks() {
 async function handleEnrich() {
   const statusEl = document.getElementById('enrichStatus')
   const categories = selectableReferences(categoryLocationStore.getSnapshot().categories)
-  if (!categories.length) {
-    statusEl.textContent = noActiveCategoryMessage
+  const availability = buildEnrichmentAvailability(categories)
+  if (availability.disabled) {
+    statusEl.textContent = availability.message
     return
   }
   const proposed = tasksCache.filter(t => t.status === 'proposed' && !t.suggestedCategory)
@@ -239,12 +242,13 @@ async function handleProposedClick(evt) {
 }
 
 function syncEnrichmentAvailability() {
-  const hasActiveCategories = selectableReferences(categoryLocationStore.getSnapshot().categories).length > 0
+  const categories = selectableReferences(categoryLocationStore.getSnapshot().categories)
+  const availability = buildEnrichmentAvailability(categories)
   const button = document.getElementById('enrichBtn')
   const status = document.getElementById('enrichStatus')
-  button.disabled = !hasActiveCategories
-  if (!hasActiveCategories) status.textContent = noActiveCategoryMessage
-  else if (status.textContent === noActiveCategoryMessage) status.textContent = ''
+  button.disabled = availability.disabled
+  if (availability.disabled) status.textContent = availability.message
+  else if (status.textContent === availability.message) status.textContent = ''
 }
 
 async function handleActiveClick(evt) {

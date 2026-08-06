@@ -6,8 +6,20 @@ import assert from 'node:assert/strict'
 import {
   buildActiveTaskDetailsHtml,
   buildBundlePreviewHtml,
-  buildDoingTaskHtml
+  buildDoingTaskHtml,
+  buildEnrichmentAvailability
 } from './taskPresentationLogic.js'
+
+test('uses neutral no-category copy for unavailable AI enrichment', () => {
+  assert.deepEqual(buildEnrichmentAvailability([]), {
+    disabled: true,
+    message: 'Add a category before using AI enrichment.'
+  })
+  assert.deepEqual(buildEnrichmentAvailability([{ _id: 'category-1' }]), {
+    disabled: false,
+    message: 'Add a category before using AI enrichment.'
+  })
+})
 
 test('doing markup resolves a renamed category by stable id and escapes stored names', () => {
   const markup = buildDoingTaskHtml({

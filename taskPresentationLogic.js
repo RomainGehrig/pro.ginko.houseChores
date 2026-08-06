@@ -3,6 +3,13 @@
 
 import { escapeHtml, formatDate, formatDuration } from './helpers.js'
 
+export function buildEnrichmentAvailability (categories) {
+  return {
+    disabled: categories.length === 0,
+    message: 'Add a category before using AI enrichment.'
+  }
+}
+
 export function resolveTaskCategoryName (task, categories = []) {
   if (!task?.categoryId) return String(task?.category || 'Uncategorized')
   const category = categories.find(item => item._id === task.categoryId)
