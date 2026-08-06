@@ -35,6 +35,16 @@ export function splitReferences (references = []) {
   }, { active: [], archived: [] })
 }
 
+export function escapeAttribute (value) {
+  return String(value).replace(/[&<>"']/g, character => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;'
+  })[character])
+}
+
 export function initCategoryLocationView () {
   manager = document.getElementById('referenceManager')
   status = document.getElementById('referenceManagerStatus')
@@ -58,8 +68,16 @@ function renderReferenceList (kind, references) {
   const container = document.getElementById(kind === 'category' ? 'categoryManagerList' : 'locationManagerList')
   const groups = splitReferences(references)
   const { label } = referenceConfig[kind]
-  const activeRows = groups.active.map(reference => referenceRowHtml(kind, reference)).join('')
-  const archivedRows = groups.archived.map(reference => referenceRowHtml(kind, reference)).join('')
+  const activeRows = groups.active.map(reference => referenceRowHtml(
+    kind,
+    reference,
+    editingReference === kind + ':' + reference._id
+  )).join('')
+  const archivedRows = groups.archived.map(reference => referenceRowHtml(
+    kind,
+    reference,
+    editingReference === kind + ':' + reference._id
+  )).join('')
   const empty = groups.active.length ? '' : '<p class="empty">No active ' + label.toLowerCase() + 's.</p>'
   const archivedSection = groups.archived.length
     ? '<details class="reference-archived"><summary>Archived (' + groups.archived.length + ')</summary>' + archivedRows + '</details>'
@@ -68,16 +86,17 @@ function renderReferenceList (kind, references) {
   container.innerHTML = activeRows + empty + archivedSection
 }
 
-function referenceRowHtml (kind, reference) {
-  const id = escapeHtml(String(reference._id))
+export function referenceRowHtml (kind, reference, isEditing = false) {
+  const id = escapeAttribute(reference._id)
   const name = escapeHtml(String(reference.name))
+  const nameAttribute = escapeAttribute(reference.name)
   const archived = reference.status === 'archived'
   const rowClass = archived ? 'reference-row is-archived' : 'reference-row'
   const rowData = 'data-kind="' + kind + '" data-id="' + id + '"'
 
-  if (editingReference === kind + ':' + reference._id) {
+  if (isEditing) {
     return '<div class="reference-edit-row" ' + rowData + '>' +
-      '<input class="reference-name-input" aria-label="Rename ' + kind + '" value="' + name + '" autocomplete="off">' +
+      '<input class="reference-name-input" aria-label="Rename ' + kind + '" value="' + nameAttribute + '" autocomplete="off">' +
       '<button type="button" data-action="save">Save</button>' +
       '<button type="button" data-action="cancel">Cancel</button>' +
     '</div>'
