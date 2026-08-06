@@ -1,5 +1,3 @@
-export const CATEGORIES = ['Admin', 'Clean / Reset', 'Fix', 'Plan', 'Organize', 'Run Errands']
-
 export function formatDate(ts) {
   if (!ts) return 'n/a'
   return new Date(ts).toLocaleDateString()

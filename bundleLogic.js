@@ -7,9 +7,9 @@ export function prioritizeTasks(tasks, now = Date.now()) {
   })
 }
 
-export function buildBundle(tasks, budgetMinutes, categoryFilter) {
+export function buildBundle(tasks, budgetMinutes, categoryFilterId) {
   const eligible = tasks.filter(t => {
-    if (categoryFilter && t.category !== categoryFilter) return false
+    if (categoryFilterId && t.categoryId !== categoryFilterId) return false
     return t.estimatedDuration && t.estimatedDuration > 0
   })
   const prioritized = prioritizeTasks(eligible)
@@ -24,10 +24,10 @@ export function buildBundle(tasks, budgetMinutes, categoryFilter) {
   return bundle
 }
 
-export function findFillerTask(tasks, excludeIds, remainingMinutes, categoryFilter) {
+export function findFillerTask(tasks, excludeIds, remainingMinutes, categoryFilterId) {
   const eligible = tasks.filter(t =>
     !excludeIds.includes(t._id) &&
-    (!categoryFilter || t.category === categoryFilter) &&
+    (!categoryFilterId || t.categoryId === categoryFilterId) &&
     t.estimatedDuration && t.estimatedDuration <= remainingMinutes
   )
   const prioritized = prioritizeTasks(eligible)

@@ -101,7 +101,7 @@ async function maybeAddFillerTask(actualDuration, estimatedDuration) {
   if (savedMinutes < 3) return
   await refreshTasksView()
   const excludeIds = usedTaskIds.concat(state.currentBundle.map(t => t._id))
-  const filler = findFillerTask(getActiveTasks(), excludeIds, savedMinutes, state.currentSession.categoryFilter)
+  const filler = findFillerTask(getActiveTasks(), excludeIds, savedMinutes, state.currentSession.categoryFilterId)
   if (filler && confirm('You finished early - add "' + filler.name + '" (' + formatDuration(filler.estimatedDuration) + ')?')) {
     state.currentBundle.push(filler)
   }

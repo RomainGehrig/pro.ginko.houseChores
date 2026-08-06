@@ -2,12 +2,14 @@ import { getActiveTasks } from './tasksView.js'
 import { buildBundle } from './bundleLogic.js'
 import { createSession } from './sessionData.js'
 import { formatDuration, formatDate } from './helpers.js'
+import { categoryLocationStore } from './categoryLocationStore.js'
+import { selectableReferences } from './categoryLocationLogic.js'
 import { state } from './state.js'
 import { showView, setNavVisible } from './viewRouter.js'
 import { startDoing } from './doingView.js'
 
 let selectedMinutes = null
-let selectedCategory = ''
+let selectedCategoryId = ''
 let currentBundle = []
 
 export function initSessionView() {
@@ -23,10 +25,30 @@ export function initSessionView() {
     highlightTimeBtn(null)
   })
   document.getElementById('categoryFilter').addEventListener('change', (e) => {
-    selectedCategory = e.target.value
+    selectedCategoryId = e.target.value
   })
   document.getElementById('proposeBundleBtn').addEventListener('click', handlePropose)
   document.getElementById('startSessionBtn').addEventListener('click', handleStart)
+  categoryLocationStore.subscribe(renderCategoryFilter)
+  renderCategoryFilter(categoryLocationStore.getSnapshot())
+}
+
+function renderCategoryFilter(snapshot) {
+  const categories = selectableReferences(snapshot.categories)
+  if (!categories.some(category => category._id === selectedCategoryId)) selectedCategoryId = ''
+
+  const filter = document.getElementById('categoryFilter')
+  const allCategories = document.createElement('option')
+  allCategories.value = ''
+  allCategories.textContent = 'All categories'
+  const categoryOptions = categories.map(category => {
+    const option = document.createElement('option')
+    option.value = category._id
+    option.textContent = category.name
+    return option
+  })
+  filter.replaceChildren(allCategories, ...categoryOptions)
+  filter.value = selectedCategoryId
 }
 
 function highlightTimeBtn(activeBtn) {
@@ -38,7 +60,7 @@ function handlePropose() {
     alert('Choose or enter a time budget first.')
     return
   }
-  currentBundle = buildBundle(getActiveTasks(), selectedMinutes, selectedCategory || null)
+  currentBundle = buildBundle(getActiveTasks(), selectedMinutes, selectedCategoryId || null)
   renderBundlePreview()
 }
 
@@ -59,15 +81,23 @@ function renderBundlePreview() {
 }
 
 async function handleStart() {
+  const selectedCategory = selectableReferences(categoryLocationStore.getSnapshot().categories)
+    .find(category => category._id === selectedCategoryId)
   const session = await createSession({
     timeBudgetMinutes: selectedMinutes,
-    categoryFilter: selectedCategory || null,
+    categoryFilterId: selectedCategoryId || null,
+    categoryFilter: selectedCategory?.name || null,
     taskBundle: currentBundle.map(t => t._id),
     startTime: Date.now(),
     endTime: null,
     status: 'active'
   })
-  state.currentSession = { _id: session._id, timeBudgetMinutes: selectedMinutes, categoryFilter: selectedCategory || null }
+  state.currentSession = {
+    _id: session._id,
+    timeBudgetMinutes: selectedMinutes,
+    categoryFilterId: selectedCategoryId || null,
+    categoryFilter: selectedCategory?.name || null
+  }
   state.currentBundle = currentBundle
   state.currentBundleIndex = 0
   setNavVisible('doing', true)
