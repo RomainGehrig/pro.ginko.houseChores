@@ -2,6 +2,7 @@ import { listAllTasks, createTask, updateTask } from './taskData.js'
 import { enrichTasks } from './aiEnrich.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
 import {
+  buildTaskEditorModel,
   resolveSuggestedCategoryId,
   sanitizeLocationIds,
   selectableReferences,
@@ -11,6 +12,8 @@ import { escapeAttribute } from './categoryLocationView.js'
 import { formatDate, formatDuration, escapeHtml } from './helpers.js'
 
 let tasksCache = []
+let editingTaskId = null
+let taskEditorError = ''
 const noActiveCategoryMessage = 'Add an active category before using AI enrichment.'
 
 export async function initTasksView() {
@@ -125,17 +128,58 @@ function proposedCardHtml(task, categories, locations) {
 function renderActive() {
   const container = document.getElementById('activeCards')
   const active = getActiveTasks()
+  const snapshot = categoryLocationStore.getSnapshot()
   container.innerHTML = active.length
-    ? active.map(t => (
-        '<div class="task-card" data-id="' + t._id + '">' +
-          '<div class="task-name">' + escapeHtml(t.name) + '</div>' +
-          '<div class="task-meta">' + escapeHtml(t.category || 'Uncategorized') + ' \u00b7 ' + formatDuration(t.estimatedDuration) +
-            (t.recurrence ? ' \u00b7 every ' + t.recurrence + 'd' : '') + '</div>' +
-          '<div class="task-meta">Next due: ' + formatDate(t.nextDueDate) + '</div>' +
-          '<button class="archive-btn">Archive</button>' +
-        '</div>'
-      )).join('')
+    ? active.map(task => activeTaskCardHtml(task, snapshot)).join('')
     : '<p class="empty">No active tasks.</p>'
+}
+
+function activeTaskCardHtml(task, snapshot) {
+  const isEditing = task._id === editingTaskId
+  const content = isEditing
+    ? taskEditorHtml(task, snapshot)
+    : '<div class="task-meta">' + escapeHtml(task.category || 'Uncategorized') + ' \u00b7 ' + formatDuration(task.estimatedDuration) +
+      (task.recurrence ? ' \u00b7 every ' + task.recurrence + 'd' : '') + '</div>' +
+      '<div class="task-meta">Next due: ' + formatDate(task.nextDueDate) + '</div>'
+  const actions = isEditing
+    ? '<button class="save-task-edit-btn" type="button">Save</button>' +
+      '<button class="cancel-task-edit-btn" type="button">Cancel</button>'
+    : '<button class="edit-task-btn" type="button">Edit</button>'
+
+  return (
+    '<div class="task-card" data-id="' + escapeAttribute(task._id) + '">' +
+      '<div class="task-name">' + escapeHtml(String(task.name ?? '')) + '</div>' +
+      content + actions +
+      '<button class="archive-btn" type="button">Archive</button>' +
+    '</div>'
+  )
+}
+
+function taskEditorHtml(task, snapshot) {
+  const model = buildTaskEditorModel(task, snapshot)
+  const selectedLocationIds = new Set(model.locationIds)
+  const categoryOptions = model.categoryOptions.map(category =>
+    '<option value="' + escapeAttribute(category._id) + '"' +
+      (category._id === model.categoryId ? ' selected' : '') + '>' +
+      escapeHtml(String(category.name)) + (category.status === 'archived' ? ' (Archived)' : '') + '</option>'
+  ).join('')
+  const locationOptions = model.locationOptions.length
+    ? model.locationOptions.map(location =>
+        '<label class="location-option"><input class="task-edit-location" name="locationIds" type="checkbox" value="' +
+          escapeAttribute(location._id) + '"' + (selectedLocationIds.has(location._id) ? ' checked' : '') + '> ' +
+          '<span>' + escapeHtml(String(location.name)) + '</span>' +
+          (location.status === 'archived' ? ' <span class="archived-badge">Archived</span>' : '') + '</label>'
+      ).join('')
+    : '<span class="empty">No locations available.</span>'
+
+  return (
+    '<div class="task-edit-form">' +
+      '<label>Category <select class="task-edit-category" name="categoryId">' +
+        '<option value="">-</option>' + categoryOptions + '</select></label>' +
+      '<fieldset class="location-options"><legend>Locations</legend>' + locationOptions + '</fieldset>' +
+      '<div class="task-card-error" role="alert">' + escapeHtml(taskEditorError) + '</div>' +
+    '</div>'
+  )
 }
 
 function renderArchived() {
@@ -187,8 +231,59 @@ function syncEnrichmentAvailability() {
 }
 
 async function handleActiveClick(evt) {
-  if (!evt.target.classList.contains('archive-btn')) return
   const card = evt.target.closest('.task-card')
-  await updateTask(card.dataset.id, { status: 'archived' })
+  if (!card) return
+  const id = card.dataset.id
+
+  if (evt.target.classList.contains('archive-btn')) {
+    await updateTask(id, { status: 'archived' })
+    if (editingTaskId === id) {
+      editingTaskId = null
+      taskEditorError = ''
+    }
+    await refreshTasksView()
+    return
+  }
+
+  if (evt.target.classList.contains('edit-task-btn')) {
+    editingTaskId = id
+    taskEditorError = ''
+    renderActive()
+    return
+  }
+
+  if (evt.target.classList.contains('cancel-task-edit-btn')) {
+    editingTaskId = null
+    taskEditorError = ''
+    renderActive()
+    return
+  }
+
+  if (!evt.target.classList.contains('save-task-edit-btn')) return
+  const task = tasksCache.find(item => item._id === id)
+  if (!task) return
+  const { categories, locations } = categoryLocationStore.getSnapshot()
+  const requestedCategoryId = card.querySelector('.task-edit-category').value || null
+  const requestedLocationIds = [...card.querySelectorAll('.task-edit-location:checked')].map(input => input.value)
+  const categoryId = validateCategoryId(requestedCategoryId, categories, task.categoryId)
+  const locationIds = sanitizeLocationIds(requestedLocationIds, locations, task.locationIds || [])
+  const category = categories.find(item => item._id === categoryId) || null
+  const errorElement = card.querySelector('.task-card-error')
+  taskEditorError = ''
+  errorElement.textContent = ''
+
+  try {
+    await updateTask(id, {
+      categoryId,
+      category: category?.name || null,
+      locationIds
+    })
+  } catch (err) {
+    taskEditorError = err?.message || 'Could not save task assignments.'
+    errorElement.textContent = taskEditorError
+    return
+  }
+
+  editingTaskId = null
   await refreshTasksView()
 }

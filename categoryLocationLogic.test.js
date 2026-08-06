@@ -4,6 +4,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  buildTaskEditorModel,
   DEFAULT_CATEGORIES,
   listMissingLegacyCategoryNames,
   normalizeReferenceName,
@@ -139,4 +140,33 @@ test('keeps statusless legacy references in task choices and AI category names',
   assert.deepEqual(activeCategories.map(category => category._id), ['c-legacy', 'c-active'])
   assert.deepEqual(activeCategories.map(category => category.name), ['Legacy category', 'Current category'])
   assert.deepEqual(selectableReferences(locations).map(location => location._id), ['l-legacy', 'l-active'])
+})
+
+test('builds active-task editor choices with assigned archived references only', () => {
+  const task = {
+    categoryId: 'archived-category',
+    locationIds: ['active-location', 'active-location', 'archived-assigned', 'missing-location']
+  }
+  const categories = [
+    { _id: 'archived-category', name: 'Retired', status: 'archived', displayOrder: 2 },
+    { _id: 'active-category', name: 'Admin', status: 'active', displayOrder: 1 }
+  ]
+  const locations = [
+    { _id: 'archived-unassigned', name: 'Attic', status: 'archived', displayOrder: 0 },
+    { _id: 'archived-assigned', name: 'Basement', status: 'archived', displayOrder: 2 },
+    { _id: 'active-location', name: 'Kitchen', status: 'active', displayOrder: 1 }
+  ]
+  const originalTask = structuredClone(task)
+  const originalCategories = structuredClone(categories)
+  const originalLocations = structuredClone(locations)
+
+  const model = buildTaskEditorModel(task, { categories, locations })
+
+  assert.equal(model.categoryId, 'archived-category')
+  assert.deepEqual(model.locationIds, ['active-location', 'archived-assigned'])
+  assert.deepEqual(model.categoryOptions.map(item => item._id), ['active-category', 'archived-category'])
+  assert.deepEqual(model.locationOptions.map(item => item._id), ['active-location', 'archived-assigned'])
+  assert.deepEqual(task, originalTask)
+  assert.deepEqual(categories, originalCategories)
+  assert.deepEqual(locations, originalLocations)
 })

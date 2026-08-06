@@ -137,6 +137,22 @@ export function sanitizeLocationIds (requestedIds, locations, existingIds = []) 
   })
 }
 
+export function buildTaskEditorModel (task, snapshot) {
+  const categories = snapshot?.categories || []
+  const locations = snapshot?.locations || []
+  const existingCategoryId = task?.categoryId || null
+  const existingLocationIds = Array.isArray(task?.locationIds) ? task.locationIds : []
+  const categoryId = validateCategoryId(existingCategoryId, categories, existingCategoryId)
+  const locationIds = sanitizeLocationIds(existingLocationIds, locations, existingLocationIds)
+
+  return {
+    categoryId,
+    locationIds,
+    categoryOptions: selectableReferences(categories, categoryId ? [categoryId] : []),
+    locationOptions: selectableReferences(locations, locationIds)
+  }
+}
+
 function compareReferences (left, right) {
   const leftArchived = left.status === 'archived'
   const rightArchived = right.status === 'archived'
