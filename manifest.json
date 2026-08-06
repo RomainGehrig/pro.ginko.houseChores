@@ -1,0 +1,78 @@
+{
+  "identifier": "pro.ginko.houseChores",
+  "version": "0.02",
+  "pages": {
+    "index": {
+      "page_title": "Chore Planner",
+      "html_file": "index.html",
+      "css_files": ["index.css"],
+      "modules": ["index.js"],
+      "Description": "Single-page chore planner: task intake with AI enrichment/approval, time-boxed bundle proposal, timer-based doing mode, and post-session review."
+    }
+  },
+  "display_name": "houseChores",
+  "description": "# Build Brief: Household Chore Planner\n\nBuild a small household chore and admin-task planner. The primary goal is to help one or more people turn available time into a realistic, focused bundle of tasks.\n\n## Core user flow\n- A user adds chores or admin tasks, individually or as a batch.\n- AI can propose missing task details, such as category, estimated duration, and recurrence.\n- The user reviews and approves suggested details before tasks become recurring.\n- The user selects available time: 5, 15, 30 minutes, or a custom duration; they may optionally filter by category.\n- The app proposes a task bundle that fits the time and prioritizes overdue or due-soon tasks.\n- The user enters a focused “doing” mode with a timer.\n- Each task can be marked done, cancelled, or already completed.\n- The app records the actual duration and completion outcome.\n- After a session, the user can correct time taken and optionally rate task difficulty. AI may suggest updated future duration estimates based on past executions.\n\n## Core data\n\n### Task\n- Name\n- Category\n- Estimated duration\n- Optional recurrence\n- Last completed date\n- Next due date\n- Status: proposed, approved recurring, active, or archived\n\n### Task execution\n- Task reference\n- Session reference\n- Start and end time\n- Actual duration\n- Outcome: done, cancelled, already done\n- Optional difficulty rating\n- Notes\n\n### Work session\n- Selected time budget\n- Optional category filter\n- Generated task bundle\n- Start and end time\n\n### Categories\n- Admin\n- Clean / Reset\n- Fix\n- Plan\n- Organize\n- Run Errands\n\nMeals and groceries can initially be treated as subcategories of Run Errands.\n\n## AI behavior\n- AI may enrich raw task names with likely category, estimated duration, and recurrence.\n- AI suggestions must always be reviewable and editable before saving.\n- After enough execution history exists, AI may suggest revised duration estimates.\n- Do not let AI silently change approved task data.\n\n## Prioritization rules\n- Prefer overdue tasks.\n- Then prefer tasks due soon.\n- Fit as many suitable tasks as possible within the chosen time budget.\n- Avoid exceeding the chosen budget unless the user explicitly opts in.\n- If a task is completed early, optionally show an additional task that fits the remaining time.\n\n## First-version scope\nInclude task intake, approval, recurring tasks, time-based bundles, a timer-based doing mode, completion tracking, and basic AI enrichment.\n\nKeep accounts, permissions, notifications, calendar integration, gamification, complex household assignment, and advanced optimization out of the first version unless they are essentially free in the framework.",
+  "files": [
+    { "path": "index.js", "Description": "Entry point: wires nav buttons and initializes all views." },
+    { "path": "viewRouter.js", "Description": "Shows/hides the four top-level views and toggles nav button visibility/highlighting." },
+    { "path": "state.js", "Description": "Shared mutable state for the in-progress session and task bundle." },
+    { "path": "helpers.js", "Description": "Formatting utilities (dates, durations, timer text, HTML escaping) and the category list." },
+    { "path": "taskData.js", "Description": "DB calls for the tasks collection (list/create/update)." },
+    { "path": "executionData.js", "Description": "DB calls for the taskExecutions collection." },
+    { "path": "sessionData.js", "Description": "DB calls for the sessions collection." },
+    { "path": "bundleLogic.js", "Description": "Pure functions that prioritize tasks and greedily build a time-boxed bundle." },
+    { "path": "aiEnrich.js", "Description": "Calls the LLM to suggest category/duration/recurrence for new tasks, plus a duration-history heuristic." },
+    { "path": "tasksView.js", "Description": "Renders and wires the task list, add-task form, AI enrichment trigger, and approval flow." },
+    { "path": "sessionView.js", "Description": "Renders and wires the time-budget/category picker and bundle proposal, then starts a session." },
+    { "path": "doingView.js", "Description": "Renders the timer-based doing mode, records executions, and handles the early-finish filler-task offer." },
+    { "path": "reviewView.js", "Description": "Renders the post-session review for correcting durations/ratings and suggesting updated duration estimates." }
+  ],
+  "app_tables": {
+    "tasks": {
+      "description": "Chores/admin tasks, from raw intake through approval and ongoing scheduling.",
+      "schema": {
+        "name": { "type": "String", "description": "Task name as entered by the user." },
+        "category": { "type": "String", "description": "Approved category (one of the fixed category list)." },
+        "estimatedDuration": { "type": "String", "description": "Approved estimated duration in minutes (numeric)." },
+        "recurrence": { "type": "String", "description": "Approved recurrence interval in days, or null for a one-off task (numeric)." },
+        "lastCompletedDate": { "type": "String", "description": "Timestamp (ms) the task was last completed, or null." },
+        "nextDueDate": { "type": "String", "description": "Timestamp (ms) the task is next due (numeric)." },
+        "status": { "type": "String", "description": "One of: proposed, approved_recurring, active, archived." },
+        "suggestedCategory": { "type": "String", "description": "AI-suggested category, pending user approval." },
+        "suggestedDuration": { "type": "String", "description": "AI-suggested duration in minutes, pending user approval (numeric)." },
+        "suggestedRecurrenceDays": { "type": "String", "description": "AI-suggested recurrence in days, pending user approval (numeric)." }
+      }
+    },
+    "taskExecutions": {
+      "description": "One record per task tackled during a doing-mode session.",
+      "schema": {
+        "taskId": { "type": "String", "description": "_id of the related task." },
+        "sessionId": { "type": "String", "description": "_id of the related work session." },
+        "startTime": { "type": "String", "description": "Timestamp (ms) the task was started (numeric)." },
+        "endTime": { "type": "String", "description": "Timestamp (ms) the task was ended (numeric)." },
+        "actualDuration": { "type": "String", "description": "Actual minutes spent, editable during review (numeric)." },
+        "outcome": { "type": "String", "description": "One of: done, cancelled, already_done." },
+        "difficultyRating": { "type": "String", "description": "Optional 1-5 difficulty rating set during review (numeric)." },
+        "notes": { "type": "String", "description": "Optional free-text notes set during review." }
+      }
+    },
+    "sessions": {
+      "description": "A single time-boxed doing-mode session.",
+      "schema": {
+        "timeBudgetMinutes": { "type": "String", "description": "Selected time budget in minutes (numeric)." },
+        "categoryFilter": { "type": "String", "description": "Optional category filter applied when the bundle was generated." },
+        "taskBundle": { "type": "Array", "description": "Array of task _ids proposed for this session." },
+        "startTime": { "type": "String", "description": "Timestamp (ms) the session started (numeric)." },
+        "endTime": { "type": "String", "description": "Timestamp (ms) the session ended (numeric)." },
+        "status": { "type": "String", "description": "One of: active, completed." }
+      }
+    }
+  },
+  "permissions": [
+    {
+      "name": "ai_access",
+      "type": "use_llm",
+      "description": "Use your LLM keys to suggest category, duration, and recurrence when enriching newly added tasks."
+    }
+  ]
+}

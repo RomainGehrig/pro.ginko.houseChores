@@ -1,0 +1,73 @@
+<div id="app">
+  <header class="app-header">
+    <h1>Chore Planner</h1>
+    <nav class="view-nav">
+      <button class="nav-btn active" data-view="tasks">Tasks</button>
+      <button class="nav-btn" data-view="session">Start Session</button>
+      <button class="nav-btn" data-view="doing" style="display:none">Doing</button>
+      <button class="nav-btn" data-view="review" style="display:none">Review</button>
+    </nav>
+  </header>
+
+  <section id="view-tasks" class="view">
+    <div class="add-task-box">
+      <h2>Add Tasks</h2>
+      <textarea id="newTaskInput" placeholder="One task per line, e.g.&#10;Clean bathroom&#10;Pay electricity bill"></textarea>
+      <button id="addTasksBtn">Add</button>
+      <button id="enrichBtn">Enrich with AI</button>
+      <span id="enrichStatus"></span>
+    </div>
+
+    <div class="task-section">
+      <h2>Needs Review</h2>
+      <div class="task-cards" id="proposedCards"></div>
+    </div>
+
+    <div class="task-section">
+      <h2>Active Tasks</h2>
+      <div class="task-cards" id="activeCards"></div>
+    </div>
+
+    <div class="task-section">
+      <h2>Archived</h2>
+      <div class="task-cards" id="archivedCards"></div>
+    </div>
+  </section>
+
+  <section id="view-session" class="view" style="display:none">
+    <h2>Start a Session</h2>
+    <div class="time-options">
+      <button class="time-btn" data-minutes="5">5 min</button>
+      <button class="time-btn" data-minutes="15">15 min</button>
+      <button class="time-btn" data-minutes="30">30 min</button>
+      <label>Custom: <input id="customMinutes" type="number" min="1" placeholder="minutes"></label>
+    </div>
+    <div class="category-filter">
+      <label>Category filter:
+        <select id="categoryFilter">
+          <option value="">All</option>
+          <option value="Admin">Admin</option>
+          <option value="Clean / Reset">Clean / Reset</option>
+          <option value="Fix">Fix</option>
+          <option value="Plan">Plan</option>
+          <option value="Organize">Organize</option>
+          <option value="Run Errands">Run Errands</option>
+        </select>
+      </label>
+    </div>
+    <button id="proposeBundleBtn">Propose Bundle</button>
+
+    <div id="bundlePreview"></div>
+    <button id="startSessionBtn" style="display:none">Start Doing</button>
+  </section>
+
+  <section id="view-doing" class="view" style="display:none">
+    <div id="doingContent"></div>
+  </section>
+
+  <section id="view-review" class="view" style="display:none">
+    <h2>Session Review</h2>
+    <div id="reviewList"></div>
+    <button id="finishReviewBtn">Finish</button>
+  </section>
+</div>

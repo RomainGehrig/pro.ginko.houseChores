@@ -1,0 +1,172 @@
+#app {
+  font-family: sans-serif;
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 20px;
+}
+
+.app-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-right: 56px;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.app-header h1 {
+  margin: 0;
+  font-size: 20px;
+}
+
+.view-nav {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.nav-btn {
+  padding: 6px 12px;
+  border: 1px solid #ccc;
+  background: #f5f5f5;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.nav-btn.active {
+  background: #333;
+  color: #fff;
+  border-color: #333;
+}
+
+.add-task-box {
+  margin-bottom: 24px;
+  padding: 12px;
+  background: #f9f9f9;
+  border-radius: 8px;
+}
+
+.add-task-box textarea {
+  width: 100%;
+  min-height: 70px;
+  box-sizing: border-box;
+  margin-bottom: 8px;
+}
+
+.task-section {
+  margin-bottom: 24px;
+}
+
+.task-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.task-card {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.task-card.archived {
+  opacity: 0.6;
+}
+
+.task-card label {
+  display: block;
+  font-size: 12px;
+  margin: 6px 0;
+}
+
+.task-card input, .task-card select {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 4px;
+}
+
+.task-name {
+  font-weight: bold;
+}
+
+.task-meta {
+  font-size: 12px;
+  color: #666;
+}
+
+.empty {
+  color: #888;
+  font-style: italic;
+}
+
+button {
+  padding: 6px 14px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  background: #fff;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #f0f0f0;
+}
+
+.time-options {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+
+.time-btn {
+  padding: 8px 16px;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  background: #fff;
+  cursor: pointer;
+}
+
+.time-btn.active {
+  background: #333;
+  color: #fff;
+  border-color: #333;
+}
+
+.category-filter {
+  margin-bottom: 14px;
+}
+
+.timer {
+  font-size: 48px;
+  font-weight: bold;
+  text-align: center;
+  margin: 20px 0;
+}
+
+.doing-progress {
+  color: #666;
+  font-size: 12px;
+  margin-bottom: 4px;
+}
+
+.doing-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.exec-card {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+
+.exec-card label {
+  display: block;
+  font-size: 12px;
+  margin: 6px 0;
+}
