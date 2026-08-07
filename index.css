@@ -5,6 +5,10 @@
   padding: 20px;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .app-header {
   display: flex;
   align-items: center;
@@ -340,17 +344,71 @@ button:hover {
   margin: 20px 0;
 }
 
+.doing-session-head {
+  align-items: center;
+  background: #fff;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 8px 0 12px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.doing-session-head .timer {
+  margin: 4px 0;
+  text-align: left;
+}
+
+.doing-session button {
+  min-height: 44px;
+}
+
 .doing-progress {
   color: #666;
   font-size: 12px;
   margin-bottom: 4px;
 }
 
-.doing-actions {
+#doingTaskList {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.doing-task {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.doing-task.is-resolved {
+  background: #f7f7f7;
+  color: #555;
+}
+
+.doing-task-actions,
+#doingDecisionPanel {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-  justify-content: center;
+}
+
+.doing-task-actions {
+  margin-top: 10px;
+}
+
+#doingDecisionPanel {
+  align-items: center;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+#doingDecisionPanel p {
+  flex-basis: 100%;
+  margin: 0;
 }
 
 .exec-card {

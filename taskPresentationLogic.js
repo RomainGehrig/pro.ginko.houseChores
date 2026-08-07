@@ -1,7 +1,7 @@
 // ABOUTME: Pure task-presentation helpers for stable reference labels and safe markup.
 // ABOUTME: Keeps stored task and category values escaped before they enter HTML contexts.
 
-import { escapeHtml, formatDuration } from './helpers.js'
+import { escapeHtml, formatDuration, formatTimer } from './helpers.js'
 import { normalizeReferenceName, resolveReference } from './categoryLocationLogic.js'
 import { formatScheduledDate, scheduleSummary } from './scheduleLogic.js'
 
@@ -18,19 +18,62 @@ export function resolveTaskCategoryName (task, categories = []) {
   return String(category?.name || task.category || 'Unknown category')
 }
 
-export function buildDoingTaskHtml (task, bundleIndex, bundleLength, categories = []) {
-  const categoryName = resolveTaskCategoryName(task, categories)
-  return '<div class="doing-progress">Task ' + (bundleIndex + 1) + ' of ' + bundleLength + '</div>' +
-    '<h2>' + escapeHtml(String(task?.name ?? '')) + '</h2>' +
-    '<div class="task-meta">' + escapeHtml(categoryName) + ' \u00b7 target ' + formatDuration(task?.estimatedDuration) + '</div>' +
-    '<div class="timer" id="timerDisplay">00:00</div>' +
-    '<div id="doingStatus"></div>' +
-    '<div class="doing-actions">' +
-      '<button id="doneBtn">Done</button>' +
-      '<button id="alreadyDoneBtn">Already Done</button>' +
-      '<button id="cancelBtn">Cancel</button>' +
-      '<button id="endSessionBtn">End Session</button>' +
-    '</div>'
+const outcomeActionsHtml = task => task.unavailable
+  ? '<button data-task-id="' + escapeHtml(task._id) +
+    '" data-outcome="cancelled">Cancel</button>'
+  : '<button data-task-id="' + escapeHtml(task._id) + '" data-outcome="done">Done</button>' +
+    '<button data-task-id="' + escapeHtml(task._id) +
+      '" data-outcome="already_done">Already Done</button>' +
+    '<button data-task-id="' + escapeHtml(task._id) +
+      '" data-outcome="cancelled">Cancel</button>'
+
+const outcomeLabel = outcome => ({
+  done: 'Done',
+  already_done: 'Already Done',
+  cancelled: 'Cancelled'
+})[outcome] || String(outcome || '')
+
+const executionSeconds = execution => Math.max(0,
+  Number.isFinite(Number(execution.rawDurationMs))
+    ? Math.floor(Number(execution.rawDurationMs) / 1000)
+    : Math.round(Number(execution.actualDuration || 0) * 60)
+)
+
+export function buildDoingSessionHtml (session, bundle, executions, categories = []) {
+  const executionByTaskId = new Map(executions.map(execution => [execution.taskId, execution]))
+  const tasksHtml = bundle.map(task => {
+    const execution = executionByTaskId.get(task._id)
+    const categoryName = resolveTaskCategoryName(task, categories)
+    const resultHtml = execution
+      ? '<div class="doing-task-result">' + escapeHtml(outcomeLabel(execution.outcome)) +
+        ' \u00b7 ' + formatTimer(executionSeconds(execution)) + '</div>'
+      : '<div class="doing-task-actions">' + outcomeActionsHtml(task) + '</div>'
+    return '<article class="doing-task' + (execution ? ' is-resolved' : '') +
+      '" data-task-id="' + escapeHtml(task._id) + '">' +
+        '<div class="task-name">' + escapeHtml(String(task?.name ?? '')) + '</div>' +
+        '<div class="task-meta">' + escapeHtml(categoryName) + ' \u00b7 target ' +
+          escapeHtml(formatDuration(task?.estimatedDuration)) + '</div>' +
+        resultHtml +
+      '</article>'
+  }).join('')
+  const paused = session?.status === 'paused'
+
+  return '<div class="doing-session-head">' +
+      '<div>' +
+        '<div class="doing-progress">Session time</div>' +
+        '<div class="timer" id="sessionTimerDisplay">00:00</div>' +
+        '<div class="task-meta">Budget ' + escapeHtml(formatDuration(session?.timeBudgetMinutes)) + '</div>' +
+      '</div>' +
+      '<button id="pauseSessionBtn"' + (paused ? ' hidden' : '') + '>Pause</button>' +
+    '</div>' +
+    '<div id="doingStatus" class="inline-status" role="status"></div>' +
+    '<div id="doingTaskList">' + tasksHtml + '</div>' +
+    '<div id="doingDecisionPanel"' + (paused ? '' : ' hidden') + '>' +
+      '<p>The session is paused.</p>' +
+      '<button id="concludeSessionBtn">Conclude</button>' +
+      '<button id="openContinueBtn">Continue</button>' +
+    '</div>' +
+    '<div id="doingContinuePanel" hidden></div>'
 }
 
 function referenceSnapshot (snapshotOrCategories) {

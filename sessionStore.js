@@ -7,6 +7,7 @@ import { listTasksByIds } from './taskData.js'
 import { buildSessionDraft } from './bundleLogic.js'
 import {
   chooseCurrentSession,
+  conclusionFields,
   normalizationFields,
   pauseFields,
   resolvedTaskIds
@@ -20,7 +21,8 @@ export function createSessionStore ({
   listExecutions = listExecutionsBySession,
   listTasks = listTasksByIds,
   createSessionRecord = createSession,
-  updateSessionRecord = updateSession
+  updateSessionRecord = updateSession,
+  now = Date.now
 } = {}) {
   async function hydrate (session, nowMs) {
     const executions = await listExecutions(session._id)
@@ -82,7 +84,21 @@ export function createSessionStore ({
     return { aggregate: await hydrate(created, nowMs), restored: false }
   }
 
-  return { restoreCurrent, refresh, start }
+  async function pause (sessionId, atMs = now()) {
+    const aggregate = await refresh(sessionId, atMs)
+    if (aggregate.session.status === 'paused') return aggregate
+    await updateSessionRecord(sessionId, pauseFields(aggregate.session, atMs))
+    return refresh(sessionId, atMs)
+  }
+
+  async function conclude (sessionId, atMs = now()) {
+    const aggregate = await refresh(sessionId, atMs)
+    const fields = conclusionFields(aggregate.session, aggregate.executions, atMs)
+    await updateSessionRecord(sessionId, fields)
+    return { ...aggregate, session: { ...aggregate.session, ...fields } }
+  }
+
+  return { restoreCurrent, refresh, start, pause, conclude }
 }
 
 export const sessionStore = createSessionStore()

@@ -1,106 +1,268 @@
-import { state } from './state.js'
-import { createExecution } from './executionData.js'
+// ABOUTME: Renders and mutates the one authoritative whole-session Doing aggregate.
+// ABOUTME: Derives one durable clock from persisted timing and retries staged outcome writes.
+
+import { state, setCurrentSessionAggregate } from './state.js'
+import { completionAttemptIdFor, createExecution } from './executionData.js'
 import { listTasksByIds, updateTask } from './taskData.js'
 import { updateSession } from './sessionData.js'
-import { getActiveTasks, refreshTasksView } from './tasksView.js'
-import { findFillerTask } from './bundleLogic.js'
-import { formatTimer, formatDuration } from './helpers.js'
-import { buildDoingTaskHtml } from './taskPresentationLogic.js'
+import { formatTimer } from './helpers.js'
+import { buildDoingSessionHtml } from './taskPresentationLogic.js'
 import { createCompletionCoordinator } from './completionSaveLogic.js'
-import {
-  continueAfterCompletion,
-  endDoingSession,
-  prepareCompletionAttempt,
-  retryCompletionForStage
-} from './doingCompletionLogic.js'
+import { prepareCompletionAttempt, retryCompletionForStage } from './doingCompletionLogic.js'
 import { localDateFromDate } from './scheduleLogic.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
 import { showView, setNavVisible } from './viewRouter.js'
 import { startReview } from './reviewView.js'
+import { sessionStore } from './sessionStore.js'
+import {
+  activeElapsedMs,
+  outcomeTiming,
+  pauseFields,
+  resolvedTaskIds
+} from './sessionLogic.js'
 
 let timerInterval = null
-let taskStartTime = null
-let usedTaskIds = []
-let pendingContinuation = null
-let sessionSaveInFlight = false
-let sessionControlDisabledState = null
+let sessionMutationInFlight = false
+let pendingCompletion = null
+let pendingCompletionStage = null
+let pendingSessionRetry = null
+let boundDoingContent = null
+let boundWindow = null
 
-const completionCoordinator = createCompletionCoordinator({ createExecution, updateTask })
+const completionCoordinator = createCompletionCoordinator({
+  createExecution,
+  updateTask,
+  updateSession
+})
 
-export function initDoingView() {
-  // content is rendered dynamically by startDoing/renderCurrentTask
+const coordinatorHasPendingStage = () =>
+  completionCoordinator.hasPendingExecution() ||
+  completionCoordinator.hasPendingTaskUpdate() ||
+  completionCoordinator.hasPendingSessionUpdate()
+
+export function initDoingView () {
+  bindDoingContent()
+  if (typeof window !== 'undefined' && boundWindow !== window) {
+    boundWindow = window
+    window.addEventListener('focus', () => refreshDoing())
+  }
 }
 
-export function startDoing() {
-  usedTaskIds = []
-  renderCurrentTask()
-}
-
-function currentTask() {
-  return state.currentBundle[state.currentBundleIndex]
-}
-
-function renderCurrentTask() {
-  clearInterval(timerInterval)
-  const task = currentTask()
+function bindDoingContent () {
   const content = document.getElementById('doingContent')
+  if (!content || boundDoingContent === content) return
+  boundDoingContent = content
+  content.addEventListener('click', handleDoingClick)
+}
 
-  if (!task) {
-    endSession()
+export function startDoing (aggregate) {
+  initDoingView()
+  return applyAggregate(aggregate || {
+    session: state.currentSession,
+    bundle: state.currentBundle,
+    executions: state.currentExecutions
+  })
+}
+
+export async function refreshDoing () {
+  if (!state.currentSession?._id ||
+    !['active', 'paused'].includes(state.currentSession.status) ||
+    sessionMutationInFlight) return null
+  try {
+    const aggregate = await sessionStore.refresh(state.currentSession._id, Date.now())
+    pendingSessionRetry = null
+    await applyAggregate(aggregate)
+    return aggregate
+  } catch (error) {
+    renderSessionMutationFailure(
+      'Could not refresh the session: ' + error.message,
+      refreshDoing
+    )
+    return null
+  }
+}
+
+async function applyAggregate (aggregate) {
+  setCurrentSessionAggregate(aggregate)
+  if (aggregate.session.status === 'completed') {
+    clearInterval(timerInterval)
+    setNavVisible('doing', false)
+    setNavVisible('review', true)
+    showView('review')
+    await startReview()
     return
   }
+  if (aggregate.session.status === 'interrupted') {
+    clearInterval(timerInterval)
+    renderDoingError('This session was superseded by newer unfinished work.')
+    return
+  }
+  renderDoing()
+}
 
-  taskStartTime = Date.now()
-  content.innerHTML = buildDoingTaskHtml(
-    task,
-    state.currentBundleIndex,
-    state.currentBundle.length,
+function renderDoing () {
+  clearInterval(timerInterval)
+  bindDoingContent()
+  const content = document.getElementById('doingContent')
+  content.innerHTML = buildDoingSessionHtml(
+    state.currentSession,
+    state.currentBundle,
+    state.currentExecutions,
     categoryLocationStore.getSnapshot().categories
   )
-
-  document.getElementById('doneBtn').addEventListener('click', () => finishTask('done'))
-  document.getElementById('alreadyDoneBtn').addEventListener('click', () => finishTask('already_done'))
-  document.getElementById('cancelBtn').addEventListener('click', () => finishTask('cancelled'))
-  document.getElementById('endSessionBtn').addEventListener('click', endSession)
-
-  const timerDisplay = document.getElementById('timerDisplay')
-  timerInterval = setInterval(() => {
-    const seconds = Math.floor((Date.now() - taskStartTime) / 1000)
-    timerDisplay.textContent = formatTimer(seconds)
-  }, 1000)
+  updateTimerDisplay()
+  setSessionMutationControlsDisabled(sessionMutationInFlight)
+  if (state.currentSession.status === 'active') {
+    timerInterval = setInterval(updateTimerDisplay, 1000)
+  }
 }
 
-async function finishTask(outcome) {
-  if (pendingContinuation || sessionSaveInFlight) return
-
-  clearInterval(timerInterval)
-  const task = currentTask()
-  const endTime = Date.now()
-  const actualDuration = Math.round((endTime - taskStartTime) / 60000) || 1
-  const execution = {
-    taskId: task._id,
-    sessionId: state.currentSession._id,
-    startTime: taskStartTime,
-    endTime,
-    actualDuration,
-    outcome,
-    difficultyRating: null,
-    notes: ''
-  }
-  const completion = {
-    completionDate: localDateFromDate(new Date(endTime)),
-    completedAt: endTime
-  }
-
-  pendingContinuation = { outcome, execution, actualDuration, task, completion, taskUpdate: null }
-  setCompletionControlsDisabled(true)
-  const result = await attemptPendingCompletion()
-  await handleCompletionResult(result)
+function updateTimerDisplay () {
+  const timerDisplay = document.getElementById('sessionTimerDisplay')
+  if (!timerDisplay || !state.currentSession) return
+  timerDisplay.textContent = formatTimer(
+    Math.floor(activeElapsedMs(state.currentSession, Date.now()) / 1000)
+  )
 }
 
-async function attemptPendingCompletion () {
-  const continuation = pendingContinuation
-  if (!continuation) {
+function setSessionMutationControlsDisabled (disabled) {
+  const content = document.getElementById('doingContent')
+  if (!content) return
+  content.querySelectorAll('button').forEach(control => {
+    if (control.id === 'retryCompletionBtn' || control.id === 'retrySessionMutationBtn') return
+    control.disabled = disabled
+  })
+}
+
+function clearDoingStatus () {
+  const status = document.getElementById('doingStatus')
+  if (!status) return
+  status.textContent = ''
+  status.replaceChildren()
+  status.setAttribute('role', 'status')
+  status.setAttribute('data-state', '')
+}
+
+function renderStatusRetry (message, id, label) {
+  const status = document.getElementById('doingStatus')
+  if (!status) {
+    renderDoingError(message)
+    return null
+  }
+  status.replaceChildren()
+  status.textContent = message + ' '
+  status.setAttribute('role', 'alert')
+  status.setAttribute('data-state', 'error')
+  const retryButton = document.createElement('button')
+  retryButton.id = id
+  retryButton.textContent = label
+  status.appendChild(retryButton)
+  return retryButton
+}
+
+function renderDoingError (message) {
+  const content = document.getElementById('doingContent')
+  if (!content) return
+  content.replaceChildren()
+  const error = document.createElement('p')
+  error.className = 'inline-status'
+  error.textContent = message
+  error.setAttribute('role', 'alert')
+  error.setAttribute('data-state', 'error')
+  content.appendChild(error)
+}
+
+function renderCompletionFailure (result) {
+  pendingCompletionStage = result.stage
+  renderStatusRetry(result.message, 'retryCompletionBtn', 'Retry completion')
+}
+
+function renderSessionMutationFailure (message, retry) {
+  pendingSessionRetry = retry
+  renderStatusRetry(message, 'retrySessionMutationBtn', 'Retry')
+}
+
+async function handleDoingClick (event) {
+  const button = event.target?.closest?.('button')
+  if (!button) return
+
+  if (button.id === 'retryCompletionBtn') return retryCompletion(button)
+  if (button.id === 'retrySessionMutationBtn') return retrySessionMutation(button)
+  if (sessionMutationInFlight) return
+
+  if (button.dataset.taskId && button.dataset.outcome) {
+    return completeTask(button.dataset.taskId, button.dataset.outcome)
+  }
+  if (button.id === 'pauseSessionBtn') return pauseSession()
+  if (button.id === 'concludeSessionBtn') return concludeSession()
+  if (button.id === 'openContinueBtn') {
+    const panel = document.getElementById('doingContinuePanel')
+    if (panel) panel.hidden = false
+  }
+}
+
+function validOutcome (outcome) {
+  return outcome === 'done' || outcome === 'already_done' || outcome === 'cancelled'
+}
+
+async function completeTask (taskId, outcome) {
+  if (sessionMutationInFlight || !validOutcome(outcome)) return
+  sessionMutationInFlight = true
+  pendingSessionRetry = null
+  clearDoingStatus()
+  setSessionMutationControlsDisabled(true)
+
+  try {
+    const aggregate = await sessionStore.refresh(state.currentSession._id, Date.now())
+    const existing = aggregate.executions.find(execution => execution.taskId === taskId)
+    if (existing) {
+      pendingCompletion = null
+      pendingCompletionStage = null
+      await applyAggregate(aggregate)
+      releaseCompletionLockIfSettled()
+      return
+    }
+
+    const task = aggregate.bundle.find(candidate => candidate._id === taskId)
+    if (!task) throw new Error('The selected task is no longer attached to this session.')
+    const endTime = Date.now()
+    const timing = outcomeTiming(aggregate.session, aggregate.executions, endTime)
+    const resolved = resolvedTaskIds(aggregate.executions)
+    resolved.add(taskId)
+    const allResolved = aggregate.session.taskBundle.every(id => resolved.has(id))
+    pendingCompletion = {
+      aggregate,
+      task,
+      taskId,
+      outcome,
+      timing,
+      completion: {
+        completionDate: localDateFromDate(new Date(endTime)),
+        completedAt: endTime
+      },
+      sessionUpdate: {
+        checkpointElapsedMs: timing.activeElapsedMs,
+        ...(allResolved ? pauseFields(aggregate.session, endTime) : {})
+      }
+    }
+
+    const result = await prepareAndCompletePendingTask()
+    await handleCompletionResult(result)
+  } catch (error) {
+    pendingCompletion = null
+    pendingCompletionStage = null
+    sessionMutationInFlight = false
+    setSessionMutationControlsDisabled(false)
+    renderSessionMutationFailure(
+      'Could not record the outcome: ' + error.message,
+      () => completeTask(taskId, outcome)
+    )
+  }
+}
+
+async function prepareAndCompletePendingTask () {
+  const attempt = pendingCompletion
+  if (!attempt) {
     return {
       ok: false,
       stage: 'task_read',
@@ -112,10 +274,10 @@ async function attemptPendingCompletion () {
   let prepared
   try {
     prepared = await prepareCompletionAttempt({
-      taskSnapshot: continuation.task,
-      outcome: continuation.outcome,
-      completion: continuation.completion,
-      loadTask: async taskId => (await listTasksByIds([taskId]))[0] || null
+      taskSnapshot: attempt.task,
+      outcome: attempt.outcome,
+      completion: attempt.completion,
+      loadTask: async id => (await listTasksByIds([id]))[0] || null
     })
   } catch (error) {
     return {
@@ -126,119 +288,110 @@ async function attemptPendingCompletion () {
     }
   }
 
-  pendingContinuation = {
-    ...continuation,
-    task: prepared.task,
-    taskUpdate: prepared.taskUpdate
-  }
+  pendingCompletion = { ...attempt, task: prepared.task, taskUpdate: prepared.taskUpdate }
   return completionCoordinator.complete({
-    execution: continuation.execution,
-    taskId: prepared.task._id,
-    taskUpdate: prepared.taskUpdate
+    execution: {
+      taskId: attempt.taskId,
+      sessionId: attempt.aggregate.session._id,
+      ...attempt.timing,
+      outcome: attempt.outcome,
+      actualSeconds: attempt.timing.rawDurationMs / 1000,
+      difficultyRating: null,
+      notes: '',
+      completionAttemptId: completionAttemptIdFor(attempt.aggregate.session._id, attempt.taskId)
+    },
+    taskId: attempt.taskId,
+    taskUpdate: prepared.taskUpdate,
+    sessionId: attempt.aggregate.session._id,
+    sessionUpdate: attempt.sessionUpdate
   })
 }
 
-function setCompletionControlsDisabled(disabled) {
-  for (const id of ['doneBtn', 'alreadyDoneBtn', 'cancelBtn', 'endSessionBtn']) {
-    const control = document.getElementById(id)
-    if (control) control.disabled = disabled
-  }
-}
-
-function setSessionSaveControlsDisabled(disabled) {
-  sessionSaveInFlight = disabled
-  const controlIds = ['doneBtn', 'alreadyDoneBtn', 'cancelBtn', 'retryCompletionBtn', 'endSessionBtn']
-  if (disabled) sessionControlDisabledState = new Map()
-  for (const id of controlIds) {
-    const control = document.getElementById(id)
-    if (!control) continue
-    if (disabled) {
-      sessionControlDisabledState.set(id, control.disabled)
-      control.disabled = true
-    } else if (sessionControlDisabledState?.has(id)) {
-      control.disabled = sessionControlDisabledState.get(id)
-    }
-  }
-  if (!disabled) sessionControlDisabledState = null
-}
-
-async function handleCompletionResult(result) {
+async function handleCompletionResult (result) {
   if (!result.ok) {
     renderCompletionFailure(result)
     return
   }
 
-  const continuation = pendingContinuation
-  if (!continuation) return
-  usedTaskIds.push(continuation.task._id)
-
-  await continueAfterCompletion({
-    offerFiller: () => maybeAddFillerTask(continuation.actualDuration, continuation.task.estimatedDuration),
-    reportFillerFailure: error => console.error('Could not offer a filler task after completion.', error),
-    advanceBundle: () => { state.currentBundleIndex += 1 },
-    renderNextTask: renderCurrentTask
-  })
-  pendingContinuation = null
-}
-
-function renderCompletionFailure(result) {
-  const status = document.getElementById('doingStatus')
-  status.textContent = result.message
-  status.setAttribute('role', 'alert')
-
-  const retryButton = document.createElement('button')
-  retryButton.id = 'retryCompletionBtn'
-  retryButton.textContent = 'Retry completion'
-  retryButton.addEventListener('click', async () => {
-    if (sessionSaveInFlight) return
-    retryButton.disabled = true
-    const endSessionButton = document.getElementById('endSessionBtn')
-    if (endSessionButton) endSessionButton.disabled = true
-
-    const retryResult = await retryCompletionForStage(result.stage, {
-      actionsBlocked: () => sessionSaveInFlight,
-      retryPreparation: attemptPendingCompletion,
-      retryExecution: completionCoordinator.retryExecution,
-      retryTaskUpdate: completionCoordinator.retryTaskUpdate
-    })
-    if (!retryResult) return
-    await handleCompletionResult(retryResult)
-  })
-  status.appendChild(retryButton)
-
-  const endSessionButton = document.getElementById('endSessionBtn')
-  if (endSessionButton) endSessionButton.disabled = false
-}
-
-async function maybeAddFillerTask(actualDuration, estimatedDuration) {
-  const savedMinutes = (estimatedDuration || 0) - actualDuration
-  if (savedMinutes < 3) return
-  await refreshTasksView()
-  const excludeIds = usedTaskIds.concat(state.currentBundle.map(t => t._id))
-  const filler = findFillerTask(getActiveTasks(), excludeIds, savedMinutes, state.currentSession.categoryFilterId)
-  if (filler && confirm('You finished early - add "' + filler.name + '" (' + formatDuration(filler.estimatedDuration) + ')?')) {
-    state.currentBundle.push(filler)
+  pendingCompletion = null
+  pendingCompletionStage = null
+  try {
+    const aggregate = await sessionStore.refresh(state.currentSession._id, Date.now())
+    await applyAggregate(aggregate)
+  } catch (error) {
+    sessionMutationInFlight = false
+    setSessionMutationControlsDisabled(false)
+    renderSessionMutationFailure(
+      'Outcome saved, but the session could not be refreshed: ' + error.message,
+      refreshDoing
+    )
+    return
   }
+  releaseCompletionLockIfSettled()
 }
 
-async function endSession() {
-  clearInterval(timerInterval)
-  await endDoingSession({
-    actionsBlocked: () => sessionSaveInFlight,
-    hasPendingTaskUpdate: completionCoordinator.hasPendingTaskUpdate,
-    confirmDiscard: () => confirm('The completion is recorded, but the schedule was not updated and will need manual correction. End session anyway?'),
-    saveSession: () => updateSession(state.currentSession._id, { endTime: Date.now(), status: 'completed' }),
-    setCompletionControlsDisabled: setSessionSaveControlsDisabled,
-    discardPendingTaskUpdate: completionCoordinator.discardPendingTaskUpdate,
-    clearPendingContinuation: () => {
-      completionCoordinator.discardPendingExecution()
-      pendingContinuation = null
-    },
-    showReview: async () => {
-      setNavVisible('doing', false)
-      setNavVisible('review', true)
-      showView('review')
-      await startReview()
-    }
+function releaseCompletionLockIfSettled () {
+  if (pendingCompletion || coordinatorHasPendingStage()) return
+  sessionMutationInFlight = false
+  setSessionMutationControlsDisabled(false)
+}
+
+async function retryCompletion (button) {
+  if (!pendingCompletionStage) return
+  button.disabled = true
+  const result = await retryCompletionForStage(pendingCompletionStage, {
+    actionsBlocked: () => false,
+    retryPreparation: prepareAndCompletePendingTask,
+    retryExecution: completionCoordinator.retryExecution,
+    retryTaskUpdate: completionCoordinator.retryTaskUpdate,
+    retrySessionUpdate: completionCoordinator.retrySessionUpdate
   })
+  if (!result) return
+  await handleCompletionResult(result)
+}
+
+async function runSessionMutation (operation, failureMessage, retry) {
+  if (sessionMutationInFlight) return
+  sessionMutationInFlight = true
+  pendingSessionRetry = null
+  clearDoingStatus()
+  setSessionMutationControlsDisabled(true)
+
+  let aggregate
+  try {
+    aggregate = await operation()
+  } catch (error) {
+    sessionMutationInFlight = false
+    setSessionMutationControlsDisabled(false)
+    renderSessionMutationFailure(failureMessage + ': ' + error.message, retry)
+    return
+  }
+
+  await applyAggregate(aggregate)
+  sessionMutationInFlight = false
+  setSessionMutationControlsDisabled(false)
+}
+
+function pauseSession () {
+  return runSessionMutation(
+    () => sessionStore.pause(state.currentSession._id, Date.now()),
+    'Could not pause the session',
+    pauseSession
+  )
+}
+
+function concludeSession () {
+  return runSessionMutation(
+    () => sessionStore.conclude(state.currentSession._id, Date.now()),
+    'Could not conclude the session',
+    concludeSession
+  )
+}
+
+async function retrySessionMutation (button) {
+  if (!pendingSessionRetry || sessionMutationInFlight) return
+  const retry = pendingSessionRetry
+  pendingSessionRetry = null
+  button.disabled = true
+  await retry()
 }

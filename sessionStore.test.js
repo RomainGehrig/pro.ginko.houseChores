@@ -89,3 +89,53 @@ test('start creates one compact snapshot when none is unfinished', async () => {
   assert.equal(created.activeStartedAt, 9000)
   assert.deepEqual(result.aggregate.session.taskBundle, ['t1'])
 })
+
+test('pause persists active elapsed time from the injected clock', async () => {
+  let session = {
+    _id: 's1', status: 'active', startTime: 1000, taskBundle: ['t1'],
+    accumulatedActiveMs: 0, activeStartedAt: 1000, checkpointElapsedMs: 0
+  }
+  const updates = []
+  const store = createSessionStore({
+    now: () => 10000,
+    getSession: async () => ({ ...session }),
+    listExecutions: async () => [],
+    listTasks: async () => [{ _id: 't1', name: 'Sink' }],
+    updateSessionRecord: async (id, fields) => {
+      updates.push({ id, fields })
+      session = { ...session, ...fields }
+    }
+  })
+
+  const aggregate = await store.pause('s1')
+
+  assert.equal(updates[0].fields.accumulatedActiveMs, 9000)
+  assert.equal(aggregate.session.status, 'paused')
+  assert.equal(aggregate.session.activeStartedAt, null)
+})
+
+test('conclude stores active time not assigned to an execution', async () => {
+  let session = {
+    _id: 's1', status: 'paused', startTime: 1000, taskBundle: ['t1'],
+    accumulatedActiveMs: 12000, activeStartedAt: null, checkpointElapsedMs: 7000
+  }
+  const updates = []
+  const store = createSessionStore({
+    now: () => 20000,
+    getSession: async () => ({ ...session }),
+    listExecutions: async () => [{
+      taskId: 't1', endTime: 8000, rawDurationMs: 7000, activeElapsedMs: 7000
+    }],
+    listTasks: async () => [{ _id: 't1', name: 'Sink' }],
+    updateSessionRecord: async (id, fields) => {
+      updates.push({ id, fields })
+      session = { ...session, ...fields }
+    }
+  })
+
+  const aggregate = await store.conclude('s1')
+
+  assert.equal(updates[0].fields.unassignedDurationMs, 5000)
+  assert.equal(aggregate.session.status, 'completed')
+  assert.equal(aggregate.session.unassignedDurationMs, 5000)
+})

@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import {
   buildActiveTaskDetailsHtml,
   buildBundlePreviewHtml,
-  buildDoingTaskHtml,
+  buildDoingSessionHtml,
   buildEnrichmentAvailability
 } from './taskPresentationLogic.js'
 
@@ -21,52 +21,36 @@ test('uses neutral no-category copy for unavailable AI enrichment', () => {
   })
 })
 
-test('doing markup resolves a renamed category by stable id and escapes stored names', () => {
-  const markup = buildDoingTaskHtml({
-    _id: 'task-1',
-    name: '<img src=x onerror=alert(1)>',
-    categoryId: 'category-1',
-    category: 'Stale category snapshot',
-    estimatedDuration: 15
-  }, 0, 1, [{
-    _id: 'category-1',
-    name: '<svg onload=alert(2)>Renamed category',
-    status: 'active'
-  }])
-
+test('doing markup renders all unresolved task actions and escapes names', () => {
+  const markup = buildDoingSessionHtml({
+    status: 'active', timeBudgetMinutes: 15
+  }, [
+    { _id: 't1', name: '<img src=x onerror=alert(1)>', estimatedDuration: 5 },
+    { _id: 't2', name: 'Clean sink', estimatedDuration: 10 }
+  ], [], [])
+  assert.match(markup, /id="sessionTimerDisplay"/)
+  assert.match(markup, /data-task-id="t1"/)
+  assert.match(markup, /data-task-id="t2"/)
+  assert.equal((markup.match(/data-outcome="done"/g) || []).length, 2)
+  assert.equal((markup.match(/data-outcome="already_done"/g) || []).length, 2)
+  assert.equal((markup.match(/data-outcome="cancelled"/g) || []).length, 2)
   assert.match(markup, /&lt;img src=x onerror=alert\(1\)&gt;/)
-  assert.match(markup, /&lt;svg onload=alert\(2\)&gt;Renamed category/)
-  assert.doesNotMatch(markup, /<img|<svg|Stale category snapshot/)
-
-  const activeMarkup = buildActiveTaskDetailsHtml({
-    categoryId: 'category-1',
-    category: 'Stale category snapshot',
-    estimatedDuration: 15,
-    scheduledDate: '2026-08-16',
-    schedule: { type: 'one_off' }
-  }, [{
-    _id: 'category-1',
-    name: '<svg onload=alert(2)>Renamed category',
-    status: 'active'
-  }])
-  assert.match(activeMarkup, /&lt;svg onload=alert\(2\)&gt;Renamed category/)
-  assert.doesNotMatch(activeMarkup, /<svg|Stale category snapshot/)
+  assert.doesNotMatch(markup, /<img/)
 })
 
-test('doing markup keeps completion recovery status and actions safely rendered', () => {
-  const markup = buildDoingTaskHtml({
-    name: '<button id="retryCompletionBtn">Fake retry</button>',
-    category: 'Home',
-    estimatedDuration: 10
-  }, 0, 1)
-
-  assert.match(markup, /<div id="doingStatus"><\/div>/)
-  assert.match(markup, /<button id="doneBtn">Done<\/button>/)
-  assert.match(markup, /<button id="alreadyDoneBtn">Already Done<\/button>/)
-  assert.match(markup, /<button id="cancelBtn">Cancel<\/button>/)
-  assert.match(markup, /<button id="endSessionBtn">End Session<\/button>/)
-  assert.doesNotMatch(markup, /<h2><button/)
-  assert.equal((markup.match(/id="retryCompletionBtn"/g) || []).length, 0)
+test('resolved and unavailable cards remain visible in paused state', () => {
+  const markup = buildDoingSessionHtml({
+    status: 'paused', timeBudgetMinutes: 15
+  }, [
+    { _id: 't1', name: 'Clean sink', estimatedDuration: 5 },
+    { _id: 'missing', name: 'Unavailable task', unavailable: true }
+  ], [{ taskId: 't1', outcome: 'done', rawDurationMs: 5000 }], [])
+  assert.match(markup, /data-task-id="t1"[\s\S]*Done · 00:05/)
+  assert.match(markup, /data-task-id="missing"[\s\S]*Unavailable task/)
+  assert.match(markup, /data-task-id="missing"[\s\S]*data-outcome="cancelled"/)
+  assert.match(markup, /id="doingDecisionPanel"/)
+  assert.match(markup, />Conclude</)
+  assert.match(markup, />Continue</)
 })
 
 test('bundle preview escapes stored task names', () => {
