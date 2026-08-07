@@ -357,7 +357,7 @@ test('suggestion attachment revalidates the cumulative ledger against authoritat
   assert.deepEqual(updates, [])
 })
 
-test('pending Quick add recovery retries one supplied ID after task creation succeeds', async () => {
+test('pending Quick add recovery preserves an existing task after attachment fails', async () => {
   const originalFreezr = globalThis.freezr
   let session = {
     _id: 's1', status: 'paused', startTime: 1000, taskBundle: ['t1'],
@@ -400,14 +400,20 @@ test('pending Quick add recovery retries one supplied ID after task creation suc
       { message: 'attachment write failed' }
     )
     assert.equal(session.pendingAddition.taskId, 'quick-s1-fixed-id')
+    records.set('quick-s1-fixed-id', {
+      ...records.get('quick-s1-fixed-id'),
+      categoryId: 'maintenance',
+      estimatedDuration: 15,
+      status: 'active'
+    })
 
     const recovered = await store.quickAdd('s1', 'Replace hallway bulb')
 
-    assert.deepEqual(createCalls.map(call => call.id), [
-      'quick-s1-fixed-id', 'quick-s1-fixed-id'
-    ])
+    assert.deepEqual(createCalls.map(call => call.id), ['quick-s1-fixed-id'])
     assert.equal(records.size, 1)
-    assert.equal(records.get('quick-s1-fixed-id').status, 'proposed')
+    assert.equal(records.get('quick-s1-fixed-id').status, 'active')
+    assert.equal(records.get('quick-s1-fixed-id').categoryId, 'maintenance')
+    assert.equal(records.get('quick-s1-fixed-id').estimatedDuration, 15)
     assert.equal(records.get('quick-s1-fixed-id').name, 'Replace hallway bulb')
     assert.deepEqual(recovered.session.taskBundle, ['t1', 'quick-s1-fixed-id'])
     assert.equal(recovered.session.pendingAddition, null)
@@ -775,12 +781,16 @@ test('active pending addition stays untouched until the authoritative session is
   }
   const updates = []
   const createCalls = []
+  const tasks = new Map([['t1', { _id: 't1', name: 'Sink' }]])
   const store = createSessionStore({
     now: () => 10000,
     getSession: async () => structuredClone(session),
     listExecutions: async () => [],
-    listTasks: async ids => ids.map(id => ({ _id: id, name: id })),
-    createTaskRecord: async (title, id) => createCalls.push({ title, id }),
+    listTasks: async ids => ids.map(id => tasks.get(id)).filter(Boolean),
+    createTaskRecord: async (title, id) => {
+      createCalls.push({ title, id })
+      tasks.set(id, { _id: id, name: title, status: 'proposed' })
+    },
     updateSessionRecord: async (id, fields) => {
       updates.push({ id, fields: structuredClone(fields) })
       session = { ...session, ...structuredClone(fields) }

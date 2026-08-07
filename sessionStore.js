@@ -46,7 +46,8 @@ export function createSessionStore ({
     const alreadyAttached = (repaired.taskBundle || []).includes(pending.taskId)
 
     if (pending.stage !== 'attached' || !alreadyAttached) {
-      await createTaskRecord(pending.title, pending.taskId)
+      const [existingTask] = await listTasks([pending.taskId])
+      if (!existingTask) await createTaskRecord(pending.title, pending.taskId)
       const attachedPending = { ...pending, stage: 'attached' }
       const attachment = {
         taskBundle: [...new Set([...(repaired.taskBundle || []), pending.taskId])],
