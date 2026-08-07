@@ -152,3 +152,39 @@ test('confirmed discard happens only after session persistence succeeds', async 
   assert.equal(ended, true)
   assert.deepEqual(calls, ['confirm', 'controls:true', 'save', 'discard', 'clear', 'review', 'controls:false'])
 })
+
+test('review failure always releases the session-save action lock', async () => {
+  const calls = []
+  let controlsDisabled = false
+
+  await assert.rejects(endDoingSession({
+    actionsBlocked: () => controlsDisabled,
+    hasPendingTaskUpdate: () => true,
+    confirmDiscard: () => {
+      calls.push('confirm')
+      return true
+    },
+    saveSession: async () => calls.push('save'),
+    setCompletionControlsDisabled: disabled => {
+      controlsDisabled = disabled
+      calls.push('controls:' + disabled)
+    },
+    discardPendingTaskUpdate: () => calls.push('discard'),
+    clearPendingContinuation: () => calls.push('clear'),
+    showReview: async () => {
+      calls.push('review')
+      throw new Error('review offline')
+    }
+  }), /review offline/)
+
+  assert.equal(controlsDisabled, false)
+  assert.deepEqual(calls, [
+    'confirm',
+    'controls:true',
+    'save',
+    'discard',
+    'clear',
+    'review',
+    'controls:false'
+  ])
+})

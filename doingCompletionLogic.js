@@ -47,9 +47,12 @@ export async function endDoingSession ({
     setCompletionControlsDisabled(false)
     throw error
   }
-  if (shouldDiscardPendingUpdate) discardPendingTaskUpdate()
-  clearPendingContinuation()
-  await showReview()
-  setCompletionControlsDisabled(false)
+  try {
+    if (shouldDiscardPendingUpdate) discardPendingTaskUpdate()
+    clearPendingContinuation()
+    await showReview()
+  } finally {
+    setCompletionControlsDisabled(false)
+  }
   return true
 }
