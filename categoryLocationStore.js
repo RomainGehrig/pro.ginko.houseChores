@@ -11,7 +11,10 @@ import {
   selectableReferences
 } from './categoryLocationLogic.js'
 
-const errorMessage = error => error instanceof Error ? error.message : String(error)
+const errorMessage = error => {
+  const message = error instanceof Error ? error.message : String(error ?? '')
+  return message.trim() || 'Could not complete this operation. Please try again.'
+}
 
 const sortReferences = records => selectableReferences(records, records.map(record => record._id))
 

@@ -108,6 +108,18 @@ test('initialization publishes loaded data when locations fail to load', async (
   assert.match(snapshot.error, /locations are unavailable/)
 })
 
+test('initialization publishes a user-facing fallback when an adapter error has no message', async () => {
+  const fake = createFakeApis()
+  fake.referenceData.listLocations = async () => { throw new Error() }
+  const store = createCategoryLocationStore(fake)
+
+  const snapshot = await store.initialize()
+
+  assert.equal(snapshot.readiness.locations, false)
+  assert.equal(snapshot.errors.locations, 'Could not complete this operation. Please try again.')
+  assert.equal(snapshot.error, 'Could not complete this operation. Please try again.')
+})
+
 test('initialization retains successful default writes when the first category refresh fails', async () => {
   const fake = createFakeApis()
   const listCategories = fake.referenceData.listCategories
@@ -154,7 +166,7 @@ test('initialization merges metadata-only default creates before a failed refres
   assert.match(snapshot.error, /category refresh unavailable/)
 })
 
-test('blocks category mutations when empty-message seed failures leave the cache incomplete', async () => {
+test('reports and blocks category mutations when empty-message seed failures leave the cache incomplete', async () => {
   const persistedCategories = []
   let categoryListCalls = 0
   let nextUserCategoryId = 0
@@ -191,18 +203,18 @@ test('blocks category mutations when empty-message seed failures leave the cache
   } catch (error) {
     mutationError = error.message
   }
+  assert.match(initialized.errors.categories, /Could not complete this operation\. Please try again\./)
+  assert.match(initialized.error, /Could not complete this operation\. Please try again\./)
 
   assert.deepEqual({
     initializedNames: initialized.categories.map(category => category.normalizedName),
     readiness: initialized.readiness,
-    categoryError: initialized.errors.categories,
     mutationError,
     persistedNames: persistedCategories.map(category => category.normalizedName),
     finalNames: store.getSnapshot().categories.map(category => category.normalizedName)
   }, {
     initializedNames: [],
     readiness: { categories: false, locations: true },
-    categoryError: null,
     mutationError: 'Categories must load successfully before they can be changed.',
     persistedNames: ['admin'],
     finalNames: []

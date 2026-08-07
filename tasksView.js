@@ -35,7 +35,7 @@ export async function initTasksView() {
   document.getElementById('activeCards').addEventListener('click', handleActiveClick)
   document.getElementById('activeCards').addEventListener('change', handleActiveScheduleChange)
   document.getElementById('activeCards').addEventListener('input', handleActiveScheduleChange)
-  categoryLocationStore.subscribe(renderTasks)
+  categoryLocationStore.subscribe(renderTasksAfterReferencePublication)
   await refreshTasksView()
 }
 
@@ -49,6 +49,64 @@ function renderTasks() {
   renderActive()
   renderArchived()
   syncEnrichmentAvailability()
+}
+
+function renderTasksAfterReferencePublication () {
+  const drafts = captureTaskEditorDrafts()
+  renderTasks()
+  restoreTaskEditorDrafts(drafts)
+}
+
+function captureTaskEditorDrafts () {
+  const drafts = new Map()
+  const containers = [
+    { id: 'proposedCards', accepts: () => true },
+    { id: 'activeCards', accepts: card => Boolean(card.querySelector('.task-edit-form')) }
+  ]
+
+  for (const { id, accepts } of containers) {
+    const container = document.getElementById(id)
+    if (!container) continue
+    for (const card of container.querySelectorAll('.task-card')) {
+      if (!accepts(card)) continue
+      const controls = [...card.querySelectorAll('input[name], select[name], textarea[name]')]
+      drafts.set(id + ':' + card.dataset.id, controls.map(control => ({
+        tagName: control.tagName,
+        name: control.name,
+        value: control.value,
+        checked: control.type === 'checkbox' || control.type === 'radio'
+          ? control.checked
+          : null
+      })))
+    }
+  }
+  return drafts
+}
+
+function restoreTaskEditorDrafts (drafts) {
+  for (const [key, values] of drafts) {
+    const separator = key.indexOf(':')
+    const container = document.getElementById(key.slice(0, separator))
+    const taskId = key.slice(separator + 1)
+    const card = [...(container?.querySelectorAll('.task-card') || [])]
+      .find(candidate => candidate.dataset.id === taskId)
+    if (!card) continue
+
+    const controls = [...card.querySelectorAll('input[name], select[name], textarea[name]')]
+    for (const draft of values) {
+      const control = controls.find(candidate =>
+        candidate.tagName === draft.tagName &&
+        candidate.name === draft.name &&
+        (draft.checked === null || candidate.value === draft.value)
+      )
+      if (!control) continue
+      if (draft.checked === null) control.value = draft.value
+      else control.checked = draft.checked
+    }
+
+    const scheduleEditor = card.querySelector('.schedule-editor')
+    if (scheduleEditor) syncScheduleEditor(scheduleEditor)
+  }
 }
 
 export function getActiveTasks() {

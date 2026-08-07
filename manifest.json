@@ -25,6 +25,7 @@
     { "path": "scheduleLogic.test.js", "Description": "Node tests covering schedule normalization, legacy compatibility, validation, summaries, matching, and completion advancement." },
     { "path": "scheduleEditor.js", "Description": "Pure helpers that build, render, validate, and progressively disclose the task schedule editor." },
     { "path": "scheduleEditor.test.js", "Description": "Node tests covering schedule-editor models, controls, validation messages, and typed schedule serialization." },
+    { "path": "browserBehavior.test.js", "Description": "Headless Chromium regressions covering computed schedule visibility, hidden-value preservation, and task drafts across reference publications." },
     { "path": "completionSaveLogic.js", "Description": "Pure completion-save coordinator that writes one execution and safely retries a failed task schedule update." },
     { "path": "completionSaveLogic.test.js", "Description": "Node tests covering completion schedule advancement and failure-safe execution/task-update retry boundaries." },
     { "path": "doingCompletionLogic.js", "Description": "Pure doing-mode orchestration for refreshed completion inputs, retry dispatch, filler continuation, and end-session transitions." },
