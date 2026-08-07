@@ -1,0 +1,28 @@
+// ABOUTME: Verifies install-time file inventory and static selector fallbacks.
+// ABOUTME: Prevents imported modules/tests or legacy category choices from being omitted unnoticed.
+
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { readFile, readdir } from 'node:fs/promises'
+
+test('manifest inventories every top-level JavaScript artifact', async () => {
+  const manifest = JSON.parse(await readFile(new URL('./manifest.json', import.meta.url), 'utf8'))
+  const actual = (await readdir(new URL('.', import.meta.url)))
+    .filter(path => path.endsWith('.js'))
+    .sort()
+  const declared = manifest.files
+    .map(file => file.path)
+    .filter(path => path.endsWith('.js'))
+    .sort()
+
+  assert.deepEqual(declared, actual)
+})
+
+test('static category filter contains only the empty dynamic-list fallback', async () => {
+  const html = await readFile(new URL('./index.html', import.meta.url), 'utf8')
+  const selectMarkup = html.match(/<select id="categoryFilter">([\s\S]*?)<\/select>/)?.[1] || ''
+  const optionValues = [...selectMarkup.matchAll(/<option\s+value="([^"]*)"/g)]
+    .map(match => match[1])
+
+  assert.deepEqual(optionValues, [''])
+})

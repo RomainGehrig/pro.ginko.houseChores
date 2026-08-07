@@ -2,12 +2,11 @@ import { listAllTasks, createTask, updateTask } from './taskData.js'
 import { enrichTasks } from './aiEnrich.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
 import {
+  buildCategoryAssignmentFields,
   buildProposedTaskEditorModel,
   buildTaskEditorModel,
-  resolveCategorySnapshotName,
   sanitizeLocationIds,
-  selectableReferences,
-  validateCategoryId
+  selectableReferences
 } from './categoryLocationLogic.js'
 import { escapeAttribute } from './categoryLocationView.js'
 import { escapeHtml } from './helpers.js'
@@ -163,11 +162,11 @@ function renderActive() {
     : '<p class="empty">No active tasks.</p>'
 }
 
-function activeTaskCardHtml(task, snapshot) {
+export function activeTaskCardHtml(task, snapshot) {
   const isEditing = task._id === editingTaskId
   const content = isEditing
     ? taskEditorHtml(task, snapshot)
-    : buildActiveTaskDetailsHtml(task, snapshot.categories)
+    : buildActiveTaskDetailsHtml(task, snapshot)
   const actions = isEditing
     ? '<button class="save-task-edit-btn" type="button">Save</button>' +
       '<button class="cancel-task-edit-btn" type="button">Cancel</button>'
@@ -214,9 +213,17 @@ function taskEditorHtml(task, snapshot) {
 function renderArchived() {
   const container = document.getElementById('archivedCards')
   const archived = tasksCache.filter(t => t.status === 'archived')
+  const snapshot = categoryLocationStore.getSnapshot()
   container.innerHTML = archived.length
-    ? archived.map(t => '<div class="task-card archived"><div class="task-name">' + escapeHtml(t.name) + '</div></div>').join('')
+    ? archived.map(task => archivedTaskCardHtml(task, snapshot)).join('')
     : '<p class="empty">No archived tasks.</p>'
+}
+
+export function archivedTaskCardHtml (task, snapshot) {
+  return '<div class="task-card archived" data-id="' + escapeAttribute(task._id) + '">' +
+    '<div class="task-name">' + escapeHtml(String(task.name ?? '')) + '</div>' +
+    buildActiveTaskDetailsHtml(task, snapshot) +
+  '</div>'
 }
 
 async function handleProposedClick(evt) {
@@ -226,11 +233,9 @@ async function handleProposedClick(evt) {
   const id = card.dataset.id
   const task = tasksCache.find(item => item._id === id)
   if (!task) return
-  const { categories, locations } = categoryLocationStore.getSnapshot()
+  const snapshot = categoryLocationStore.getSnapshot()
   const selectedCategoryId = card.querySelector('.f-category').value || null
   const selectedLocationIds = [...card.querySelectorAll('.f-location:checked')].map(input => input.value)
-  const categoryId = validateCategoryId(selectedCategoryId, categories, task.categoryId)
-  const locationIds = sanitizeLocationIds(selectedLocationIds, locations, task.locationIds || [])
   const duration = Number(card.querySelector('.f-duration').value) || null
   const errorElement = card.querySelector('.task-card-error')
   errorElement.textContent = ''
@@ -239,11 +244,7 @@ async function handleProposedClick(evt) {
     errorElement.textContent = scheduleResult.message
     return
   }
-  const referenceFields = {
-    categoryId,
-    category: resolveCategorySnapshotName(task, categoryId, categories),
-    locationIds
-  }
+  const referenceFields = buildTaskReferenceFields(task, selectedCategoryId, selectedLocationIds, snapshot)
   const fields = buildApprovedTaskFields(task, referenceFields, duration, scheduleResult)
   setTaskCardBusy(card, true)
   try {
@@ -275,6 +276,22 @@ export function buildActiveTaskScheduleFields (task, scheduleResult) {
     scheduledDate: scheduleResult.scheduledDate,
     schedule: scheduleResult.schedule,
     status: scheduleResult.schedule.type === 'one_off' ? 'active' : 'approved_recurring'
+  }
+}
+
+export function buildTaskReferenceFields (
+  task,
+  requestedCategoryId,
+  requestedLocationIds,
+  snapshot = {}
+) {
+  const categories = snapshot.categories || []
+  const locations = snapshot.locations || []
+  return {
+    ...buildCategoryAssignmentFields(task, requestedCategoryId, categories, {
+      referencesReady: snapshot.readiness?.categories !== false
+    }),
+    locationIds: sanitizeLocationIds(requestedLocationIds, locations, task?.locationIds || [])
   }
 }
 
@@ -321,11 +338,9 @@ async function handleActiveClick(evt) {
   if (!evt.target.classList.contains('save-task-edit-btn')) return
   const task = tasksCache.find(item => item._id === id)
   if (!task) return
-  const { categories, locations } = categoryLocationStore.getSnapshot()
+  const snapshot = categoryLocationStore.getSnapshot()
   const requestedCategoryId = card.querySelector('.task-edit-category').value || null
   const requestedLocationIds = [...card.querySelectorAll('.task-edit-location:checked')].map(input => input.value)
-  const categoryId = validateCategoryId(requestedCategoryId, categories, task.categoryId)
-  const locationIds = sanitizeLocationIds(requestedLocationIds, locations, task.locationIds || [])
   const errorElement = card.querySelector('.task-card-error')
   taskEditorError = ''
   errorElement.textContent = ''
@@ -338,11 +353,7 @@ async function handleActiveClick(evt) {
     errorElement.textContent = taskEditorError
     return
   }
-  const referenceFields = {
-    categoryId,
-    category: resolveCategorySnapshotName(task, categoryId, categories),
-    locationIds
-  }
+  const referenceFields = buildTaskReferenceFields(task, requestedCategoryId, requestedLocationIds, snapshot)
   const scheduleFields = buildActiveTaskScheduleFields(task, scheduleResult)
   setTaskCardBusy(card, true)
   try {

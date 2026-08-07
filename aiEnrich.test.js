@@ -5,6 +5,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   buildEnrichmentPrompt,
+  enrichTasks,
   normalizeEnrichmentSuggestion
 } from './aiEnrich.js'
 
@@ -39,4 +40,51 @@ test('keeps valid schedule suggestions and drops invalid ones', () => {
   assert.equal(normalizeEnrichmentSuggestion({
     category: 'Clean', schedule: { type: 'fixed', pattern: { kind: 'cron' } }
   }).schedule, null)
+})
+
+test('discards null suggestions and malformed weekday arrays without aborting the AI batch', async () => {
+  const originalFreezr = globalThis.freezr
+  globalThis.freezr = {
+    llm: {
+      ask: async () => ({
+        success: true,
+        response: [
+          null,
+          {
+            category: 'Clean',
+            estimatedDuration: 10,
+            schedule: {
+              type: 'fixed',
+              pattern: { kind: 'weekdays', weekdays: 'Friday' }
+            }
+          },
+          {
+            category: 'Admin',
+            estimatedDuration: 5,
+            schedule: { type: 'periodic', every: 1, unit: 'week' }
+          }
+        ]
+      })
+    }
+  }
+
+  try {
+    assert.equal(normalizeEnrichmentSuggestion(null), null)
+    assert.deepEqual(await enrichTasks([
+      { name: 'Unknown suggestion' },
+      { name: 'Vacuum Friday' },
+      { name: 'Pay bills weekly' }
+    ], ['Clean', 'Admin']), [
+      null,
+      { category: 'Clean', estimatedDuration: 10, schedule: null },
+      {
+        category: 'Admin',
+        estimatedDuration: 5,
+        schedule: { type: 'periodic', every: 1, unit: 'week' }
+      }
+    ])
+  } finally {
+    if (originalFreezr === undefined) delete globalThis.freezr
+    else globalThis.freezr = originalFreezr
+  }
 })

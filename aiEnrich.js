@@ -13,7 +13,8 @@ export function buildEnrichmentPrompt (tasks, categoryNames) {
     'Tasks:\n' + tasks.map(task => '- ' + task.name).join('\n')
 }
 
-export function normalizeEnrichmentSuggestion (value = {}) {
+export function normalizeEnrichmentSuggestion (value) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
   return {
     category: value.category || null,
     estimatedDuration: Number(value.estimatedDuration) > 0

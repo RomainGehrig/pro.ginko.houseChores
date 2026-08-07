@@ -7,6 +7,22 @@ import * as referenceView from './categoryLocationView.js'
 
 const { splitReferences } = referenceView
 
+test('disables only the reference collection whose initial read is not ready', () => {
+  const snapshot = {
+    readiness: { categories: false, locations: true },
+    errors: { categories: 'categories offline', locations: null }
+  }
+
+  assert.deepEqual(referenceView.referenceAvailability(snapshot, 'category'), {
+    disabled: true,
+    message: 'categories offline'
+  })
+  assert.deepEqual(referenceView.referenceAvailability(snapshot, 'location'), {
+    disabled: false,
+    message: ''
+  })
+})
+
 test('returns the store snapshot after applying a successful post-write UI update', async () => {
   const snapshot = { warning: 'Category saved, but the refreshed list is unavailable.' }
   let updated = false
@@ -50,6 +66,19 @@ test('prefers a post-write refresh warning over a generic mutation success messa
     message: 'Location added.',
     state: 'success'
   })
+})
+
+test('keeps an unrelated collection error visible after a successful mutation', () => {
+  assert.deepEqual(
+    referenceView.mutationFeedback(
+      { error: 'Categories unavailable.', warning: null },
+      'Location added.'
+    ),
+    {
+      message: 'Categories unavailable.',
+      state: 'error'
+    }
+  )
 })
 
 test('splits active and archived references without treating missing status as archived', () => {

@@ -89,16 +89,16 @@ export function scheduleEditorHtml (model = {}) {
   }).join('')
 
   return '<section class="schedule-editor">' +
-    '<label class="schedule-row">Scheduled date <input type="date" name="scheduledDate" data-schedule-field="date" value="' +
+    '<label class="schedule-row">Scheduled date <input type="date" name="scheduledDate" aria-label="Scheduled date" data-schedule-field="date" value="' +
       escapeAttribute(scheduledDate) + '"></label>' +
-    '<label class="schedule-row">Repeats <select name="scheduleType" data-schedule-field="type">' +
+    '<label class="schedule-row">Repeats <select name="scheduleType" aria-label="Repeat type" data-schedule-field="type">' +
       '<option value="one_off"' + selected(schedule.type, 'one_off') + '>Once</option>' +
       '<option value="periodic"' + selected(schedule.type, 'periodic') + '>Flexible cadence</option>' +
       '<option value="fixed"' + selected(schedule.type, 'fixed') + '>Fixed calendar</option>' +
     '</select></label>' +
     '<div data-schedule-group="periodic"' + (periodic ? '' : ' hidden') + '>' +
-      '<label class="schedule-row">Every <input type="number" name="scheduleEvery" min="1" step="1" data-schedule-field="every" value="' +
-        escapeAttribute(every) + '"> <select name="scheduleUnit" data-schedule-field="unit">' +
+      '<label class="schedule-row">Every <input type="number" name="scheduleEvery" min="1" step="1" aria-label="Cadence interval" data-schedule-field="every" value="' +
+        escapeAttribute(every) + '"> <select name="scheduleUnit" aria-label="Cadence unit" data-schedule-field="unit">' +
           '<option value="day"' + selected(unit, 'day') + '>day(s)</option>' +
           '<option value="week"' + selected(unit, 'week') + '>week(s)</option>' +
           '<option value="month"' + selected(unit, 'month') + '>month(s)</option>' +
@@ -106,14 +106,17 @@ export function scheduleEditorHtml (model = {}) {
         '</select> after completion</label>' +
     '</div>' +
     '<div data-schedule-group="fixed"' + (fixed ? '' : ' hidden') + '>' +
-      '<label class="schedule-row">Pattern <select name="scheduleFixedKind" data-schedule-field="fixed-kind">' +
+      '<label class="schedule-row">Pattern <select name="scheduleFixedKind" aria-label="Fixed calendar pattern" data-schedule-field="fixed-kind">' +
         '<option value="weekdays"' + selected(fixedKind, 'weekdays') + '>Days of the week</option>' +
         '<option value="month_day"' + selected(fixedKind, 'month_day') + '>Day of each month</option>' +
         '<option value="annual_date"' + selected(fixedKind, 'annual_date') + '>Annual date</option>' +
       '</select></label>' +
-      '<div class="schedule-weekdays" data-schedule-fixed-group="weekdays"' + (fixedKind === 'weekdays' ? '' : ' hidden') + '>' + weekdayInputs + '</div>' +
-      '<label class="schedule-row" data-schedule-fixed-group="month_day"' + (fixedKind === 'month_day' ? '' : ' hidden') + '>Day <input type="number" name="scheduleMonthDay" min="1" max="31" step="1" data-schedule-field="month-day" value="' + escapeAttribute(monthDay) + '"> of each month</label>' +
-      '<label class="schedule-row" data-schedule-fixed-group="annual_date"' + (fixedKind === 'annual_date' ? '' : ' hidden') + '>Month <input type="number" name="scheduleAnnualMonth" min="1" max="12" step="1" data-schedule-field="annual-month" value="' + escapeAttribute(annualMonth) + '"> Day <input type="number" name="scheduleAnnualDay" min="1" max="31" step="1" data-schedule-field="annual-day" value="' + escapeAttribute(annualDay) + '"></label>' +
+      '<fieldset class="schedule-weekdays" aria-label="Weekdays" data-schedule-fixed-group="weekdays"' + (fixedKind === 'weekdays' ? '' : ' hidden') + '>' + weekdayInputs + '</fieldset>' +
+      '<label class="schedule-row" data-schedule-fixed-group="month_day"' + (fixedKind === 'month_day' ? '' : ' hidden') + '>Day <input type="number" name="scheduleMonthDay" min="1" max="31" step="1" aria-label="Monthly day" data-schedule-field="month-day" value="' + escapeAttribute(monthDay) + '"> of each month</label>' +
+      '<div class="schedule-row" data-schedule-fixed-group="annual_date" role="group" aria-label="Annual date"' + (fixedKind === 'annual_date' ? '' : ' hidden') + '>' +
+        '<label>Month <input type="number" name="scheduleAnnualMonth" min="1" max="12" step="1" aria-label="Annual month" data-schedule-field="annual-month" value="' + escapeAttribute(annualMonth) + '"></label>' +
+        '<label>Day <input type="number" name="scheduleAnnualDay" min="1" max="31" step="1" aria-label="Annual day" data-schedule-field="annual-day" value="' + escapeAttribute(annualDay) + '"></label>' +
+      '</div>' +
     '</div>' +
     '<div class="schedule-summary">' + escapeHtml(scheduleSummary(schedule)) + '</div>' +
   '</section>'

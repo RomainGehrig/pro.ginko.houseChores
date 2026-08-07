@@ -4,9 +4,11 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  buildCategoryAssignmentFields,
   buildProposedTaskEditorModel,
   buildTaskEditorModel,
   DEFAULT_CATEGORIES,
+  LEGACY_CATEGORY_SELECTION,
   listMissingLegacyCategoryNames,
   normalizeReferenceName,
   planDefaultCategories,
@@ -204,6 +206,69 @@ test('normalizes missing task locationIds to an empty editor selection', () => {
     categories: [],
     locations: []
   }).locationIds, [])
+})
+
+test('preselects a case-insensitive active category match for a legacy-only task', () => {
+  const model = buildTaskEditorModel({
+    category: ' garden ',
+    categoryId: null
+  }, {
+    categories: [{
+      _id: 'category-garden',
+      name: 'Garden',
+      normalizedName: 'garden',
+      status: 'active'
+    }],
+    locations: []
+  })
+
+  assert.equal(model.categoryId, 'category-garden')
+  assert.deepEqual(buildCategoryAssignmentFields({ category: ' garden ' }, model.categoryId, [{
+    _id: 'category-garden',
+    name: 'Garden',
+    normalizedName: 'garden',
+    status: 'active'
+  }], { referencesReady: true }), {
+    categoryId: 'category-garden',
+    category: 'Garden'
+  })
+})
+
+test('preserves degraded legacy category fields unless the user explicitly clears them', () => {
+  const task = { category: 'Legacy garden', categoryId: null }
+  const model = buildTaskEditorModel(task, { categories: [], locations: [] })
+
+  assert.equal(model.categoryId, LEGACY_CATEGORY_SELECTION)
+  assert.deepEqual(model.categoryOptions, [{
+    _id: LEGACY_CATEGORY_SELECTION,
+    name: 'Legacy garden',
+    status: 'unknown',
+    unresolved: true,
+    legacyOnly: true
+  }])
+  assert.deepEqual(buildCategoryAssignmentFields(
+    task,
+    LEGACY_CATEGORY_SELECTION,
+    [],
+    { referencesReady: false }
+  ), {})
+  assert.deepEqual(buildCategoryAssignmentFields(
+    task,
+    null,
+    [],
+    { referencesReady: false }
+  ), { categoryId: null, category: null })
+})
+
+test('omits an unchanged stable category while the category collection is unavailable', () => {
+  const task = { category: 'Legacy fallback', categoryId: 'missing-category' }
+
+  assert.deepEqual(buildCategoryAssignmentFields(
+    task,
+    'missing-category',
+    [],
+    { referencesReady: false }
+  ), {})
 })
 
 test('builds proposed choices that retain archived and unresolved assignments', () => {

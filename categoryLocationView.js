@@ -35,6 +35,15 @@ export function splitReferences (references = []) {
   }, { active: [], archived: [] })
 }
 
+export function referenceAvailability (snapshot, kind) {
+  const key = kind === 'category' ? 'categories' : 'locations'
+  const disabled = snapshot?.readiness?.[key] === false
+  return {
+    disabled,
+    message: disabled ? String(snapshot?.errors?.[key] || '') : ''
+  }
+}
+
 export function escapeAttribute (value) {
   return String(value).replace(/[&<>"']/g, character => ({
     '&': '&amp;',
@@ -58,6 +67,8 @@ export function initCategoryLocationView () {
 function render (snapshot) {
   renderReferenceList('category', snapshot.categories)
   renderReferenceList('location', snapshot.locations)
+  setReferenceCollectionDisabled('category', referenceAvailability(snapshot, 'category').disabled)
+  setReferenceCollectionDisabled('location', referenceAvailability(snapshot, 'location').disabled)
   if (snapshot.error) {
     manager.open = true
     showStatus(snapshot.error, 'error')
@@ -67,7 +78,20 @@ function render (snapshot) {
   }
 }
 
+function setReferenceCollectionDisabled (kind, disabled) {
+  const config = referenceConfig[kind]
+  const form = document.getElementById(kind === 'category' ? 'addCategoryForm' : 'addLocationForm')
+  const list = document.getElementById(kind === 'category' ? 'categoryManagerList' : 'locationManagerList')
+  const controls = [
+    document.getElementById(config.inputId),
+    ...(form ? form.querySelectorAll('button, input') : []),
+    ...(list ? list.querySelectorAll('button, input') : [])
+  ].filter(Boolean)
+  controls.forEach(control => { control.disabled = disabled })
+}
+
 export function mutationFeedback (snapshot, successMessage) {
+  if (snapshot?.error) return { message: snapshot.error, state: 'error' }
   if (snapshot?.warning) return { message: snapshot.warning, state: 'warning' }
   return { message: successMessage, state: 'success' }
 }
@@ -202,6 +226,11 @@ function setBusy (busy) {
   manager.querySelectorAll('button, input').forEach(control => {
     control.disabled = busy
   })
+  if (!busy) {
+    const snapshot = categoryLocationStore.getSnapshot()
+    setReferenceCollectionDisabled('category', referenceAvailability(snapshot, 'category').disabled)
+    setReferenceCollectionDisabled('location', referenceAvailability(snapshot, 'location').disabled)
+  }
 }
 
 function clearStatus () {

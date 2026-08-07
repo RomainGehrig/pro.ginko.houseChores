@@ -10,6 +10,8 @@ export const DEFAULT_CATEGORIES = [
   { name: 'Run Errands', seedKey: 'run-errands', displayOrder: 5 }
 ]
 
+export const LEGACY_CATEGORY_SELECTION = '__preserve_legacy_category__'
+
 export function normalizeReferenceName (value) {
   return String(value ?? '').trim().replace(/\s+/g, ' ').toLowerCase()
 }
@@ -121,6 +123,29 @@ export function resolveCategorySnapshotName (task, categoryId, categories) {
   return null
 }
 
+export function buildCategoryAssignmentFields (
+  task,
+  requestedId,
+  categories,
+  { referencesReady = true } = {}
+) {
+  const legacyName = normalizeReferenceName(task?.category)
+  const existingSelection = task?.categoryId ||
+    resolveSuggestedCategoryId(task?.category, categories) ||
+    (legacyName ? LEGACY_CATEGORY_SELECTION : null)
+
+  if (requestedId === LEGACY_CATEGORY_SELECTION) return {}
+  if (!referencesReady && requestedId === existingSelection) return {}
+  if (!requestedId) return { categoryId: null, category: null }
+
+  const categoryId = validateCategoryId(requestedId, categories, task?.categoryId || null)
+  if (!categoryId) return {}
+  return {
+    categoryId,
+    category: resolveCategorySnapshotName(task, categoryId, categories)
+  }
+}
+
 export function selectableReferences (records, existingIds = []) {
   const preservedIds = new Set(existingIds || [])
   return records
@@ -155,30 +180,42 @@ export function buildTaskEditorModel (task, snapshot) {
   const locations = snapshot?.locations || []
   const existingCategoryId = task?.categoryId || null
   const existingLocationIds = Array.isArray(task?.locationIds) ? task.locationIds : []
-  const categoryId = validateCategoryId(existingCategoryId, categories, existingCategoryId)
+  let categoryId = validateCategoryId(existingCategoryId, categories, existingCategoryId) ||
+    resolveSuggestedCategoryId(task?.category, categories)
   const locationIds = sanitizeLocationIds(existingLocationIds, locations, existingLocationIds)
+  const categoryOptions = assignmentOptions(
+    categories,
+    categoryId ? [categoryId] : [],
+    () => task?.category || 'Unknown category'
+  )
+
+  if (!categoryId && normalizeReferenceName(task?.category)) {
+    categoryId = LEGACY_CATEGORY_SELECTION
+    categoryOptions.push({
+      _id: LEGACY_CATEGORY_SELECTION,
+      name: String(task.category).trim().replace(/\s+/g, ' '),
+      status: 'unknown',
+      unresolved: true,
+      legacyOnly: true
+    })
+  }
 
   return {
     categoryId,
     locationIds,
-    categoryOptions: assignmentOptions(
-      categories,
-      categoryId ? [categoryId] : [],
-      () => task?.category || 'Unknown category'
-    ),
+    categoryOptions,
     locationOptions: assignmentOptions(locations, locationIds, () => 'Unknown location')
   }
 }
 
 export function buildProposedTaskEditorModel (task, snapshot) {
   const model = buildTaskEditorModel(task, snapshot)
-  if (model.categoryId) return model
+  if (task?.categoryId && model.categoryId) return model
 
   const categories = snapshot?.categories || []
   return {
     ...model,
-    categoryId: resolveSuggestedCategoryId(task?.suggestedCategory, categories) ||
-      resolveSuggestedCategoryId(task?.category, categories)
+    categoryId: resolveSuggestedCategoryId(task?.suggestedCategory, categories) || model.categoryId
   }
 }
 

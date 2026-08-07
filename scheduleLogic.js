@@ -149,7 +149,8 @@ export function formatScheduledDate (value, locales) {
 
 function normalizeFixedPattern (pattern) {
   if (pattern?.kind === 'weekdays') {
-    const weekdays = [...new Set((pattern.weekdays || []).map(Number))]
+    if (!Array.isArray(pattern.weekdays)) return null
+    const weekdays = [...new Set(pattern.weekdays.map(Number))]
       .filter(day => Number.isInteger(day) && day >= 1 && day <= 7)
       .sort((a, b) => a - b)
     return weekdays.length ? { kind: 'weekdays', weekdays } : null

@@ -1,6 +1,6 @@
 import { state } from './state.js'
 import { createExecution } from './executionData.js'
-import { updateTask } from './taskData.js'
+import { listTasksByIds, updateTask } from './taskData.js'
 import { updateSession } from './sessionData.js'
 import { getActiveTasks, refreshTasksView } from './tasksView.js'
 import { findFillerTask } from './bundleLogic.js'
@@ -10,9 +10,10 @@ import { createCompletionCoordinator } from './completionSaveLogic.js'
 import {
   continueAfterCompletion,
   endDoingSession,
+  prepareCompletionAttempt,
   retryCompletionForStage
 } from './doingCompletionLogic.js'
-import { localDateFromDate, taskUpdateForOutcome } from './scheduleLogic.js'
+import { localDateFromDate } from './scheduleLogic.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
 import { showView, setNavVisible } from './viewRouter.js'
 import { startReview } from './reviewView.js'
@@ -22,6 +23,7 @@ let taskStartTime = null
 let usedTaskIds = []
 let pendingContinuation = null
 let sessionSaveInFlight = false
+let sessionControlDisabledState = null
 
 const completionCoordinator = createCompletionCoordinator({ createExecution, updateTask })
 
@@ -69,7 +71,7 @@ function renderCurrentTask() {
 }
 
 async function finishTask(outcome) {
-  if (pendingContinuation) return
+  if (pendingContinuation || sessionSaveInFlight) return
 
   clearInterval(timerInterval)
   const task = currentTask()
@@ -85,19 +87,55 @@ async function finishTask(outcome) {
     difficultyRating: null,
     notes: ''
   }
-  const taskUpdate = taskUpdateForOutcome(task, outcome, {
+  const completion = {
     completionDate: localDateFromDate(new Date(endTime)),
     completedAt: endTime
-  })
+  }
 
-  pendingContinuation = { outcome, execution, actualDuration, task, taskUpdate }
+  pendingContinuation = { outcome, execution, actualDuration, task, completion, taskUpdate: null }
   setCompletionControlsDisabled(true)
-  const result = await completionCoordinator.complete({
-    execution,
-    taskId: task._id,
-    taskUpdate
-  })
+  const result = await attemptPendingCompletion()
   await handleCompletionResult(result)
+}
+
+async function attemptPendingCompletion () {
+  const continuation = pendingContinuation
+  if (!continuation) {
+    return {
+      ok: false,
+      stage: 'task_read',
+      message: 'Could not refresh task before completion: completion state is unavailable',
+      canRetry: false
+    }
+  }
+
+  let prepared
+  try {
+    prepared = await prepareCompletionAttempt({
+      taskSnapshot: continuation.task,
+      outcome: continuation.outcome,
+      completion: continuation.completion,
+      loadTask: async taskId => (await listTasksByIds([taskId]))[0] || null
+    })
+  } catch (error) {
+    return {
+      ok: false,
+      stage: 'task_read',
+      message: 'Could not refresh task before completion: ' + error.message,
+      canRetry: true
+    }
+  }
+
+  pendingContinuation = {
+    ...continuation,
+    task: prepared.task,
+    taskUpdate: prepared.taskUpdate
+  }
+  return completionCoordinator.complete({
+    execution: continuation.execution,
+    taskId: prepared.task._id,
+    taskUpdate: prepared.taskUpdate
+  })
 }
 
 function setCompletionControlsDisabled(disabled) {
@@ -109,10 +147,19 @@ function setCompletionControlsDisabled(disabled) {
 
 function setSessionSaveControlsDisabled(disabled) {
   sessionSaveInFlight = disabled
-  for (const id of ['retryCompletionBtn', 'endSessionBtn']) {
+  const controlIds = ['doneBtn', 'alreadyDoneBtn', 'cancelBtn', 'retryCompletionBtn', 'endSessionBtn']
+  if (disabled) sessionControlDisabledState = new Map()
+  for (const id of controlIds) {
     const control = document.getElementById(id)
-    if (control) control.disabled = disabled
+    if (!control) continue
+    if (disabled) {
+      sessionControlDisabledState.set(id, control.disabled)
+      control.disabled = true
+    } else if (sessionControlDisabledState?.has(id)) {
+      control.disabled = sessionControlDisabledState.get(id)
+    }
   }
+  if (!disabled) sessionControlDisabledState = null
 }
 
 async function handleCompletionResult(result) {
@@ -150,11 +197,8 @@ function renderCompletionFailure(result) {
 
     const retryResult = await retryCompletionForStage(result.stage, {
       actionsBlocked: () => sessionSaveInFlight,
-      retryExecution: () => completionCoordinator.complete({
-        execution: pendingContinuation.execution,
-        taskId: pendingContinuation.task._id,
-        taskUpdate: pendingContinuation.taskUpdate
-      }),
+      retryPreparation: attemptPendingCompletion,
+      retryExecution: completionCoordinator.retryExecution,
       retryTaskUpdate: completionCoordinator.retryTaskUpdate
     })
     if (!retryResult) return
@@ -186,7 +230,10 @@ async function endSession() {
     saveSession: () => updateSession(state.currentSession._id, { endTime: Date.now(), status: 'completed' }),
     setCompletionControlsDisabled: setSessionSaveControlsDisabled,
     discardPendingTaskUpdate: completionCoordinator.discardPendingTaskUpdate,
-    clearPendingContinuation: () => { pendingContinuation = null },
+    clearPendingContinuation: () => {
+      completionCoordinator.discardPendingExecution()
+      pendingContinuation = null
+    },
     showReview: async () => {
       setNavVisible('doing', false)
       setNavVisible('review', true)

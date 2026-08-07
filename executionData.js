@@ -1,4 +1,12 @@
-export const createExecution = (data) => freezr.create('taskExecutions', data)
+export const createExecution = data => {
+  const completionAttemptId = String(data?.completionAttemptId || '').trim()
+  return completionAttemptId
+    ? freezr.create('taskExecutions', data, {
+        data_object_id: completionAttemptId,
+        upsert: true
+      })
+    : freezr.create('taskExecutions', data)
+}
 
 export const updateExecution = (id, fields) => freezr.updateFields('taskExecutions', id, fields)
 

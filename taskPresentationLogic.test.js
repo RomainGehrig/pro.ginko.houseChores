@@ -95,3 +95,47 @@ test('task and bundle markup use scheduled language and schedule summaries', () 
   assert.match(markup, /About every 3 days after completion/)
   assert.doesNotMatch(markup, /\bdue\b|overdue/i)
 })
+
+test('non-editing task details retain archived category and location assignments', () => {
+  const markup = buildActiveTaskDetailsHtml({
+    categoryId: 'category-archived',
+    category: 'Old category snapshot',
+    locationIds: ['location-archived'],
+    estimatedDuration: 10,
+    scheduledDate: '2026-08-16',
+    schedule: { type: 'one_off' }
+  }, {
+    categories: [{
+      _id: 'category-archived',
+      name: 'Retired chores',
+      status: 'archived'
+    }],
+    locations: [{
+      _id: 'location-archived',
+      name: 'Old attic',
+      status: 'archived'
+    }]
+  })
+
+  assert.match(markup, /Retired chores/)
+  assert.match(markup, /Old attic/)
+  assert.equal((markup.match(/archived-badge/g) || []).length, 2)
+  assert.equal((markup.match(/>Archived</g) || []).length, 2)
+  assert.doesNotMatch(markup, /Old category snapshot/)
+})
+
+test('non-editing task details safely mark unresolved retained assignments unavailable', () => {
+  const markup = buildActiveTaskDetailsHtml({
+    categoryId: 'missing-category',
+    category: '<img src=x onerror=alert(1)>',
+    locationIds: ['missing-location'],
+    estimatedDuration: 10,
+    scheduledDate: '2026-08-16',
+    schedule: { type: 'one_off' }
+  }, { categories: [], locations: [] })
+
+  assert.match(markup, /&lt;img src=x onerror=alert\(1\)&gt;/)
+  assert.match(markup, /Unknown location/)
+  assert.equal((markup.match(/>Unavailable</g) || []).length, 2)
+  assert.doesNotMatch(markup, /<img/)
+})

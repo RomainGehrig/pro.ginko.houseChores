@@ -22,7 +22,17 @@ const taskFailure = error => ({
   canRetry: true
 })
 
-export function createCompletionCoordinator ({ createExecution, updateTask }) {
+function defaultAttemptId () {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
+  return 'completion-' + Date.now() + '-' + Math.random().toString(36).slice(2)
+}
+
+export function createCompletionCoordinator ({
+  createExecution,
+  updateTask,
+  createAttemptId = defaultAttemptId
+}) {
+  let pendingExecution = null
   let pendingTaskUpdate = null
 
   async function retryTaskUpdate () {
@@ -37,24 +47,45 @@ export function createCompletionCoordinator ({ createExecution, updateTask }) {
     }
   }
 
-  async function complete ({ execution, taskId, taskUpdate }) {
-    if (pendingTaskUpdate) return taskFailure(new Error('task update already pending'))
-
+  async function persistExecution (attempt) {
     try {
-      await createExecution(execution)
+      await createExecution(attempt.execution)
     } catch (error) {
       return executionFailure(error)
     }
 
-    if (!taskUpdate) return success()
-    pendingTaskUpdate = { taskId, fields: taskUpdate }
+    pendingExecution = null
+    if (!attempt.taskUpdate) return success()
+    pendingTaskUpdate = { taskId: attempt.taskId, fields: attempt.taskUpdate }
     return retryTaskUpdate()
+  }
+
+  async function complete ({ execution, taskId, taskUpdate }) {
+    if (pendingTaskUpdate) return taskFailure(new Error('task update already pending'))
+    if (pendingExecution) return executionFailure(new Error('execution retry already pending'))
+
+    try {
+      pendingExecution = {
+        execution: {
+          ...execution,
+          completionAttemptId: execution.completionAttemptId || createAttemptId()
+        },
+        taskId,
+        taskUpdate
+      }
+    } catch (error) {
+      return executionFailure(error)
+    }
+    return persistExecution(pendingExecution)
   }
 
   return {
     complete,
+    retryExecution: () => pendingExecution ? persistExecution(pendingExecution) : success(),
     retryTaskUpdate,
+    hasPendingExecution: () => pendingExecution !== null,
     hasPendingTaskUpdate: () => pendingTaskUpdate !== null,
+    discardPendingExecution: () => { pendingExecution = null },
     discardPendingTaskUpdate: () => { pendingTaskUpdate = null }
   }
 }

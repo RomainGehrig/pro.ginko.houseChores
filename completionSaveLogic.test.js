@@ -134,3 +134,36 @@ test('records outcomes without a task update as a successful completion', async 
   assert.equal(executionWrites, 1)
   assert.equal(taskWrites, 0)
 })
+
+test('reuses one completion-attempt id when the execution commits before its response is lost', async () => {
+  const executions = new Map()
+  const attemptedIds = []
+  let loseFirstResponse = true
+  let taskWrites = 0
+  const coordinator = createCompletionCoordinator({
+    createAttemptId: () => 'completion-attempt-1',
+    createExecution: async execution => {
+      attemptedIds.push(execution.completionAttemptId)
+      executions.set(execution.completionAttemptId, structuredClone(execution))
+      if (loseFirstResponse) {
+        loseFirstResponse = false
+        throw new Error('response lost')
+      }
+    },
+    updateTask: async () => { taskWrites++ }
+  })
+
+  const first = await coordinator.complete({
+    execution: { taskId: 'task-1', outcome: 'done' },
+    taskId: 'task-1',
+    taskUpdate: { status: 'archived' }
+  })
+  const retry = await coordinator.retryExecution()
+
+  assert.equal(first.stage, 'execution')
+  assert.equal(retry.ok, true)
+  assert.deepEqual(attemptedIds, ['completion-attempt-1', 'completion-attempt-1'])
+  assert.equal(executions.size, 1)
+  assert.equal(taskWrites, 1)
+  assert.equal(coordinator.hasPendingExecution(), false)
+})

@@ -385,3 +385,117 @@ test('successful update remains confirmed when its refresh fails', async () => {
   assert.match(snapshot.warning, /saved.*refresh.*updated location refresh failed/i)
   assert.equal(publications, 1)
 })
+
+test('rejects mutations for only the collection whose initial read failed', async () => {
+  const categoryFailure = createFakeApis()
+  categoryFailure.referenceData.listCategories = async () => {
+    throw new Error('categories unavailable')
+  }
+  let categoryCreates = 0
+  const createCategory = categoryFailure.referenceData.createCategory
+  categoryFailure.referenceData.createCategory = async data => {
+    categoryCreates++
+    return createCategory(data)
+  }
+  const categoryStore = createCategoryLocationStore(categoryFailure)
+  await categoryStore.initialize()
+
+  assert.deepEqual(categoryStore.getSnapshot().readiness, {
+    categories: false,
+    locations: true
+  })
+  assert.match(categoryStore.getSnapshot().errors.categories, /categories unavailable/)
+  await assert.rejects(() => categoryStore.addCategory('Unsafe category'), /categories.*load/i)
+  assert.equal(categoryCreates, 0)
+  await categoryStore.addLocation('Kitchen')
+  assert.match(categoryStore.getSnapshot().errors.categories, /categories unavailable/)
+  assert.match(categoryStore.getSnapshot().error, /categories unavailable/)
+
+  const locationFailure = createFakeApis({ locationError: 'locations unavailable' })
+  let locationCreates = 0
+  const createLocation = locationFailure.referenceData.createLocation
+  locationFailure.referenceData.createLocation = async data => {
+    locationCreates++
+    return createLocation(data)
+  }
+  const locationStore = createCategoryLocationStore(locationFailure)
+  await locationStore.initialize()
+
+  assert.deepEqual(locationStore.getSnapshot().readiness, {
+    categories: true,
+    locations: false
+  })
+  assert.match(locationStore.getSnapshot().errors.locations, /locations unavailable/)
+  await assert.rejects(() => locationStore.addLocation('Unsafe location'), /locations.*load/i)
+  assert.equal(locationCreates, 0)
+  await locationStore.addCategory('Household')
+  assert.match(locationStore.getSnapshot().errors.locations, /locations unavailable/)
+  assert.match(locationStore.getSnapshot().error, /locations unavailable/)
+})
+
+test('two stores initializing against shared persistence create one stable reference per name', async () => {
+  const categories = []
+  const tasks = [{
+    _id: 'task-garden',
+    category: 'Garden',
+    categoryId: null,
+    status: 'active'
+  }]
+  let generatedId = 0
+  let initialCategoryReads = 0
+  let releaseInitialReads
+  const initialReadsReady = new Promise(resolve => { releaseInitialReads = resolve })
+
+  const referenceData = {
+    listCategories: async () => {
+      if (initialCategoryReads < 2) {
+        initialCategoryReads++
+        if (initialCategoryReads === 2) releaseInitialReads()
+        await initialReadsReady
+        return []
+      }
+      return clone(categories)
+    },
+    createCategory: async (data, options = {}) => {
+      await Promise.resolve()
+      const id = options.upsert && options.dataObjectId
+        ? options.dataObjectId
+        : 'generated-category-' + ++generatedId
+      const existing = categories.find(category => category._id === id)
+      if (existing) Object.assign(existing, clone(data))
+      else categories.push({ _id: id, ...clone(data) })
+      return clone(categories.find(category => category._id === id))
+    },
+    updateCategory: async (id, fields) => {
+      const category = categories.find(item => item._id === id)
+      if (category) Object.assign(category, clone(fields))
+      return { _id: id, ...clone(fields) }
+    },
+    listLocations: async () => [],
+    createLocation: async data => ({ _id: 'location-1', ...clone(data) }),
+    updateLocation: async (id, fields) => ({ _id: id, ...clone(fields) })
+  }
+  const taskData = {
+    listAllTasks: async () => clone(tasks),
+    updateTask: async (id, fields) => {
+      Object.assign(tasks.find(task => task._id === id), clone(fields))
+    }
+  }
+  const firstStore = createCategoryLocationStore({ referenceData, taskData })
+  const secondStore = createCategoryLocationStore({ referenceData, taskData })
+
+  await Promise.all([firstStore.initialize(), secondStore.initialize()])
+
+  for (const definition of [
+    ...firstStore.getSnapshot().categories.filter(category => category.seedKey),
+    { normalizedName: 'garden' }
+  ]) {
+    assert.equal(
+      categories.filter(category => category.normalizedName === definition.normalizedName).length,
+      1,
+      `duplicate ${definition.normalizedName}`
+    )
+  }
+  assert.equal(new Set(categories.map(category => category._id)).size, categories.length)
+  assert.equal(tasks[0].categoryId, categories.find(category => category.normalizedName === 'garden')._id)
+})

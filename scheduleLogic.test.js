@@ -31,6 +31,31 @@ test('normalizes supported schedule shapes and ISO weekdays', () => {
   }), null)
 })
 
+test('discards malformed persisted weekday arrays without aborting task normalization', () => {
+  const malformedSchedule = {
+    type: 'fixed',
+    pattern: { kind: 'weekdays', weekdays: 'Monday' }
+  }
+
+  assert.equal(normalizeSchedule(malformedSchedule), null)
+  assert.deepEqual(normalizeTaskSchedule({
+    _id: 'malformed-task',
+    status: 'active',
+    scheduledDate: '2026-08-07',
+    schedule: malformedSchedule,
+    suggestedSchedule: {
+      type: 'fixed',
+      pattern: { kind: 'weekdays', weekdays: { 0: 1 } }
+    }
+  }, '2026-08-07'), {
+    _id: 'malformed-task',
+    status: 'active',
+    scheduledDate: '2026-08-07',
+    schedule: { type: 'one_off' },
+    suggestedSchedule: null
+  })
+})
+
 test('validates a fixed first date but allows a preserved current occurrence', () => {
   const schedule = {
     type: 'fixed', pattern: { kind: 'weekdays', weekdays: [7] }

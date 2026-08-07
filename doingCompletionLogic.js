@@ -1,6 +1,25 @@
 // ABOUTME: Pure orchestration for doing-mode completion and session transitions.
 // ABOUTME: Keeps optional filler failures and session-save failures from losing progress.
 
+import { taskUpdateForOutcome } from './scheduleLogic.js'
+
+export async function prepareCompletionAttempt ({
+  taskSnapshot,
+  outcome,
+  completion,
+  loadTask
+}) {
+  if (outcome === 'cancelled') {
+    return { task: taskSnapshot, taskUpdate: null }
+  }
+  const task = await loadTask(taskSnapshot._id)
+  if (!task) throw new Error('Task is no longer available.')
+  return {
+    task,
+    taskUpdate: taskUpdateForOutcome(task, outcome, completion)
+  }
+}
+
 export async function continueAfterCompletion ({
   offerFiller,
   reportFillerFailure,
@@ -19,10 +38,12 @@ export async function continueAfterCompletion ({
 
 export function retryCompletionForStage (stage, {
   actionsBlocked = () => false,
+  retryPreparation,
   retryExecution,
   retryTaskUpdate
 }) {
   if (actionsBlocked()) return null
+  if (stage === 'task_read') return retryPreparation()
   return stage === 'execution' ? retryExecution() : retryTaskUpdate()
 }
 

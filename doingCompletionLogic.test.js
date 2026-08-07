@@ -6,6 +6,7 @@ import assert from 'node:assert/strict'
 import {
   continueAfterCompletion,
   endDoingSession,
+  prepareCompletionAttempt,
   retryCompletionForStage
 } from './doingCompletionLogic.js'
 
@@ -44,6 +45,21 @@ test('dispatches retries only to the failed persistence stage', async () => {
   assert.equal(await retryCompletionForStage('execution', retries), executionResult)
   assert.equal(await retryCompletionForStage('task_update', retries), taskResult)
   assert.deepEqual(calls, ['execution', 'task_update'])
+})
+
+test('retries a failed task refresh before any persistence stage', async () => {
+  const calls = []
+  const result = { ok: false, stage: 'task_read' }
+
+  assert.equal(await retryCompletionForStage('task_read', {
+    retryPreparation: async () => {
+      calls.push('task_read')
+      return result
+    },
+    retryExecution: async () => calls.push('execution'),
+    retryTaskUpdate: async () => calls.push('task_update')
+  }), result)
+  assert.deepEqual(calls, ['task_read'])
 })
 
 test('declining pending-update discard leaves the session and retry state untouched', async () => {
@@ -187,4 +203,73 @@ test('review failure always releases the session-save action lock', async () => 
     'review',
     'controls:false'
   ])
+})
+
+test('completion uses a periodic schedule saved after the session bundle snapshot', async () => {
+  const attempt = await prepareCompletionAttempt({
+    taskSnapshot: {
+      _id: 'task-1',
+      scheduledDate: '2026-08-07',
+      schedule: { type: 'one_off' }
+    },
+    outcome: 'done',
+    completion: { completionDate: '2026-08-07', completedAt: 1234 },
+    loadTask: async () => ({
+      _id: 'task-1',
+      scheduledDate: '2026-08-07',
+      schedule: { type: 'periodic', every: 1, unit: 'month' }
+    })
+  })
+
+  assert.deepEqual(attempt.taskUpdate, {
+    lastCompletedDate: 1234,
+    scheduledDate: '2026-09-07'
+  })
+  assert.equal(attempt.task.schedule.type, 'periodic')
+})
+
+test('completion archives a task changed to one-off after the session bundle snapshot', async () => {
+  const attempt = await prepareCompletionAttempt({
+    taskSnapshot: {
+      _id: 'task-1',
+      scheduledDate: '2026-08-07',
+      schedule: { type: 'periodic', every: 1, unit: 'week' }
+    },
+    outcome: 'already_done',
+    completion: { completionDate: '2026-08-07', completedAt: 5678 },
+    loadTask: async () => ({
+      _id: 'task-1',
+      scheduledDate: '2026-08-07',
+      schedule: { type: 'one_off' }
+    })
+  })
+
+  assert.deepEqual(attempt.taskUpdate, {
+    lastCompletedDate: 5678,
+    status: 'archived'
+  })
+  assert.equal(attempt.task.schedule.type, 'one_off')
+})
+
+test('cancelled completion does not require a fresh task read', async () => {
+  const taskSnapshot = {
+    _id: 'task-1',
+    scheduledDate: '2026-08-07',
+    schedule: { type: 'periodic', every: 1, unit: 'week' }
+  }
+  let reads = 0
+
+  const attempt = await prepareCompletionAttempt({
+    taskSnapshot,
+    outcome: 'cancelled',
+    completion: { completionDate: '2026-08-07', completedAt: 9012 },
+    loadTask: async () => {
+      reads++
+      throw new Error('tasks offline')
+    }
+  })
+
+  assert.equal(reads, 0)
+  assert.equal(attempt.task, taskSnapshot)
+  assert.equal(attempt.taskUpdate, null)
 })

@@ -27,9 +27,12 @@
     { "path": "scheduleEditor.test.js", "Description": "Node tests covering schedule-editor models, controls, validation messages, and typed schedule serialization." },
     { "path": "completionSaveLogic.js", "Description": "Pure completion-save coordinator that writes one execution and safely retries a failed task schedule update." },
     { "path": "completionSaveLogic.test.js", "Description": "Node tests covering completion schedule advancement and failure-safe execution/task-update retry boundaries." },
+    { "path": "doingCompletionLogic.js", "Description": "Pure doing-mode orchestration for refreshed completion inputs, retry dispatch, filler continuation, and end-session transitions." },
+    { "path": "doingCompletionLogic.test.js", "Description": "Node tests covering completion preparation, stage-specific retries, and failure-safe session finalization." },
     { "path": "taskData.js", "Description": "DB calls for the tasks collection that normalize legacy and typed schedule fields on read and initialize proposed tasks without a scheduled date." },
     { "path": "taskData.test.js", "Description": "Node tests covering proposed-task scheduling defaults and normalized task-list reads." },
     { "path": "executionData.js", "Description": "DB calls for the taskExecutions collection." },
+    { "path": "executionData.test.js", "Description": "Node test covering idempotent execution upserts by stable completion-attempt ID." },
     { "path": "sessionData.js", "Description": "DB calls for the sessions collection." },
     { "path": "bundleLogic.js", "Description": "Pure functions that prioritize eligible tasks by scheduled date and build category-ID-filtered time-boxed bundles and filler suggestions." },
     { "path": "bundleLogic.test.js", "Description": "Node tests covering scheduled-date ordering, future-task eligibility, and stable category-ID filtering for bundles and filler suggestions." },
@@ -39,16 +42,20 @@
     { "path": "tasksView.test.js", "Description": "Node tests covering task-view scheduling editor integration, approved payloads, and edit preservation." },
     { "path": "sessionView.js", "Description": "Renders the time budget and active-category picker, builds filtered bundles, and saves stable session filters." },
     { "path": "doingView.js", "Description": "Renders doing mode, records executions, advances completed task schedules through the failure-safe coordinator, and offers category-ID-filtered filler tasks after early finishes." },
+    { "path": "doingView.test.js", "Description": "Production DOM tests covering session-finalization locking, refreshed task schedules, and idempotent completion retry." },
     { "path": "reviewView.js", "Description": "Renders the post-session review for correcting durations/ratings and suggesting updated duration estimates." },
     { "path": "historyLogic.js", "Description": "Pure functions joining sessions, executions and tasks into read-only history summaries." },
+    { "path": "historyLogic.test.js", "Description": "Node tests covering joined read-only session history summaries." },
     { "path": "historyView.js", "Description": "Renders the session history accordion and wires expand/collapse." },
     { "path": "categoryLocationLogic.js", "Description": "Pure rules for stable category and location references, seeding, migration, and assignment validation." },
     { "path": "categoryLocationLogic.test.js", "Description": "Node tests covering category and location reference rules and legacy migration plans." },
     { "path": "categoryLocationData.js", "Description": "DB calls for user-managed category and location reference collections." },
+    { "path": "categoryLocationData.test.js", "Description": "Node test covering stable category object IDs and datastore upsert option translation." },
     { "path": "categoryLocationStore.js", "Description": "Loads, seeds, and migrates category/location references before dependent views render." },
     { "path": "categoryLocationStore.test.js", "Description": "Node tests covering idempotent reference initialization and degraded data loading." },
     { "path": "categoryLocationView.js", "Description": "Renders and wires the category and location management panel." },
-    { "path": "categoryLocationView.test.js", "Description": "Node tests covering category and location management-list helpers." }
+    { "path": "categoryLocationView.test.js", "Description": "Node tests covering category and location management-list helpers." },
+    { "path": "artifactInventory.test.js", "Description": "Node tests ensuring the manifest inventories every JavaScript artifact and static selectors contain no legacy fixed choices." }
   ],
   "app_tables": {
     "tasks": {
@@ -100,7 +107,8 @@
         "actualDuration": { "type": "String", "description": "Actual minutes spent, editable during review (numeric)." },
         "outcome": { "type": "String", "description": "One of: done, cancelled, already_done." },
         "difficultyRating": { "type": "String", "description": "Optional 1-5 difficulty rating set during review (numeric)." },
-        "notes": { "type": "String", "description": "Optional free-text notes set during review." }
+        "notes": { "type": "String", "description": "Optional free-text notes set during review." },
+        "completionAttemptId": { "type": "String", "description": "Stable client-generated ID reused to upsert one logical execution across lost-response retries." }
       }
     },
     "sessions": {

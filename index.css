@@ -245,9 +245,12 @@
 }
 
 .schedule-weekdays {
+  border: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 4px 10px;
+  margin: 0;
+  padding: 0;
 }
 
 .task-card .schedule-weekdays input {

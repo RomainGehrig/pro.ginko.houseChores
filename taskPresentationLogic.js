@@ -2,6 +2,7 @@
 // ABOUTME: Keeps stored task and category values escaped before they enter HTML contexts.
 
 import { escapeHtml, formatDuration } from './helpers.js'
+import { normalizeReferenceName, resolveReference } from './categoryLocationLogic.js'
 import { formatScheduledDate, scheduleSummary } from './scheduleLogic.js'
 
 export function buildEnrichmentAvailability (categories) {
@@ -32,10 +33,51 @@ export function buildDoingTaskHtml (task, bundleIndex, bundleLength, categories 
     '</div>'
 }
 
-export function buildActiveTaskDetailsHtml (task, categories = []) {
-  return '<div class="task-meta">' + escapeHtml(resolveTaskCategoryName(task, categories)) + ' \u00b7 ' +
+function referenceSnapshot (snapshotOrCategories) {
+  return Array.isArray(snapshotOrCategories)
+    ? { categories: snapshotOrCategories, locations: [] }
+    : {
+        categories: snapshotOrCategories?.categories || [],
+        locations: snapshotOrCategories?.locations || []
+      }
+}
+
+function categoryPresentation (task, categories) {
+  if (task?.categoryId) {
+    return resolveReference(categories, task.categoryId, task.category, 'Unknown category')
+  }
+  const legacyName = String(task?.category || '').trim()
+  if (!legacyName) return { name: 'Uncategorized', status: 'active', unresolved: false }
+  const category = categories.find(item =>
+    normalizeReferenceName(item.name) === normalizeReferenceName(legacyName)
+  )
+  return category
+    ? resolveReference(categories, category._id, legacyName, 'Unknown category')
+    : { name: legacyName, status: 'unknown', unresolved: true }
+}
+
+function referencePresentationHtml (reference) {
+  const badge = reference.status === 'archived'
+    ? ' <span class="archived-badge">Archived</span>'
+    : reference.unresolved
+      ? ' <span class="archived-badge">Unavailable</span>'
+      : ''
+  return escapeHtml(String(reference.name)) + badge
+}
+
+export function buildActiveTaskDetailsHtml (task, snapshotOrCategories = []) {
+  const { categories, locations } = referenceSnapshot(snapshotOrCategories)
+  const category = categoryPresentation(task, categories)
+  const assignedLocations = (Array.isArray(task?.locationIds) ? task.locationIds : [])
+    .map(id => resolveReference(locations, id, null, 'Unknown location'))
+  const locationMarkup = assignedLocations.length
+    ? assignedLocations.map(referencePresentationHtml).join(', ')
+    : 'No locations'
+
+  return '<div class="task-meta">Category: ' + referencePresentationHtml(category) + ' \u00b7 ' +
     formatDuration(task?.estimatedDuration) +
     ' \u00b7 ' + escapeHtml(scheduleSummary(task?.schedule)) + '</div>' +
+    '<div class="task-meta">Locations: ' + locationMarkup + '</div>' +
     '<div class="task-meta">Scheduled: ' + escapeHtml(formatScheduledDate(task?.scheduledDate)) + '</div>'
 }
 
