@@ -613,10 +613,51 @@ test('production retry reuses the committed execution after its first response i
     await document.clickOutcome('task-1', 'done')
     await document.clickControl('retryCompletionBtn')
 
-    assert.equal(persistence.executionCalls, 2)
+    assert.equal(persistence.executionCalls, 1)
     assert.equal(persistence.executions.size, 1)
     assert.equal(persistence.taskUpdates.length, 1)
     assert.equal(state.currentExecutions.length, 1)
+  })
+})
+
+test('retry preserves a newer active handoff instead of replaying a stale final pause', async () => {
+  const task1 = task('task-1')
+  const task2 = task('task-2')
+  const session = {
+    _id: 'session-1', status: 'active', startTime: 10000,
+    taskBundle: ['task-1'], timeBudgetMinutes: 15,
+    accumulatedActiveMs: 0, activeStartedAt: 10000, checkpointElapsedMs: 0
+  }
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [task1, task2],
+    bundle: [task1],
+    failSessionUpdates: 1
+  }, async ({ document, persistence, clock }) => {
+    clock.setNow(70000)
+    await document.clickOutcome('task-1', 'done')
+    assert.ok(document.control('retryCompletionBtn'))
+
+    persistence.patchSession({
+      status: 'active',
+      taskBundle: ['task-1', 'task-2'],
+      accumulatedActiveMs: 60000,
+      activeStartedAt: 80000,
+      pausedAt: null,
+      checkpointElapsedMs: 60000
+    })
+    clock.setNow(90000)
+
+    await document.clickControl('retryCompletionBtn')
+
+    assert.equal(persistence.session.status, 'active')
+    assert.equal(persistence.session.activeStartedAt, 80000)
+    assert.equal(persistence.session.checkpointElapsedMs, 60000)
+    assert.deepEqual(persistence.session.taskBundle, ['task-1', 'task-2'])
+    assert.equal(persistence.sessionUpdateCalls, 1)
+    assert.equal(state.currentSession.status, 'active')
+    assert.ok(document.outcomeControl('task-2', 'done'))
   })
 })
 

@@ -227,3 +227,34 @@ test('cancelled skips task update but advances the checkpoint', async () => {
   assert.equal(result.ok, true)
   assert.deepEqual(calls, ['execution', 'session'])
 })
+
+test('continues from a discovered execution without replaying cached execution or session writes', async () => {
+  const calls = []
+  const coordinator = createCompletionCoordinator({
+    createExecution: async () => {
+      calls.push('execution')
+      throw new Error('response lost')
+    },
+    updateTask: async (id, fields) => calls.push(['task', id, fields]),
+    updateSession: async () => calls.push('session')
+  })
+
+  const first = await coordinator.complete({
+    execution: { taskId: 't1', sessionId: 's1' },
+    taskId: 't1', taskUpdate: { scheduledDate: 'stale' },
+    sessionId: 's1', sessionUpdate: { status: 'paused', activeStartedAt: null }
+  })
+  const recovered = await coordinator.continueAfterPersistedExecution({
+    taskId: 't1', taskUpdate: { scheduledDate: 'fresh' }
+  })
+
+  assert.equal(first.stage, 'execution')
+  assert.equal(recovered.ok, true)
+  assert.deepEqual(calls, [
+    'execution',
+    ['task', 't1', { scheduledDate: 'fresh' }]
+  ])
+  assert.equal(coordinator.hasPendingExecution(), false)
+  assert.equal(coordinator.hasPendingTaskUpdate(), false)
+  assert.equal(coordinator.hasPendingSessionUpdate(), false)
+})

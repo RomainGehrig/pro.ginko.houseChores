@@ -106,8 +106,16 @@ export function createCompletionCoordinator ({
     return persistExecution(pendingExecution)
   }
 
+  async function continueAfterPersistedExecution ({ taskId, taskUpdate }) {
+    pendingExecution = null
+    pendingTaskUpdate = taskUpdate ? { taskId, fields: taskUpdate } : null
+    pendingSessionUpdate = null
+    return retryTaskUpdate()
+  }
+
   return {
     complete,
+    continueAfterPersistedExecution,
     retryExecution: () => pendingExecution ? persistExecution(pendingExecution) : success(),
     retryTaskUpdate,
     retrySessionUpdate,

@@ -387,6 +387,52 @@ function terminalSession (session) {
   return session.status === 'completed' || session.status === 'interrupted'
 }
 
+function discardCompletionRetryState () {
+  completionCoordinator.discardPendingExecution()
+  completionCoordinator.discardPendingTaskUpdate()
+  completionCoordinator.discardPendingSessionUpdate()
+  pendingCompletion = null
+  pendingCompletionStage = null
+}
+
+function samePersistedNumber (left, right) {
+  if (left === null || left === undefined || left === '') {
+    return right === null || right === undefined || right === ''
+  }
+  if (right === null || right === undefined || right === '') return false
+  return Number.isFinite(Number(left)) && Number.isFinite(Number(right))
+    ? Number(left) === Number(right)
+    : left === right
+}
+
+function sameMutationBase (authoritative, attempted) {
+  return authoritative.status === attempted.status &&
+    samePersistedNumber(authoritative.accumulatedActiveMs, attempted.accumulatedActiveMs) &&
+    samePersistedNumber(authoritative.activeStartedAt, attempted.activeStartedAt) &&
+    samePersistedNumber(authoritative.checkpointElapsedMs, attempted.checkpointElapsedMs) &&
+    samePersistedNumber(authoritative.pausedAt, attempted.pausedAt) &&
+    JSON.stringify(authoritative.taskBundle || []) === JSON.stringify(attempted.taskBundle || [])
+}
+
+function executionMatchesPendingCompletion (execution, attempt) {
+  return execution.taskId === attempt.taskId &&
+    execution.sessionId === attempt.aggregate.session._id &&
+    execution.outcome === attempt.outcome &&
+    execution.completionAttemptId === completionAttemptIdFor(
+      attempt.aggregate.session._id,
+      attempt.taskId
+    ) &&
+    samePersistedNumber(execution.endTime, attempt.timing.endTime) &&
+    samePersistedNumber(execution.rawDurationMs, attempt.timing.rawDurationMs) &&
+    samePersistedNumber(execution.activeElapsedMs, attempt.timing.activeElapsedMs)
+}
+
+async function applyAuthoritativeCompletionState (aggregate) {
+  discardCompletionRetryState()
+  await applyAggregate(aggregate)
+  releaseCompletionLockIfSettled()
+}
+
 async function completeTask (taskId, outcome) {
   if (sessionMutationInFlight || !validOutcome(outcome)) return
   sessionMutationInFlight = true
@@ -530,9 +576,94 @@ function releaseCompletionLockIfSettled () {
 }
 
 async function retryCompletion (button) {
-  if (!pendingCompletionStage) return
+  if (!pendingCompletionStage || !pendingCompletion) return
   button.disabled = true
-  const result = await retryCompletionForStage(pendingCompletionStage, {
+  const retryStage = pendingCompletionStage
+  const attempt = pendingCompletion
+  let aggregate
+  try {
+    aggregate = await sessionStore.refresh(attempt.aggregate.session._id, Date.now())
+  } catch (error) {
+    renderCompletionFailure({
+      ok: false,
+      stage: retryStage,
+      message: 'Could not refresh the session before retrying: ' + error.message,
+      canRetry: true
+    })
+    return
+  }
+
+  const persistedExecution = aggregate.executions.find(execution =>
+    execution.taskId === attempt.taskId
+  )
+  if (persistedExecution) {
+    if (retryStage === 'session_update') {
+      await applyAuthoritativeCompletionState(aggregate)
+      return
+    }
+    if (!executionMatchesPendingCompletion(persistedExecution, attempt)) {
+      await applyAuthoritativeCompletionState(aggregate)
+      return
+    }
+
+    const task = aggregate.bundle.find(candidate => candidate._id === attempt.taskId) || attempt.task
+    let prepared
+    try {
+      prepared = await prepareCompletionAttempt({
+        taskSnapshot: task,
+        outcome: persistedExecution.outcome,
+        completion: {
+          completionDate: localDateFromDate(new Date(Number(persistedExecution.endTime))),
+          completedAt: Number(persistedExecution.endTime)
+        },
+        loadTask: async id => (await listTasksByIds([id]))[0] || null
+      })
+    } catch (error) {
+      renderCompletionFailure({
+        ok: false,
+        stage: 'task_read',
+        message: 'Could not refresh task before completion: ' + error.message,
+        canRetry: true
+      })
+      return
+    }
+    pendingCompletion = {
+      ...attempt,
+      aggregate,
+      task: prepared.task,
+      outcome: persistedExecution.outcome,
+      timing: {
+        startTime: Number(persistedExecution.startTime),
+        endTime: Number(persistedExecution.endTime),
+        rawDurationMs: Number(persistedExecution.rawDurationMs),
+        activeElapsedMs: Number(persistedExecution.activeElapsedMs),
+        actualDuration: Number(persistedExecution.actualDuration)
+      },
+      taskUpdate: prepared.task.status === 'proposed' ? null : prepared.taskUpdate,
+      sessionUpdate: null
+    }
+    const result = await completionCoordinator.continueAfterPersistedExecution({
+      taskId: attempt.taskId,
+      taskUpdate: pendingCompletion.taskUpdate
+    })
+    await handleCompletionResult(result)
+    return
+  }
+
+  if (retryStage === 'task_update' || retryStage === 'session_update' ||
+    aggregate.session.status !== 'active' ||
+    !sameMutationBase(aggregate.session, attempt.aggregate.session)) {
+    await applyAuthoritativeCompletionState(aggregate)
+    return
+  }
+
+  const task = aggregate.bundle.find(candidate => candidate._id === attempt.taskId)
+  if (!task) {
+    await applyAuthoritativeCompletionState(aggregate)
+    return
+  }
+  pendingCompletion = { ...attempt, aggregate, task }
+  const result = await retryCompletionForStage(retryStage, {
     actionsBlocked: () => false,
     retryPreparation: prepareAndCompletePendingTask,
     retryExecution: completionCoordinator.retryExecution,
