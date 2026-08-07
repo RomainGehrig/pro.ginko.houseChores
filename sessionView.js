@@ -13,6 +13,14 @@ let selectedMinutes = null
 let selectedCategoryId = ''
 let currentProposal = null
 
+export function showSessionStartNotice (startResult, status) {
+  if (!startResult?.restored || !status) return false
+  status.textContent = 'Resuming your unfinished session — the new bundle was not started.'
+  status.setAttribute('role', 'status')
+  status.setAttribute('data-state', 'info')
+  return true
+}
+
 export function initSessionView() {
   document.querySelectorAll('.time-btn').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -86,11 +94,13 @@ function renderBundlePreview() {
 async function handleStart() {
   if (!currentProposal?.tasks.length) return
   try {
-    const { aggregate } = await sessionStore.start(currentProposal, Date.now())
+    const startResult = await sessionStore.start(currentProposal, Date.now())
+    const { aggregate } = startResult
     setCurrentSessionAggregate(aggregate)
     setNavVisible('doing', true)
     showView('doing')
-    startDoing(aggregate)
+    await startDoing(aggregate)
+    showSessionStartNotice(startResult, document.getElementById('doingStatus'))
   } catch (error) {
     document.getElementById('bundlePreview').innerHTML =
       '<p class="inline-status" data-state="error" role="alert">' +

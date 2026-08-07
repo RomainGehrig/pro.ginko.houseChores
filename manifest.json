@@ -48,6 +48,7 @@
     { "path": "tasksView.js", "Description": "Renders and wires task intake, explicit scheduled-date and schedule review, active category/location assignments, AI enrichment, approval, and task editing." },
     { "path": "tasksView.test.js", "Description": "Node tests covering task-view scheduling editor integration, approved payloads, and edit preservation." },
     { "path": "sessionView.js", "Description": "Renders the time budget and active-category picker, builds filtered bundles, and starts durable sessions." },
+    { "path": "sessionView.test.js", "Description": "Node tests covering restored-session start notices when a proposed bundle cannot replace unfinished work." },
     { "path": "doingView.js", "Description": "Renders all session tasks, persists exact outcome checkpoints, and supports pause, continuation, and conclusion." },
     { "path": "doingView.test.js", "Description": "Production DOM tests covering authoritative refresh, any-order outcomes, persistence retries, pause, and continuation." },
     { "path": "reviewView.js", "Description": "Renders the post-session review for correcting durations/ratings and suggesting updated duration estimates." },
