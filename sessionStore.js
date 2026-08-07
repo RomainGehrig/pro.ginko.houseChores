@@ -1,9 +1,10 @@
 // ABOUTME: Loads and repairs the one authoritative unfinished session aggregate.
 // ABOUTME: Keeps freezr persistence outside pure timing and DOM rendering.
 
-import { getSessionById, listUnfinishedSessions, updateSession } from './sessionData.js'
+import { createSession, getSessionById, listUnfinishedSessions, updateSession } from './sessionData.js'
 import { listExecutionsBySession } from './executionData.js'
 import { listTasksByIds } from './taskData.js'
+import { buildSessionDraft } from './bundleLogic.js'
 import {
   chooseCurrentSession,
   normalizationFields,
@@ -18,6 +19,7 @@ export function createSessionStore ({
   getSession = getSessionById,
   listExecutions = listExecutionsBySession,
   listTasks = listTasksByIds,
+  createSessionRecord = createSession,
   updateSessionRecord = updateSession
 } = {}) {
   async function hydrate (session, nowMs) {
@@ -73,7 +75,14 @@ export function createSessionStore ({
     return hydrate(session, nowMs)
   }
 
-  return { restoreCurrent, refresh }
+  async function start (proposal, nowMs = Date.now()) {
+    const existing = await restoreCurrent(nowMs)
+    if (existing) return { aggregate: existing, restored: true }
+    const created = await createSessionRecord(buildSessionDraft(proposal, nowMs))
+    return { aggregate: await hydrate(created, nowMs), restored: false }
+  }
+
+  return { restoreCurrent, refresh, start }
 }
 
 export const sessionStore = createSessionStore()

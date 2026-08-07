@@ -50,3 +50,42 @@ test('restore repairs a final execution into paused state', async () => {
   assert.equal(aggregate.session.activeStartedAt, null)
   assert.equal(updates.at(-1).fields.pausedAt, 6000)
 })
+
+test('start restores unfinished work instead of creating a second session', async () => {
+  let creates = 0
+  const existing = {
+    _id: 'existing', status: 'paused', taskBundle: [], startTime: 1000,
+    accumulatedActiveMs: 5000, activeStartedAt: null
+  }
+  const store = createSessionStore({
+    listSessions: async () => [existing],
+    getSession: async () => existing,
+    listExecutions: async () => [],
+    listTasks: async () => [],
+    createSessionRecord: async () => { creates++; return { _id: 'new' } },
+    updateSessionRecord: async () => {}
+  })
+  const result = await store.start({ tasks: [{ _id: 't1' }] }, 9000)
+  assert.equal(result.restored, true)
+  assert.equal(result.aggregate.session._id, 'existing')
+  assert.equal(creates, 0)
+})
+
+test('start creates one compact snapshot when none is unfinished', async () => {
+  let created
+  const store = createSessionStore({
+    listSessions: async () => [],
+    getSession: async id => created?._id === id ? created : null,
+    listExecutions: async () => [],
+    listTasks: async ids => ids.map(_id => ({ _id, name: _id })),
+    createSessionRecord: async draft => (created = { _id: 'new', ...draft }),
+    updateSessionRecord: async () => {}
+  })
+  const result = await store.start({
+    tasks: [{ _id: 't1' }], timeBudgetMinutes: 15,
+    categoryFilterId: null, categoryFilter: null
+  }, 9000)
+  assert.equal(result.restored, false)
+  assert.equal(created.activeStartedAt, 9000)
+  assert.deepEqual(result.aggregate.session.taskBundle, ['t1'])
+})

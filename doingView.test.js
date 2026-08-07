@@ -92,6 +92,7 @@ test('completion outcomes cannot create an execution while End Session is pendin
     schedule: { type: 'one_off' }
   }]
   state.currentBundleIndex = 0
+  state.currentExecutions = []
 
   let ending
   try {
@@ -120,6 +121,7 @@ test('completion outcomes cannot create an execution while End Session is pendin
     state.currentSession = null
     state.currentBundle = []
     state.currentBundleIndex = 0
+    state.currentExecutions = []
   }
 })
 
@@ -148,6 +150,7 @@ async function completeWithPersistedTask (taskSnapshot, persistedTask) {
     schedule: { type: 'one_off' }
   }]
   state.currentBundleIndex = 0
+  state.currentExecutions = []
 
   try {
     startDoing()
@@ -161,6 +164,7 @@ async function completeWithPersistedTask (taskSnapshot, persistedTask) {
     state.currentSession = null
     state.currentBundle = []
     state.currentBundleIndex = 0
+    state.currentExecutions = []
   }
 }
 
@@ -253,6 +257,7 @@ test('production retry reuses the committed execution after its first response i
     schedule: { type: 'one_off' }
   }]
   state.currentBundleIndex = 0
+  state.currentExecutions = []
 
   try {
     startDoing()
@@ -271,5 +276,6 @@ test('production retry reuses the committed execution after its first response i
     state.currentSession = null
     state.currentBundle = []
     state.currentBundleIndex = 0
+    state.currentExecutions = []
   }
 })
