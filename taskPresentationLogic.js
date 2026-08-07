@@ -33,8 +33,11 @@ const outcomeLabel = outcome => ({
   cancelled: 'Cancelled'
 })[outcome] || String(outcome || '')
 
+const hasRawDuration = value => (typeof value === 'number' ||
+  (typeof value === 'string' && value.trim() !== '')) && Number.isFinite(Number(value))
+
 const executionSeconds = execution => Math.max(0,
-  Number.isFinite(Number(execution.rawDurationMs))
+  hasRawDuration(execution.rawDurationMs)
     ? Math.floor(Number(execution.rawDurationMs) / 1000)
     : Math.round(Number(execution.actualDuration || 0) * 60)
 )

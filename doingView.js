@@ -153,6 +153,7 @@ function setSessionMutationControlsDisabled (disabled) {
     if (control.id === 'retryCompletionBtn' || control.id === 'retrySessionMutationBtn') return
     control.disabled = disabled
   })
+  if (!disabled) updateResumeAvailability()
 }
 
 function clearDoingStatus () {

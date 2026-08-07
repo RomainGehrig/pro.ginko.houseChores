@@ -58,6 +58,28 @@ test('active unavailable cards are Cancel-only while proposed Quick-add cards st
   assert.match(quickCard, /data-outcome="cancelled"/)
 })
 
+test('resolved timing falls back for null or empty raw values while preserving numeric zero', () => {
+  const markup = buildDoingSessionHtml({
+    status: 'paused', timeBudgetMinutes: 15
+  }, [{
+    _id: 'null-raw', name: 'Null raw', estimatedDuration: 1
+  }, {
+    _id: 'empty-raw', name: 'Empty raw', estimatedDuration: 1
+  }, {
+    _id: 'zero-raw', name: 'Zero raw', estimatedDuration: 1
+  }], [{
+    taskId: 'null-raw', outcome: 'done', rawDurationMs: null, actualDuration: 2
+  }, {
+    taskId: 'empty-raw', outcome: 'done', rawDurationMs: '', actualDuration: 0.5
+  }, {
+    taskId: 'zero-raw', outcome: 'done', rawDurationMs: 0, actualDuration: 99
+  }], [])
+
+  assert.match(markup, /data-task-id="null-raw"[\s\S]*?Done · 02:00/)
+  assert.match(markup, /data-task-id="empty-raw"[\s\S]*?Done · 00:30/)
+  assert.match(markup, /data-task-id="zero-raw"[\s\S]*?Done · 00:00/)
+})
+
 test('resolved and unavailable cards remain visible without outcome controls while paused', () => {
   const markup = buildDoingSessionHtml({
     status: 'paused', timeBudgetMinutes: 15

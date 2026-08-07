@@ -886,7 +886,7 @@ test('paused picker attaches suggestions and search, quick-adds a proposed task,
   }
 })
 
-test('suggestion attach rejects stale local budget and applies the authoritative pause', async () => {
+test('suggestion failure reconciliation preserves the authoritative pause and disabled Resume', async () => {
   const original = task('original-task')
   const suggested = {
     ...task('suggested-5m'), estimatedDuration: 5, scheduledDate: '2026-08-01'
@@ -920,6 +920,7 @@ test('suggestion attach rejects stale local budget and applies the authoritative
 
     assert.deepEqual(persistence.session.taskBundle, ['original-task'])
     assert.equal(state.currentSession.accumulatedActiveMs, 9 * 60000)
+    assert.equal(document.control('resumeSessionBtn').disabled, true)
     assert.match(
       document.control('doingStatus').textContent,
       /exceed the remaining session budget/
