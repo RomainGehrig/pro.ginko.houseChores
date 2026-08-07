@@ -6,6 +6,7 @@ import {
   nextScheduledDate,
   normalizeSchedule,
   normalizeTaskSchedule,
+  suggestScheduledDate,
   scheduleSummary,
   scheduleMatchesDate,
   taskUpdateForOutcome,
@@ -56,20 +57,18 @@ test('discards malformed persisted weekday arrays without aborting task normaliz
   })
 })
 
-test('validates a fixed first date but allows a preserved current occurrence', () => {
+test('accepts an off-pattern date for a fixed calendar schedule', () => {
   const schedule = {
-    type: 'fixed', pattern: { kind: 'weekdays', weekdays: [7] }
+    type: 'fixed', pattern: { kind: 'annual_date', month: 7, day: 1 }
   }
-  assert.equal(scheduleMatchesDate(schedule, '2026-08-16'), true)
-  assert.equal(scheduleMatchesDate(schedule, '2026-08-17'), false)
-  assert.equal(validateScheduleInput(
-    { scheduledDate: '2026-08-17', schedule },
-    { requirePatternMatch: true }
-  ).ok, false)
-  assert.equal(validateScheduleInput(
-    { scheduledDate: '2026-08-17', schedule },
-    { requirePatternMatch: false }
-  ).ok, true)
+  assert.deepEqual(validateScheduleInput({
+    scheduledDate: '2026-08-08',
+    schedule
+  }), {
+    ok: true,
+    scheduledDate: '2026-08-08',
+    schedule
+  })
 })
 
 test('matches fixed calendar dates clamped to February', () => {
@@ -80,10 +79,7 @@ test('matches fixed calendar dates clamped to February', () => {
   assert.equal(scheduleMatchesDate(monthly, '2024-02-29'), true)
   assert.equal(scheduleMatchesDate(annual, '2026-02-28'), true)
   assert.equal(scheduleMatchesDate(annual, '2024-02-29'), true)
-  assert.equal(validateScheduleInput(
-    { scheduledDate: '2026-02-28', schedule: annual },
-    { requirePatternMatch: true }
-  ).ok, true)
+  assert.equal(validateScheduleInput({ scheduledDate: '2026-02-28', schedule: annual }).ok, true)
 })
 
 test('normalizes current local records without writing a migration', () => {
@@ -113,6 +109,36 @@ test('normalizes current local records without writing a migration', () => {
 
 test('formats local dates without crossing UTC boundaries', () => {
   assert.equal(localDateFromDate(new Date(2026, 1, 28, 23, 45)), '2026-02-28')
+})
+
+test('suggests the first matching weekday on or after the reference date', () => {
+  const schedule = {
+    type: 'fixed', pattern: { kind: 'weekdays', weekdays: [5, 7] }
+  }
+
+  assert.equal(suggestScheduledDate(schedule, '2026-08-07'), '2026-08-07')
+  assert.equal(suggestScheduledDate(schedule, '2026-08-08'), '2026-08-09')
+})
+
+test('suggests inclusive monthly and annual dates with calendar clamping', () => {
+  const monthly = { type: 'fixed', pattern: { kind: 'month_day', day: 31 } }
+  const annual = { type: 'fixed', pattern: { kind: 'annual_date', month: 2, day: 29 } }
+
+  assert.equal(suggestScheduledDate(monthly, '2026-02-27'), '2026-02-28')
+  assert.equal(suggestScheduledDate(monthly, '2026-02-28'), '2026-02-28')
+  assert.equal(suggestScheduledDate(monthly, '2026-03-01'), '2026-03-31')
+  assert.equal(suggestScheduledDate(annual, '2026-02-28'), '2026-02-28')
+  assert.equal(suggestScheduledDate(annual, '2026-03-01'), '2027-02-28')
+})
+
+test('does not suggest a date without a valid fixed schedule and reference date', () => {
+  assert.equal(suggestScheduledDate({ type: 'one_off' }, '2026-08-07'), null)
+  assert.equal(suggestScheduledDate({
+    type: 'periodic', every: 1, unit: 'year'
+  }, '2026-08-07'), null)
+  assert.equal(suggestScheduledDate({
+    type: 'fixed', pattern: { kind: 'weekdays', weekdays: [1] }
+  }, 'invalid'), null)
 })
 
 test('advances periodic schedules from completion using calendar units', () => {

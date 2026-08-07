@@ -93,6 +93,16 @@ function nextFixedDate (pattern, threshold) {
     : clampedDate(year + 1, pattern.month, pattern.day)
 }
 
+export function suggestScheduledDate (schedule, referenceDate) {
+  const normalizedSchedule = normalizeSchedule(schedule)
+  const reference = parseLocalDate(referenceDate)
+  if (normalizedSchedule?.type !== 'fixed' || !reference) return null
+
+  return scheduleMatchesDate(normalizedSchedule, referenceDate)
+    ? formatLocalDate(reference)
+    : nextFixedDate(normalizedSchedule.pattern, referenceDate)
+}
+
 export function nextScheduledDate (task, completionDate) {
   const schedule = normalizeSchedule(task.schedule)
   if (schedule?.type === 'one_off') return null
@@ -203,16 +213,12 @@ export function scheduleMatchesDate (schedule, scheduledDate) {
     date.day === Math.min(pattern.day, daysInMonth(date.year, pattern.month))
 }
 
-export function validateScheduleInput (input = {}, options = {}) {
+export function validateScheduleInput (input = {}) {
   const date = parseLocalDate(input.scheduledDate)
   if (!date) return { ok: false, message: 'Enter a valid scheduled date.' }
 
   const schedule = normalizeSchedule(input.schedule)
   if (!schedule) return { ok: false, message: 'Choose a valid schedule.' }
-
-  if (options.requirePatternMatch && !scheduleMatchesDate(schedule, input.scheduledDate)) {
-    return { ok: false, message: 'The scheduled date must match the fixed calendar pattern.' }
-  }
 
   return { ok: true, scheduledDate: formatLocalDate(date), schedule }
 }
