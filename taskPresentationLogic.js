@@ -23,6 +23,7 @@ export function buildDoingTaskHtml (task, bundleIndex, bundleLength, categories 
     '<h2>' + escapeHtml(String(task?.name ?? '')) + '</h2>' +
     '<div class="task-meta">' + escapeHtml(categoryName) + ' \u00b7 target ' + formatDuration(task?.estimatedDuration) + '</div>' +
     '<div class="timer" id="timerDisplay">00:00</div>' +
+    '<div id="doingStatus"></div>' +
     '<div class="doing-actions">' +
       '<button id="doneBtn">Done</button>' +
       '<button id="alreadyDoneBtn">Already Done</button>' +

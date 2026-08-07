@@ -6,6 +6,8 @@ import { getActiveTasks, refreshTasksView } from './tasksView.js'
 import { findFillerTask } from './bundleLogic.js'
 import { formatTimer, formatDuration } from './helpers.js'
 import { buildDoingTaskHtml } from './taskPresentationLogic.js'
+import { createCompletionCoordinator } from './completionSaveLogic.js'
+import { localDateFromDate, taskUpdateForOutcome } from './scheduleLogic.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
 import { showView, setNavVisible } from './viewRouter.js'
 import { startReview } from './reviewView.js'
@@ -13,6 +15,9 @@ import { startReview } from './reviewView.js'
 let timerInterval = null
 let taskStartTime = null
 let usedTaskIds = []
+let pendingContinuation = null
+
+const completionCoordinator = createCompletionCoordinator({ createExecution, updateTask })
 
 export function initDoingView() {
   // content is rendered dynamically by startDoing/renderCurrentTask
@@ -58,12 +63,13 @@ function renderCurrentTask() {
 }
 
 async function finishTask(outcome) {
+  if (pendingContinuation) return
+
   clearInterval(timerInterval)
   const task = currentTask()
   const endTime = Date.now()
   const actualDuration = Math.round((endTime - taskStartTime) / 60000) || 1
-
-  await createExecution({
+  const execution = {
     taskId: task._id,
     sessionId: state.currentSession._id,
     startTime: taskStartTime,
@@ -72,25 +78,72 @@ async function finishTask(outcome) {
     outcome,
     difficultyRating: null,
     notes: ''
+  }
+  const taskUpdate = taskUpdateForOutcome(task, outcome, {
+    completionDate: localDateFromDate(new Date(endTime)),
+    completedAt: endTime
   })
 
-  usedTaskIds.push(task._id)
+  pendingContinuation = { outcome, execution, actualDuration, task, taskUpdate }
+  setCompletionControlsDisabled(true)
+  const result = await completionCoordinator.complete({
+    execution,
+    taskId: task._id,
+    taskUpdate
+  })
+  await handleCompletionResult(result)
+}
 
-  if (outcome === 'done' || outcome === 'already_done') {
-    const now = Date.now()
-    const updates = { lastCompletedDate: now }
-    if (task.recurrence) {
-      updates.nextDueDate = now + task.recurrence * 24 * 60 * 60 * 1000
-    } else {
-      updates.status = 'archived'
-    }
-    await updateTask(task._id, updates)
+function setCompletionControlsDisabled(disabled) {
+  for (const id of ['doneBtn', 'alreadyDoneBtn', 'cancelBtn', 'endSessionBtn']) {
+    const control = document.getElementById(id)
+    if (control) control.disabled = disabled
+  }
+}
+
+async function handleCompletionResult(result) {
+  if (!result.ok) {
+    renderCompletionFailure(result)
+    return
   }
 
-  await maybeAddFillerTask(actualDuration, task.estimatedDuration)
+  const continuation = pendingContinuation
+  if (!continuation) return
+  pendingContinuation = null
+  usedTaskIds.push(continuation.task._id)
+
+  await maybeAddFillerTask(continuation.actualDuration, continuation.task.estimatedDuration)
 
   state.currentBundleIndex += 1
   renderCurrentTask()
+}
+
+function renderCompletionFailure(result) {
+  const status = document.getElementById('doingStatus')
+  status.textContent = result.message
+  status.setAttribute('role', 'alert')
+
+  const retryButton = document.createElement('button')
+  retryButton.id = 'retryCompletionBtn'
+  retryButton.textContent = 'Retry completion'
+  retryButton.addEventListener('click', async () => {
+    retryButton.disabled = true
+    const endSessionButton = document.getElementById('endSessionBtn')
+    if (endSessionButton) endSessionButton.disabled = true
+
+    const retryResult = result.stage === 'execution'
+      ? await completionCoordinator.complete({
+          execution: pendingContinuation.execution,
+          taskId: pendingContinuation.task._id,
+          taskUpdate: pendingContinuation.taskUpdate
+        })
+      : await completionCoordinator.retryTaskUpdate()
+    await handleCompletionResult(retryResult)
+  })
+  status.appendChild(retryButton)
+
+  const endSessionButton = document.getElementById('endSessionBtn')
+  if (endSessionButton) endSessionButton.disabled = false
 }
 
 async function maybeAddFillerTask(actualDuration, estimatedDuration) {
@@ -105,6 +158,13 @@ async function maybeAddFillerTask(actualDuration, estimatedDuration) {
 }
 
 async function endSession() {
+  if (completionCoordinator.hasPendingTaskUpdate()) {
+    const shouldEnd = confirm('The completion is recorded, but the schedule was not updated and will need manual correction. End session anyway?')
+    if (!shouldEnd) return
+    completionCoordinator.discardPendingTaskUpdate()
+  }
+
+  pendingContinuation = null
   clearInterval(timerInterval)
   await updateSession(state.currentSession._id, { endTime: Date.now(), status: 'completed' })
   setNavVisible('doing', false)

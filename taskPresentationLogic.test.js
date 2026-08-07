@@ -53,6 +53,22 @@ test('doing markup resolves a renamed category by stable id and escapes stored n
   assert.doesNotMatch(activeMarkup, /<svg|Stale category snapshot/)
 })
 
+test('doing markup keeps completion recovery status and actions safely rendered', () => {
+  const markup = buildDoingTaskHtml({
+    name: '<button id="retryCompletionBtn">Fake retry</button>',
+    category: 'Home',
+    estimatedDuration: 10
+  }, 0, 1)
+
+  assert.match(markup, /<div id="doingStatus"><\/div>/)
+  assert.match(markup, /<button id="doneBtn">Done<\/button>/)
+  assert.match(markup, /<button id="alreadyDoneBtn">Already Done<\/button>/)
+  assert.match(markup, /<button id="cancelBtn">Cancel<\/button>/)
+  assert.match(markup, /<button id="endSessionBtn">End Session<\/button>/)
+  assert.doesNotMatch(markup, /<h2><button/)
+  assert.equal((markup.match(/id="retryCompletionBtn"/g) || []).length, 0)
+})
+
 test('bundle preview escapes stored task names', () => {
   const markup = buildBundlePreviewHtml([{
     _id: 'task-1',
