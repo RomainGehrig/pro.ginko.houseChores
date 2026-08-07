@@ -8,6 +8,14 @@ import { refreshTasksView } from './tasksView.js'
 
 let executionsCache = []
 
+export function applyDurationCorrection (execution, value) {
+  const actualDuration = Number(value)
+  if (!Number.isFinite(actualDuration) || actualDuration < 1) return false
+  execution.actualDuration = actualDuration
+  execution.durationCorrected = true
+  return true
+}
+
 export function initReviewView() {
   document.getElementById('finishReviewBtn').addEventListener('click', handleFinish)
 }
@@ -32,7 +40,7 @@ function renderReviewList() {
     const id = card.dataset.id
     card.querySelector('.f-actual').addEventListener('change', (e) => {
       const exec = executionsCache.find(x => x._id === id)
-      exec.actualDuration = Number(e.target.value) || exec.actualDuration
+      applyDurationCorrection(exec, e.target.value)
     })
     card.querySelector('.f-difficulty').addEventListener('change', (e) => {
       const exec = executionsCache.find(x => x._id === id)
@@ -58,14 +66,23 @@ function execCardHtml(exec) {
   )
 }
 
-async function handleFinish() {
-  for (const exec of executionsCache) {
-    await updateExecution(exec._id, {
+export async function saveExecutionReviews (executions, saveExecution = updateExecution) {
+  for (const exec of executions) {
+    const fields = {
       actualDuration: exec.actualDuration,
       difficultyRating: exec.difficultyRating,
       notes: exec.notes
-    })
+    }
+    if (exec.durationCorrected) {
+      fields.rawDurationMs = Number(exec.actualDuration) * 60000
+      fields.actualSeconds = Number(exec.actualDuration) * 60
+    }
+    await saveExecution(exec._id, fields)
   }
+}
+
+async function handleFinish() {
+  await saveExecutionReviews(executionsCache)
 
   await suggestDurationUpdates()
   await refreshTasksView()

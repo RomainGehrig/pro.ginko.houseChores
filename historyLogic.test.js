@@ -48,12 +48,23 @@ test('history distinguishes resumable, completed, and interrupted sessions', () 
   ])
 })
 
-test('history uses raw milliseconds and falls back to legacy minutes', () => {
+test('history rounds raw milliseconds and falls back to legacy minutes', () => {
   const [summary] = buildHistory([{ _id: 's1', status: 'completed' }], [
     { sessionId: 's1', taskId: 't1', rawDurationMs: 90000, actualDuration: 99, outcome: 'done' },
     { sessionId: 's1', taskId: 't2', actualDuration: 2, outcome: 'cancelled' }
   ], tasks)
-  assert.equal(summary.totalActualMinutes, 3.5)
+  assert.deepEqual(summary.entries.map(entry => entry.actualDuration), [2, 2])
+  assert.equal(summary.totalActualMinutes, 4)
+})
+
+test('history treats blank raw milliseconds as missing legacy data', () => {
+  const [summary] = buildHistory([{ _id: 's1', status: 'completed' }], [
+    { sessionId: 's1', taskId: 't1', rawDurationMs: null, actualDuration: 12, outcome: 'done' },
+    { sessionId: 's1', taskId: 't2', rawDurationMs: '', actualDuration: 7, outcome: 'cancelled' }
+  ], tasks)
+
+  assert.deepEqual(summary.entries.map(entry => entry.actualDuration), [12, 7])
+  assert.equal(summary.totalActualMinutes, 19)
 })
 
 test('a session with no executions has zero tasks and no entries', () => {
