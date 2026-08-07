@@ -175,7 +175,6 @@ export function createCategoryLocationStore ({ referenceData, taskData }) {
     if (reads[0].status === 'fulfilled') {
       state.categories = reads[0].value
       categoriesLoaded = true
-      readiness.categories = true
     } else {
       errors.categories = errorMessage(reads[0].reason)
     }
@@ -273,6 +272,7 @@ export function createCategoryLocationStore ({ referenceData, taskData }) {
       }
     }
 
+    readiness.categories = categoriesLoaded && !errors.categories
     state = {
       ...state,
       initialized: true,

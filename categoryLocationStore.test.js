@@ -154,6 +154,68 @@ test('initialization merges metadata-only default creates before a failed refres
   assert.match(snapshot.error, /category refresh unavailable/)
 })
 
+test('blocks category mutations when failed seeding leaves the cache incomplete', async () => {
+  const persistedCategories = []
+  let categoryListCalls = 0
+  let nextUserCategoryId = 0
+  const referenceData = {
+    listCategories: async () => {
+      categoryListCalls++
+      if (categoryListCalls === 1) return []
+      throw new Error('category refresh unavailable')
+    },
+    createCategory: async (data, options = {}) => {
+      const id = options.dataObjectId || `category-user-${++nextUserCategoryId}`
+      const record = { _id: id, ...clone(data) }
+      const existing = persistedCategories.find(category => category._id === id)
+      if (existing) Object.assign(existing, record)
+      else persistedCategories.push(record)
+      if (options.upsert) throw new Error('seed response lost')
+      return clone(record)
+    },
+    updateCategory: async () => { throw new Error('unexpected category update') },
+    listLocations: async () => [],
+    createLocation: async () => { throw new Error('unexpected location create') },
+    updateLocation: async () => { throw new Error('unexpected location update') }
+  }
+  const taskData = {
+    listAllTasks: async () => [],
+    updateTask: async () => { throw new Error('unexpected task update') }
+  }
+  const store = createCategoryLocationStore({ referenceData, taskData })
+
+  const initialized = await store.initialize()
+  let mutationError = null
+  try {
+    await store.addCategory('Admin')
+  } catch (error) {
+    mutationError = error.message
+  }
+
+  assert.deepEqual({
+    initializedCategories: initialized.categories,
+    readiness: initialized.readiness,
+    categoryError: initialized.errors.categories,
+    mutationError,
+    persistedCategories,
+    finalCategories: store.getSnapshot().categories
+  }, {
+    initializedCategories: [],
+    readiness: { categories: false, locations: true },
+    categoryError: 'seed response lost\ncategory refresh unavailable',
+    mutationError: 'Categories must load successfully before they can be changed.',
+    persistedCategories: [{
+      _id: 'category-default-admin',
+      name: 'Admin',
+      seedKey: 'admin',
+      displayOrder: 0,
+      normalizedName: 'admin',
+      status: 'active'
+    }],
+    finalCategories: []
+  })
+})
+
 test('assigns increasing display order to custom categories created during migration', async () => {
   const fake = createFakeApis()
   fake.tasks.push({
