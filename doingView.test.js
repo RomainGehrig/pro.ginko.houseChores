@@ -4,6 +4,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { completionAttemptIdFor } from './executionData.js'
+import { sessionStore } from './sessionStore.js'
 import { state, setCurrentSessionAggregate } from './state.js'
 import { initDoingView, refreshDoing, startDoing } from './doingView.js'
 
@@ -16,7 +17,10 @@ function createControl (id = '') {
     dataset: {},
     disabled: false,
     hidden: false,
+    checked: false,
     textContent: '',
+    type: '',
+    value: '',
     style: {},
     classList: { toggle () {} },
     addEventListener (type, listener) {
@@ -34,6 +38,7 @@ function createControl (id = '') {
     },
     setAttribute () {},
     replaceChildren (...children) {
+      this.onBeforeChildren?.()
       this.textContent = ''
       this.children = children
       this.onChildren?.(children)
@@ -51,51 +56,100 @@ function createDoingDocument () {
   const dynamicIds = new Set()
   let controls = []
   const content = createControl('doingContent')
+  content._dynamicChildren = []
   nodes.set('doingContent', content)
   nodes.set('reviewList', createControl('reviewList'))
+  for (const id of ['proposedCards', 'activeCards', 'archivedCards', 'enrichBtn', 'enrichStatus']) {
+    nodes.set(id, createControl(id))
+  }
   for (const view of ['tasks', 'session', 'doing', 'review', 'history']) {
     nodes.set('view-' + view, createControl('view-' + view))
     navControls.set(view, createControl('nav-' + view))
   }
 
-  const register = control => {
+  const unregister = control => {
+    for (const child of control._dynamicChildren || []) unregister(child)
+    if (control.id && nodes.get(control.id) === control) {
+      nodes.delete(control.id)
+      dynamicIds.delete(control.id)
+    }
+    controls = controls.filter(candidate => candidate !== control)
+  }
+
+  const register = (control, owner) => {
     controls.push(control)
     if (control.id) {
       nodes.set(control.id, control)
       dynamicIds.add(control.id)
     }
-    control.onChildren = children => children.forEach(register)
+    control._dynamicChildren = []
+    control.onBeforeChildren = () => {
+      for (const child of control._dynamicChildren) unregister(child)
+      control._dynamicChildren = []
+    }
+    control.onChildren = children => children.forEach(child => register(child, control))
+    Object.defineProperty(control, 'innerHTML', {
+      configurable: true,
+      get () { return control._markup || '' },
+      set (markup) {
+        control.onBeforeChildren()
+        control._markup = markup
+        parseMarkup(markup, control)
+      }
+    })
+    owner?._dynamicChildren.push(control)
     return control
   }
 
+  function parseMarkup (markup, owner) {
+    const tagPattern = /<([a-z]+)([^>]*)>/g
+    let match
+    while ((match = tagPattern.exec(markup))) {
+      const tagName = match[1].toUpperCase()
+      const attributes = match[2]
+      const id = attributes.match(/\bid="([^"]+)"/)?.[1] || ''
+      const taskId = attributes.match(/\bdata-task-id="([^"]+)"/)?.[1]
+      const outcome = attributes.match(/\bdata-outcome="([^"]+)"/)?.[1]
+      const suggestionId = attributes.match(/\bdata-continuation-suggestion-id="([^"]+)"/)?.[1]
+      const searchId = attributes.match(/\bdata-continuation-search-id="([^"]+)"/)?.[1]
+      if (!id && !taskId && !outcome && !suggestionId && !searchId) continue
+      const control = createControl(id)
+      control.tagName = tagName
+      control.type = attributes.match(/\btype="([^"]+)"/)?.[1] || ''
+      control.value = attributes.match(/\bvalue="([^"]*)"/)?.[1] || ''
+      control.checked = /(?:^|\s)checked(?:\s|$)/.test(attributes)
+      if (taskId) control.dataset.taskId = taskId
+      if (outcome) control.dataset.outcome = outcome
+      if (suggestionId) control.dataset.continuationSuggestionId = suggestionId
+      if (searchId) control.dataset.continuationSearchId = searchId
+      control.hidden = /(?:^|\s)hidden(?:\s|$)/.test(attributes)
+      control.disabled = /(?:^|\s)disabled(?:\s|$)/.test(attributes)
+      register(control, owner)
+    }
+  }
+
   Object.defineProperty(content, 'innerHTML', {
+    configurable: true,
     set (markup) {
+      for (const child of content._dynamicChildren) unregister(child)
+      content._dynamicChildren = []
       dynamicIds.forEach(id => nodes.delete(id))
       dynamicIds.clear()
       controls = []
-      const tagPattern = /<([a-z]+)([^>]*)>/g
-      let match
-      while ((match = tagPattern.exec(markup))) {
-        const attributes = match[2]
-        const id = attributes.match(/\bid="([^"]+)"/)?.[1] || ''
-        const taskId = attributes.match(/\bdata-task-id="([^"]+)"/)?.[1]
-        const outcome = attributes.match(/\bdata-outcome="([^"]+)"/)?.[1]
-        if (!id && !taskId && !outcome) continue
-        const control = createControl(id)
-        if (taskId) control.dataset.taskId = taskId
-        if (outcome) control.dataset.outcome = outcome
-        control.hidden = /(?:^|\s)hidden(?:\s|$)/.test(attributes)
-        register(control)
-      }
+      parseMarkup(markup, content)
     }
   })
   content.querySelectorAll = selector => selector === 'button'
-    ? controls.filter(control => control.id || control.dataset.outcome)
+    ? controls.filter(control => control.tagName === 'BUTTON')
     : []
 
   const document = {
     getElementById: id => nodes.get(id) || null,
-    createElement: () => createControl(),
+    createElement: tagName => {
+      const control = createControl()
+      control.tagName = String(tagName || '').toUpperCase()
+      return control
+    },
     querySelector: selector => {
       const view = selector.match(/^\.nav-btn\[data-view="([^"]+)"\]$/)?.[1]
       return view ? navControls.get(view) || null : null
@@ -113,6 +167,27 @@ function createDoingDocument () {
       const target = nodes.get(id)
       assert.ok(target, `missing ${id}`)
       if (target.disabled) return undefined
+      return content.dispatch('click', { target })
+    },
+    async inputControl (id, value) {
+      const target = nodes.get(id)
+      assert.ok(target, `missing ${id}`)
+      target.value = value
+      return content.dispatch('input', { target })
+    },
+    async checkSuggestion (taskId) {
+      const target = controls.find(control =>
+        control.dataset.continuationSuggestionId === taskId
+      )
+      assert.ok(target, `missing suggestion ${taskId}`)
+      target.checked = true
+      return content.dispatch('change', { target })
+    },
+    async clickSearchResult (taskId) {
+      const target = controls.find(control =>
+        control.dataset.continuationSearchId === taskId
+      )
+      assert.ok(target, `missing search result ${taskId}`)
       return content.dispatch('click', { target })
     },
     dispatchStaleControl: target => content.dispatch('click', { target }),
@@ -172,12 +247,17 @@ function installFakeClock (initialNow) {
 function createPersistence ({
   initialSession,
   initialTasks,
+  initialExecutions = [],
   loseFirstExecutionResponse = false,
   failSessionUpdates = 0
 }) {
   let session = clone(initialSession)
   const tasks = new Map(initialTasks.map(task => [task._id, clone(task)]))
-  const executions = new Map()
+  const executions = new Map(initialExecutions.map((execution, index) => [
+    execution._id || 'seed-execution-' + index,
+    clone(execution)
+  ]))
+  const quickCreates = []
   const taskUpdates = []
   let executionCalls = 0
   let sessionUpdateCalls = 0
@@ -191,6 +271,13 @@ function createPersistence ({
       return []
     },
     create: async (collection, data, options = {}) => {
+      if (collection === 'tasks') {
+        const id = options.data_object_id || 'task-' + (tasks.size + 1)
+        const record = { _id: id, ...clone(data) }
+        tasks.set(id, record)
+        quickCreates.push(clone(record))
+        return clone(record)
+      }
       if (collection !== 'taskExecutions') return { _id: collection + '-1' }
       executionCalls++
       const id = options.data_object_id || 'execution-' + executionCalls
@@ -219,7 +306,9 @@ function createPersistence ({
   return {
     freezr,
     executions,
+    quickCreates,
     taskUpdates,
+    getTask (id) { return tasks.has(id) ? clone(tasks.get(id)) : null },
     patchSession (fields) { session = { ...session, ...clone(fields) } },
     get session () { return session },
     get executionCalls () { return executionCalls },
@@ -242,6 +331,7 @@ async function withDoingEnvironment ({
   session,
   persistedTasks,
   bundle,
+  executions = [],
   loseFirstExecutionResponse,
   failSessionUpdates
 }, run) {
@@ -253,6 +343,7 @@ async function withDoingEnvironment ({
   const persistence = createPersistence({
     initialSession: session,
     initialTasks: persistedTasks,
+    initialExecutions: executions,
     loseFirstExecutionResponse,
     failSessionUpdates
   })
@@ -261,11 +352,15 @@ async function withDoingEnvironment ({
   globalThis.document = document
   globalThis.window = window
   globalThis.freezr = persistence.freezr
-  setCurrentSessionAggregate({ session: clone(session), bundle: clone(bundle), executions: [] })
+  setCurrentSessionAggregate({
+    session: clone(session), bundle: clone(bundle), executions: clone(executions)
+  })
 
   try {
     initDoingView()
-    await startDoing({ session: clone(session), bundle: clone(bundle), executions: [] })
+    await startDoing({
+      session: clone(session), bundle: clone(bundle), executions: clone(executions)
+    })
     return await run({ document, window, persistence, clock })
   } finally {
     clock.restore()
@@ -594,6 +689,89 @@ test('focus refresh applies a pause written by another device', async () => {
     assert.equal(document.control('sessionTimerDisplay').textContent, '00:09')
     assert.equal(document.control('doingDecisionPanel').hidden, false)
   })
+})
+
+test('paused picker attaches suggestions and search, quick-adds a proposed task, and resumes', async () => {
+  const elapsedBeforePicker = 10 * 60000
+  const resumeClickedAt = 1200000
+  const original = { ...task('original-task'), name: 'Original task' }
+  const suggested = {
+    ...task('suggested-5m'), name: 'Clean sink', estimatedDuration: 5,
+    scheduledDate: '2026-08-01'
+  }
+  const searched = {
+    ...task('searched-30m'), name: 'Clean garage', estimatedDuration: 30,
+    scheduledDate: '2026-07-01'
+  }
+  const session = {
+    _id: 'continuation-session', status: 'paused', startTime: 10000,
+    taskBundle: ['original-task'], timeBudgetMinutes: 15,
+    accumulatedActiveMs: elapsedBeforePicker, activeStartedAt: null,
+    pausedAt: 610000, checkpointElapsedMs: elapsedBeforePicker,
+    pendingAddition: null
+  }
+  const executions = [{
+    _id: 'original-completion', taskId: 'original-task',
+    sessionId: 'continuation-session', outcome: 'done',
+    startTime: 10000, endTime: 610000,
+    rawDurationMs: elapsedBeforePicker,
+    activeElapsedMs: elapsedBeforePicker,
+    actualDuration: 10
+  }]
+  const attachedTaskIds = []
+  const originalAttachTasks = sessionStore.attachTasks
+  sessionStore.attachTasks = async (sessionId, taskIds) => {
+    attachedTaskIds.push(...taskIds)
+    return originalAttachTasks(sessionId, taskIds)
+  }
+
+  try {
+    await withDoingEnvironment({
+      session,
+      persistedTasks: [original, suggested, searched],
+      bundle: [original],
+      executions
+    }, async ({ document, persistence, clock }) => {
+      clock.setNow(900000)
+      await document.clickControl('openContinueBtn')
+
+      assert.equal(document.control('doingContinuePanel').hidden, false)
+      assert.equal(document.control('resumeSessionBtn').disabled, true)
+
+      await document.checkSuggestion('suggested-5m')
+      await document.inputControl('continueSearchInput', 'garage')
+      await document.clickSearchResult('searched-30m')
+      await document.inputControl('continueQuickTitle', 'Replace hallway bulb')
+      await document.clickControl('continueQuickAddBtn')
+
+      assert.deepEqual(attachedTaskIds, ['suggested-5m', 'searched-30m'])
+      assert.equal(persistence.quickCreates.length, 1)
+      assert.equal(persistence.quickCreates[0].status, 'proposed')
+      assert.equal(persistence.quickCreates[0].name, 'Replace hallway bulb')
+      assert.equal(persistence.session.accumulatedActiveMs, elapsedBeforePicker)
+
+      clock.setNow(resumeClickedAt)
+      await document.clickControl('resumeSessionBtn')
+
+      assert.equal(persistence.session.accumulatedActiveMs, elapsedBeforePicker)
+      assert.equal(persistence.session.activeStartedAt, resumeClickedAt)
+      assert.equal(persistence.session.status, 'active')
+
+      const quickTaskId = persistence.quickCreates[0]._id
+      clock.setNow(resumeClickedAt + 60000)
+      await document.clickOutcome('suggested-5m', 'done')
+      clock.setNow(resumeClickedAt + 120000)
+      await document.clickOutcome('searched-30m', 'done')
+      clock.setNow(resumeClickedAt + 180000)
+      await document.clickOutcome(quickTaskId, 'done')
+
+      assert.equal(persistence.session.status, 'paused')
+      assert.equal(document.control('doingDecisionPanel').hidden, false)
+      assert.equal(persistence.getTask(quickTaskId).status, 'proposed')
+    })
+  } finally {
+    sessionStore.attachTasks = originalAttachTasks
+  }
 })
 
 test('conclude stores the unassigned tail and enters Review', async () => {

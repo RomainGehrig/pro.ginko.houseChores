@@ -6,6 +6,8 @@ import assert from 'node:assert/strict'
 import {
   buildActiveTaskDetailsHtml,
   buildBundlePreviewHtml,
+  buildContinuationSearchResultsHtml,
+  buildContinuationSuggestionsHtml,
   buildDoingSessionHtml,
   buildEnrichmentAvailability
 } from './taskPresentationLogic.js'
@@ -51,6 +53,25 @@ test('resolved and unavailable cards remain visible in paused state', () => {
   assert.match(markup, /id="doingDecisionPanel"/)
   assert.match(markup, />Conclude</)
   assert.match(markup, />Continue</)
+})
+
+test('picker markup escapes every stored suggestion and search-result title', () => {
+  const markup = buildContinuationSuggestionsHtml([{
+    _id: 'suggested-5m',
+    name: '<img src=x onerror=alert(1)>',
+    estimatedDuration: 5
+  }]) + buildContinuationSearchResultsHtml([{
+    _id: 'searched-30m',
+    name: '</button><script>globalThis.compromised = true</script><button>',
+    estimatedDuration: 30
+  }])
+
+  assert.match(markup, /&lt;img src=x onerror=alert\(1\)&gt;/)
+  assert.match(
+    markup,
+    /&lt;\/button&gt;&lt;script&gt;globalThis\.compromised = true&lt;\/script&gt;&lt;button&gt;/
+  )
+  assert.doesNotMatch(markup, /<img|<script>/)
 })
 
 test('bundle preview escapes stored task names', () => {

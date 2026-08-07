@@ -76,6 +76,26 @@ export function buildDoingSessionHtml (session, bundle, executions, categories =
     '<div id="doingContinuePanel" hidden></div>'
 }
 
+export function buildContinuationSuggestionsHtml (tasks) {
+  if (!tasks.length) return '<p class="empty">No suggestions fit the remaining time.</p>'
+  return tasks.map(task =>
+    '<label class="continue-option">' +
+      '<input type="checkbox" data-continuation-suggestion-id="' + escapeHtml(task._id) + '"> ' +
+      '<span>' + escapeHtml(String(task?.name ?? '')) + '</span>' +
+      '<span class="task-meta">' + escapeHtml(formatDuration(task?.estimatedDuration)) + '</span>' +
+    '</label>'
+  ).join('')
+}
+
+export function buildContinuationSearchResultsHtml (tasks) {
+  return tasks.map(task =>
+    '<button type="button" data-continuation-search-id="' + escapeHtml(task._id) + '">' +
+      'Add ' + escapeHtml(String(task?.name ?? '')) + ' · ' +
+      escapeHtml(formatDuration(task?.estimatedDuration)) +
+    '</button>'
+  ).join('')
+}
+
 function referenceSnapshot (snapshotOrCategories) {
   return Array.isArray(snapshotOrCategories)
     ? { categories: snapshotOrCategories, locations: [] }
