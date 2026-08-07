@@ -230,6 +230,35 @@
   width: auto;
 }
 
+.schedule-editor {
+  border-top: 1px solid #eee;
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+  padding-top: 8px;
+}
+
+.schedule-row {
+  align-items: center;
+  display: grid;
+  gap: 4px;
+}
+
+.schedule-weekdays {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+
+.task-card .schedule-weekdays input {
+  width: auto;
+}
+
+.schedule-summary {
+  color: #666;
+  font-size: 12px;
+}
+
 .archived-badge {
   background: #eee;
   border-radius: 999px;
