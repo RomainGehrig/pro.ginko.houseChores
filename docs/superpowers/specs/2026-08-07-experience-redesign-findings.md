@@ -17,6 +17,28 @@ dialogs, the absence of any `freezr.delete` call, `taskUpdateForOutcome` silentl
 completed one-offs, the `|| 1` duration floor in `doingView.js:79`, and the 880 lines of
 category/location tests all hold.
 
+## Errata — the tree moved while this was being written
+
+The "suggested calendar dates" work landed in parallel (`9ffb604`…`7e0b3ca`), so **one finding
+below is now partly stale**. Read it with this correction:
+
+> *Lens: journey — "Approval hard-requires a manually picked date…"*
+
+- `requirePatternMatch` **no longer exists**. `validateScheduleInput(input)` dropped its
+  options parameter, and `readScheduleEditor(root)` no longer takes one.
+- `suggestScheduledDate(schedule, referenceDate)` was added and auto-fills the date **for
+  `fixed` calendar schedules only**. The finding still holds for `periodic` and `one_off`
+  schedules, which is most of the live data: `validateScheduleInput` still returns
+  `'Enter a valid scheduled date.'` on an empty date.
+- The rest of the finding stands: `buildNewTaskRecord` still writes `scheduledDate: null`,
+  `aiEnrich.js:12` still instructs the model *"Do not suggest a scheduledDate; the user
+  chooses it"*, and `normalizeTaskSchedule` still silently invents today's date for any
+  active task that lacks one.
+
+This does not change any staged work. Stage 7 still removes that line from the prompt, and the
+spec's decision to leave all date arithmetic to `scheduleLogic` is *strengthened* by
+`suggestScheduledDate` now existing and being tested.
+
 ---
 
 ## Lens: journey

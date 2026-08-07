@@ -6,6 +6,9 @@
 **App:** `pro.ginko.houseChores` · single user (Romain) · freezr front-end-only app
 **Direction:** Pencil & Plate
 **Status:** approved design, ready to stage
+**Baseline:** written against `b4586d7`; the "suggested calendar dates" work (`9ffb604`…`7e0b3ca`)
+landed in parallel. See the Errata in `2026-08-07-experience-redesign-findings.md` — it affects one
+finding, no staged work, and `suggestScheduledDate` referenced in §11 now genuinely exists.
 
 ---
 
