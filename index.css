@@ -238,6 +238,10 @@
   padding-top: 8px;
 }
 
+.schedule-editor [hidden] {
+  display: none !important;
+}
+
 .schedule-row {
   align-items: center;
   display: grid;
