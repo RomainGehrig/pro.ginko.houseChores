@@ -6,6 +6,14 @@
 Design spec: `docs/superpowers/specs/2026-08-07-experience-redesign-design.md`
 Tracking issue: `hc-e92`
 
+> **Session-plan precedence (2026-08-07):** Persistence, timer, outcome, pause,
+> and continuation clauses in Stages 2, 5, and 6 are superseded by
+> `docs/superpowers/plans/2026-08-07-active-session-resilience.md`. Do not
+> implement the localStorage mirror, six-hour auto-close, hidden-time exclusion,
+> per-task countdown, unrecorded skip, or immediate receipt transition described
+> below. Routing and the Pencil & Plate visual direction remain available for
+> later integration.
+
 ## Stage 1 — Due-first, and it looks like the app
 
 **Delivers.** The chore list stops lying. Eleven overdue chores are grouped under LATE with a mono "+14d" stamp and a "last done 21d ago · every 7" line, ordered by how far behind they actually are — instead of 17 identical grey cards in _date_modified order. The whole app repaints in the enamel palette with the 44px/16px control floor, working dark mode, visible focus, and the reduced-motion block. On a phone at night it is finally usable.

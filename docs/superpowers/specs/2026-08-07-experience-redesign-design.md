@@ -10,6 +10,11 @@
 landed in parallel. See the Errata in `2026-08-07-experience-redesign-findings.md` — it affects one
 finding, no staged work, and `suggestScheduledDate` referenced in §11 now genuinely exists.
 
+> **Focused session precedence (2026-08-07):**
+> `2026-08-07-active-session-resilience-design.md` supersedes this document's
+> session persistence, timer, outcome, pause/conclusion, and continuation rules.
+> The Pencil & Plate visual direction and non-session product design remain valid.
+
 ---
 
 ## 1. The idea
@@ -963,4 +968,3 @@ No adjectives, no exclamation marks, no confetti. A fact you did not previously 
 I am taking it because the alternative is measured, and worse. Two chores currently sit in `proposed` with every field null; eleven of seventeen confirmed chores are already overdue. The bottleneck has never been accuracy — it is triage. **A wrong guess costs one glance at a plate. An untriaged chore costs the chore.**
 
 And the cost is bounded, visible and self-correcting: drafts carry slip 0 and always sort last within their group, so they can never displace a genuinely overdue chore; they are marked on every surface; nothing irreversible happens to them; and the moment you actually do one, the app measures how long it took and inks the duration from the measurement. The guess corrects itself by being used. The app is allowed to be wrong out loud. It is not allowed to be silent, and it is not allowed to make you fill in a form before it will help you.
-
