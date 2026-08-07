@@ -139,9 +139,10 @@ function createDoingDocument () {
       parseMarkup(markup, content)
     }
   })
-  content.querySelectorAll = selector => selector === 'button'
-    ? controls.filter(control => control.tagName === 'BUTTON')
-    : []
+  content.querySelectorAll = selector => {
+    const tags = String(selector).split(',').map(value => value.trim().toUpperCase())
+    return controls.filter(control => tags.includes(control.tagName))
+  }
 
   const document = {
     getElementById: id => nodes.get(id) || null,
@@ -176,13 +177,16 @@ function createDoingDocument () {
       return content.dispatch('input', { target })
     },
     async checkSuggestion (taskId) {
-      const target = controls.find(control =>
-        control.dataset.continuationSuggestionId === taskId
-      )
+      const target = this.suggestionControl(taskId)
       assert.ok(target, `missing suggestion ${taskId}`)
+      if (target.disabled) return undefined
       target.checked = true
       return content.dispatch('change', { target })
     },
+    suggestionControl: taskId => controls.find(control =>
+      control.dataset.continuationSuggestionId === taskId
+    ) || null,
+    dispatchSuggestionControl: target => content.dispatch('change', { target }),
     async clickSearchResult (taskId) {
       const target = controls.find(control =>
         control.dataset.continuationSearchId === taskId
@@ -249,6 +253,7 @@ function createPersistence ({
   initialTasks,
   initialExecutions = [],
   loseFirstExecutionResponse = false,
+  loseQuickAddAttachmentResponse = false,
   failSessionUpdates = 0
 }) {
   let session = clone(initialSession)
@@ -262,6 +267,7 @@ function createPersistence ({
   let executionCalls = 0
   let sessionUpdateCalls = 0
   let remainingSessionUpdateFailures = failSessionUpdates
+  let shouldLoseQuickAddAttachmentResponse = loseQuickAddAttachmentResponse
 
   const freezr = {
     query: async collection => {
@@ -294,6 +300,11 @@ function createPersistence ({
           throw new Error('session offline')
         }
         session = { ...session, ...clone(fields) }
+        if (shouldLoseQuickAddAttachmentResponse && fields.taskBundle &&
+          fields.pendingAddition?.stage === 'attached') {
+          shouldLoseQuickAddAttachmentResponse = false
+          throw new Error('attachment response lost')
+        }
       }
       if (collection === 'tasks') {
         taskUpdates.push({ id, fields: clone(fields) })
@@ -333,6 +344,7 @@ async function withDoingEnvironment ({
   bundle,
   executions = [],
   loseFirstExecutionResponse,
+  loseQuickAddAttachmentResponse,
   failSessionUpdates
 }, run) {
   const originalDocument = globalThis.document
@@ -345,6 +357,7 @@ async function withDoingEnvironment ({
     initialTasks: persistedTasks,
     initialExecutions: executions,
     loseFirstExecutionResponse,
+    loseQuickAddAttachmentResponse,
     failSessionUpdates
   })
   const clock = installFakeClock(session.activeStartedAt || 10000)
@@ -771,6 +784,217 @@ test('paused picker attaches suggestions and search, quick-adds a proposed task,
     })
   } finally {
     sessionStore.attachTasks = originalAttachTasks
+  }
+})
+
+test('suggestion attach rejects stale local budget and applies the authoritative pause', async () => {
+  const original = task('original-task')
+  const suggested = {
+    ...task('suggested-5m'), estimatedDuration: 5, scheduledDate: '2026-08-01'
+  }
+  const session = {
+    _id: 'stale-budget-session', status: 'paused', startTime: 10000,
+    taskBundle: ['original-task'], timeBudgetMinutes: 10,
+    accumulatedActiveMs: 5 * 60000, activeStartedAt: null,
+    pausedAt: 310000, checkpointElapsedMs: 5 * 60000,
+    pendingAddition: null
+  }
+  const executions = [{
+    _id: 'original-completion', taskId: 'original-task',
+    sessionId: session._id, outcome: 'done', startTime: 10000, endTime: 310000,
+    rawDurationMs: 5 * 60000, activeElapsedMs: 5 * 60000, actualDuration: 5
+  }]
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [original, suggested],
+    bundle: [original],
+    executions
+  }, async ({ document, persistence }) => {
+    await document.clickControl('openContinueBtn')
+    persistence.patchSession({
+      accumulatedActiveMs: 9 * 60000,
+      checkpointElapsedMs: 5 * 60000
+    })
+
+    await document.checkSuggestion('suggested-5m')
+
+    assert.deepEqual(persistence.session.taskBundle, ['original-task'])
+    assert.equal(state.currentSession.accumulatedActiveMs, 9 * 60000)
+    assert.match(
+      document.control('doingStatus').textContent,
+      /exceed the remaining session budget/
+    )
+  })
+})
+
+test('Quick add treats an attached staged task as successful after its response is lost', async () => {
+  const original = task('original-task')
+  const session = {
+    _id: 'quick-reconciliation-session', status: 'paused', startTime: 10000,
+    taskBundle: ['original-task'], timeBudgetMinutes: 10,
+    accumulatedActiveMs: 5 * 60000, activeStartedAt: null,
+    pausedAt: 310000, checkpointElapsedMs: 5 * 60000,
+    pendingAddition: null
+  }
+  const executions = [{
+    taskId: 'original-task', sessionId: session._id, outcome: 'done',
+    startTime: 10000, endTime: 310000, rawDurationMs: 5 * 60000,
+    activeElapsedMs: 5 * 60000, actualDuration: 5
+  }]
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [original],
+    bundle: [original],
+    executions,
+    loseQuickAddAttachmentResponse: true
+  }, async ({ document, persistence }) => {
+    await document.clickControl('openContinueBtn')
+    await document.inputControl('continueQuickTitle', 'Replace hallway bulb')
+    await document.clickControl('continueQuickAddBtn')
+
+    assert.equal(persistence.quickCreates.length, 1)
+    assert.deepEqual(persistence.session.taskBundle, [
+      'original-task', persistence.quickCreates[0]._id
+    ])
+    assert.equal(persistence.session.pendingAddition, null)
+    assert.equal(document.control('retrySessionMutationBtn'), null)
+  })
+})
+
+test('suggestion inputs are disabled while an attachment is in flight', async () => {
+  const original = task('original-task')
+  const suggested = { ...task('suggested-2m'), estimatedDuration: 2 }
+  const session = {
+    _id: 'in-flight-session', status: 'paused', startTime: 10000,
+    taskBundle: ['original-task'], timeBudgetMinutes: 10,
+    accumulatedActiveMs: 5 * 60000, activeStartedAt: null,
+    pausedAt: 310000, checkpointElapsedMs: 5 * 60000,
+    pendingAddition: null
+  }
+  const executions = [{
+    taskId: 'original-task', sessionId: session._id, outcome: 'done',
+    startTime: 10000, endTime: 310000, rawDurationMs: 5 * 60000,
+    activeElapsedMs: 5 * 60000, actualDuration: 5
+  }]
+  const originalAttachTasks = sessionStore.attachTasks
+  let releaseAttachment
+  let markStarted
+  const attachmentGate = new Promise(resolve => { releaseAttachment = resolve })
+  const attachmentStarted = new Promise(resolve => { markStarted = resolve })
+  sessionStore.attachTasks = async (...args) => {
+    markStarted()
+    await attachmentGate
+    return originalAttachTasks(...args)
+  }
+
+  try {
+    await withDoingEnvironment({
+      session,
+      persistedTasks: [original, suggested],
+      bundle: [original],
+      executions
+    }, async ({ document }) => {
+      await document.clickControl('openContinueBtn')
+      const checkbox = document.suggestionControl('suggested-2m')
+      const attachment = document.checkSuggestion('suggested-2m')
+      await attachmentStarted
+
+      try {
+        assert.equal(checkbox.disabled, true)
+      } finally {
+        releaseAttachment()
+        await attachment
+      }
+    })
+  } finally {
+    sessionStore.attachTasks = originalAttachTasks
+  }
+})
+
+test('ambiguous suggestion attachment retains allowance and ignores repeated change events', async () => {
+  const original = task('original-task')
+  const first = { ...task('suggested-2m'), estimatedDuration: 2 }
+  const second = { ...task('suggested-4m'), estimatedDuration: 4 }
+  const session = {
+    _id: 'ambiguous-suggestion-session', status: 'paused', startTime: 10000,
+    taskBundle: ['original-task'], timeBudgetMinutes: 10,
+    accumulatedActiveMs: 5 * 60000, activeStartedAt: null,
+    pausedAt: 310000, checkpointElapsedMs: 5 * 60000,
+    pendingAddition: null
+  }
+  const executions = [{
+    taskId: 'original-task', sessionId: session._id, outcome: 'done',
+    startTime: 10000, endTime: 310000, rawDurationMs: 5 * 60000,
+    activeElapsedMs: 5 * 60000, actualDuration: 5
+  }]
+  const originalAttachTasks = sessionStore.attachTasks
+  const originalRefresh = sessionStore.refresh
+  const attachCalls = []
+  let persistenceRef
+  let failReconciliationRefresh = false
+  let releaseAttachment
+  let markStarted
+  const attachmentGate = new Promise(resolve => { releaseAttachment = resolve })
+  const attachmentStarted = new Promise(resolve => { markStarted = resolve })
+
+  sessionStore.attachTasks = async (sessionId, taskIds, options) => {
+    attachCalls.push(...taskIds)
+    if (taskIds.includes('suggested-2m')) {
+      persistenceRef.patchSession({
+        taskBundle: [...new Set([
+          ...persistenceRef.session.taskBundle,
+          'suggested-2m'
+        ])]
+      })
+      markStarted()
+      await attachmentGate
+      failReconciliationRefresh = true
+      throw new Error('attachment response lost')
+    }
+    return originalAttachTasks(sessionId, taskIds, options)
+  }
+  sessionStore.refresh = async (...args) => {
+    if (failReconciliationRefresh) {
+      failReconciliationRefresh = false
+      throw new Error('refresh response lost')
+    }
+    return originalRefresh(...args)
+  }
+
+  try {
+    await withDoingEnvironment({
+      session,
+      persistedTasks: [original, first, second],
+      bundle: [original],
+      executions
+    }, async ({ document, persistence }) => {
+      persistenceRef = persistence
+      await document.clickControl('openContinueBtn')
+      const firstCheckbox = document.suggestionControl('suggested-2m')
+      const firstAttachment = document.checkSuggestion('suggested-2m')
+      await attachmentStarted
+
+      firstCheckbox.checked = true
+      await document.dispatchSuggestionControl(firstCheckbox)
+      releaseAttachment()
+      await firstAttachment
+
+      await document.checkSuggestion('suggested-4m')
+
+      assert.deepEqual(attachCalls, ['suggested-2m'])
+      assert.deepEqual(persistence.session.taskBundle, [
+        'original-task', 'suggested-2m'
+      ])
+      assert.match(
+        document.control('continueRemaining').textContent,
+        /exceed the remaining session budget/
+      )
+    })
+  } finally {
+    sessionStore.attachTasks = originalAttachTasks
+    sessionStore.refresh = originalRefresh
   }
 })
 

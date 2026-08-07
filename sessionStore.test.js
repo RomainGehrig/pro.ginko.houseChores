@@ -196,6 +196,40 @@ test('attaching a searched task ignores the exhausted budget and deduplicates ID
   assert.equal(aggregate.session.status, 'paused')
 })
 
+test('suggestion attachment revalidates the cumulative ledger against authoritative remaining time', async () => {
+  const session = {
+    _id: 's1', status: 'paused', startTime: 1000,
+    taskBundle: ['t1', 'suggested-first-3m'], timeBudgetMinutes: 10,
+    accumulatedActiveMs: 5 * 60000, activeStartedAt: null,
+    checkpointElapsedMs: 5 * 60000, pausedAt: 301000
+  }
+  const updates = []
+  const tasks = new Map([
+    ['t1', { _id: 't1', name: 'Sink', status: 'active', estimatedDuration: 2 }],
+    ['suggested-first-3m', {
+      _id: 'suggested-first-3m', name: 'Hallway', status: 'active', estimatedDuration: 3
+    }],
+    ['suggested-next-3m', {
+      _id: 'suggested-next-3m', name: 'Windows', status: 'active', estimatedDuration: 3
+    }]
+  ])
+  const store = createSessionStore({
+    now: () => 600000,
+    getSession: async () => structuredClone(session),
+    listExecutions: async () => [],
+    listTasks: async ids => ids.map(id => tasks.get(id)).filter(Boolean),
+    updateSessionRecord: async (id, fields) => updates.push({ id, fields })
+  })
+
+  await assert.rejects(
+    store.attachTasks('s1', ['suggested-next-3m'], {
+      suggestionTaskIds: ['suggested-first-3m', 'suggested-next-3m']
+    }),
+    { message: 'That suggestion would exceed the remaining session budget.' }
+  )
+  assert.deepEqual(updates, [])
+})
+
 test('pending Quick add recovery retries one supplied ID after task creation succeeds', async () => {
   const originalFreezr = globalThis.freezr
   let session = {
@@ -226,7 +260,7 @@ test('pending Quick add recovery retries one supplied ID after task creation suc
         id === 't1' ? { _id: 't1', name: 'Sink' } : null
       )).filter(Boolean),
       updateSessionRecord: async (id, fields) => {
-        if (fields.pendingAddition === null && fields.taskBundle && failAttachmentOnce) {
+        if (fields.taskBundle && failAttachmentOnce) {
           failAttachmentOnce = false
           throw new Error('attachment write failed')
         }
@@ -256,7 +290,7 @@ test('pending Quick add recovery retries one supplied ID after task creation suc
   }
 })
 
-test('Quick add retry reuses its ID when attachment commits but the response is lost', async () => {
+test('Quick add retry does not create another ID when attachment commits but the response is lost', async () => {
   const originalFreezr = globalThis.freezr
   let session = {
     _id: 's1', status: 'paused', startTime: 1000, taskBundle: ['t1'],
@@ -288,7 +322,7 @@ test('Quick add retry reuses its ID when attachment commits but the response is 
       )).filter(Boolean),
       updateSessionRecord: async (id, fields) => {
         session = { ...session, ...structuredClone(fields) }
-        if (fields.pendingAddition === null && fields.taskBundle && loseAttachmentResponse) {
+        if (fields.taskBundle && loseAttachmentResponse) {
           loseAttachmentResponse = false
           throw new Error('attachment response lost')
         }
@@ -299,12 +333,12 @@ test('Quick add retry reuses its ID when attachment commits but the response is 
       store.quickAdd('s1', 'Replace hallway bulb'),
       { message: 'attachment response lost' }
     )
-    assert.equal(session.pendingAddition, null)
+    assert.equal(session.pendingAddition.stage, 'attached')
     assert.deepEqual(session.taskBundle, ['t1', 'quick-s1-1'])
 
     const recovered = await store.quickAdd('s1', 'Replace hallway bulb')
 
-    assert.deepEqual(createCalls, ['quick-s1-1', 'quick-s1-1'])
+    assert.deepEqual(createCalls, ['quick-s1-1'])
     assert.equal(createdIds, 1)
     assert.equal(records.size, 1)
     assert.deepEqual(recovered.session.taskBundle, ['t1', 'quick-s1-1'])
@@ -313,6 +347,108 @@ test('Quick add retry reuses its ID when attachment commits but the response is 
     if (originalFreezr === undefined) delete globalThis.freezr
     else globalThis.freezr = originalFreezr
   }
+})
+
+test('a refreshed ambiguous Quick add cannot hijack the next genuinely new title', async () => {
+  let session = {
+    _id: 's1', status: 'paused', startTime: 1000, taskBundle: ['t1'],
+    accumulatedActiveMs: 9000, activeStartedAt: null, checkpointElapsedMs: 9000,
+    pausedAt: 10000, pendingAddition: null
+  }
+  let createdIds = 0
+  let loseAttachmentResponse = true
+  const records = new Map()
+  const createCalls = []
+  const store = createSessionStore({
+    now: () => 20000,
+    createId: () => String(++createdIds),
+    getSession: async () => structuredClone(session),
+    listExecutions: async () => [{
+      taskId: 't1', endTime: 10000, rawDurationMs: 9000, activeElapsedMs: 9000
+    }],
+    listTasks: async ids => ids.map(id => records.get(id) || (
+      id === 't1' ? { _id: 't1', name: 'Sink' } : null
+    )).filter(Boolean),
+    createTaskRecord: async (title, id) => {
+      createCalls.push({ title, id })
+      records.set(id, { _id: id, name: title, status: 'proposed' })
+    },
+    updateSessionRecord: async (id, fields) => {
+      session = { ...session, ...structuredClone(fields) }
+      if (fields.taskBundle && loseAttachmentResponse) {
+        loseAttachmentResponse = false
+        throw new Error('attachment response lost')
+      }
+    }
+  })
+
+  await assert.rejects(
+    store.quickAdd('s1', 'Replace hallway bulb'),
+    { message: 'attachment response lost' }
+  )
+  await store.refresh('s1')
+  const aggregate = await store.quickAdd('s1', 'Wipe the mirror')
+
+  assert.deepEqual(createCalls, [
+    { title: 'Replace hallway bulb', id: 'quick-s1-1' },
+    { title: 'Wipe the mirror', id: 'quick-s1-2' }
+  ])
+  assert.deepEqual(aggregate.session.taskBundle, [
+    't1', 'quick-s1-1', 'quick-s1-2'
+  ])
+})
+
+test('a fresh store recovers a persisted Quick add after its attachment response is lost', async () => {
+  let session = {
+    _id: 's1', status: 'paused', startTime: 1000, taskBundle: ['t1'],
+    accumulatedActiveMs: 9000, activeStartedAt: null, checkpointElapsedMs: 9000,
+    pausedAt: 10000,
+    pendingAddition: {
+      taskId: 'quick-s1-pending', title: 'Replace hallway bulb', createdAt: 15000
+    }
+  }
+  let loseAttachmentResponse = true
+  const records = new Map()
+  const createCalls = []
+  const dependencies = {
+    now: () => 20000,
+    getSession: async () => structuredClone(session),
+    listExecutions: async () => [{
+      taskId: 't1', endTime: 10000, rawDurationMs: 9000, activeElapsedMs: 9000
+    }],
+    listTasks: async ids => ids.map(id => records.get(id) || (
+      id === 't1' ? { _id: 't1', name: 'Sink' } : null
+    )).filter(Boolean),
+    createTaskRecord: async (title, id) => {
+      createCalls.push({ title, id })
+      records.set(id, { _id: id, name: title, status: 'proposed' })
+    },
+    updateSessionRecord: async (id, fields) => {
+      session = { ...session, ...structuredClone(fields) }
+      if (fields.taskBundle && loseAttachmentResponse) {
+        loseAttachmentResponse = false
+        throw new Error('attachment response lost')
+      }
+    }
+  }
+
+  const firstStore = createSessionStore(dependencies)
+  await assert.rejects(
+    firstStore.refresh('s1'),
+    { message: 'attachment response lost' }
+  )
+
+  const freshStore = createSessionStore({
+    ...dependencies,
+    createId: () => 'unexpected-new-id'
+  })
+  const aggregate = await freshStore.quickAdd('s1', 'Replace hallway bulb')
+
+  assert.deepEqual(createCalls, [
+    { title: 'Replace hallway bulb', id: 'quick-s1-pending' }
+  ])
+  assert.deepEqual(aggregate.session.taskBundle, ['t1', 'quick-s1-pending'])
+  assert.equal(aggregate.session.pendingAddition, null)
 })
 
 test('conclude stores active time not assigned to an execution', async () => {
@@ -398,6 +534,81 @@ test('continuation additions apply an authoritative active session without write
     assert.equal(updates.length, 0, `${method} wrote an active session`)
     assert.equal(creates, 0, `${method} created a task for an active session`)
   }
+})
+
+test('active pending addition stays untouched until the authoritative session is paused', async () => {
+  let session = {
+    _id: 's1', status: 'active', startTime: 1000, taskBundle: ['t1'],
+    accumulatedActiveMs: 5000, activeStartedAt: 6000, checkpointElapsedMs: 0,
+    pausedAt: null,
+    pendingAddition: {
+      taskId: 'quick-s1-pending', title: 'Pending task', createdAt: 8500
+    }
+  }
+  const updates = []
+  const createCalls = []
+  const store = createSessionStore({
+    now: () => 10000,
+    getSession: async () => structuredClone(session),
+    listExecutions: async () => [],
+    listTasks: async ids => ids.map(id => ({ _id: id, name: id })),
+    createTaskRecord: async (title, id) => createCalls.push({ title, id }),
+    updateSessionRecord: async (id, fields) => {
+      updates.push({ id, fields: structuredClone(fields) })
+      session = { ...session, ...structuredClone(fields) }
+    }
+  })
+
+  const active = await store.refresh('s1')
+
+  assert.equal(active.session.status, 'active')
+  assert.equal(active.session.pendingAddition.taskId, 'quick-s1-pending')
+  assert.deepEqual(createCalls, [])
+  assert.deepEqual(updates, [])
+
+  session = {
+    ...session, status: 'paused', accumulatedActiveMs: 9000,
+    activeStartedAt: null, pausedAt: 10000
+  }
+  const paused = await store.refresh('s1')
+
+  assert.deepEqual(createCalls, [{ title: 'Pending task', id: 'quick-s1-pending' }])
+  assert.deepEqual(paused.session.taskBundle, ['t1', 'quick-s1-pending'])
+  assert.equal(paused.session.pendingAddition, null)
+})
+
+test('Quick add rechecks paused authority after staging its recovery marker', async () => {
+  let session = {
+    _id: 's1', status: 'paused', startTime: 1000, taskBundle: ['t1'],
+    accumulatedActiveMs: 9000, activeStartedAt: null, checkpointElapsedMs: 9000,
+    pausedAt: 10000, pendingAddition: null
+  }
+  const updates = []
+  const createCalls = []
+  const store = createSessionStore({
+    now: () => 20000,
+    createId: () => 'fixed-id',
+    getSession: async () => structuredClone(session),
+    listExecutions: async () => [],
+    listTasks: async ids => ids.map(id => ({ _id: id, name: id })),
+    createTaskRecord: async (title, id) => createCalls.push({ title, id }),
+    updateSessionRecord: async (id, fields) => {
+      updates.push({ id, fields: structuredClone(fields) })
+      session = { ...session, ...structuredClone(fields) }
+      if (fields.pendingAddition?.stage === 'creating') {
+        session = {
+          ...session, status: 'active', activeStartedAt: 20000, pausedAt: null
+        }
+      }
+    }
+  })
+
+  const aggregate = await store.quickAdd('s1', 'Pending task')
+
+  assert.equal(aggregate.session.status, 'active')
+  assert.equal(aggregate.session.pendingAddition.stage, 'creating')
+  assert.deepEqual(createCalls, [])
+  assert.equal(updates.length, 1)
 })
 
 test('all store operations hydrate legacy terminal sessions without writes', async () => {

@@ -10,6 +10,7 @@ import {
   conclusionFields,
   normalizationFields,
   pauseFields,
+  remainingBudgetMs,
   resumeFields,
   resolvedTaskIds
 } from './sessionLogic.js'
@@ -28,19 +29,34 @@ export function createSessionStore ({
   createId = () => crypto.randomUUID(),
   now = Date.now
 } = {}) {
-  const pendingQuickAdds = new Map()
+  async function recoverPendingAddition (session) {
+    const pending = session.pendingAddition
+    let repaired = { ...session }
+    const alreadyAttached = (repaired.taskBundle || []).includes(pending.taskId)
+
+    if (pending.stage !== 'attached' || !alreadyAttached) {
+      await createTaskRecord(pending.title, pending.taskId)
+      const attachedPending = { ...pending, stage: 'attached' }
+      const attachment = {
+        taskBundle: [...new Set([...(repaired.taskBundle || []), pending.taskId])],
+        pendingAddition: attachedPending
+      }
+      await updateSessionRecord(repaired._id, attachment)
+      repaired = { ...repaired, ...attachment }
+    }
+
+    try {
+      await updateSessionRecord(repaired._id, { pendingAddition: null })
+    } catch {
+      // Attachment is already durable. A retained attached marker is safe to clear on refresh.
+    }
+    return { ...repaired, pendingAddition: null }
+  }
 
   async function hydrate (session, nowMs) {
     let repaired = { ...session }
-    if (!terminal(repaired) && repaired.pendingAddition) {
-      const pending = repaired.pendingAddition
-      await createTaskRecord(pending.title, pending.taskId)
-      const recovery = {
-        taskBundle: [...new Set([...(repaired.taskBundle || []), pending.taskId])],
-        pendingAddition: null
-      }
-      await updateSessionRecord(repaired._id, recovery)
-      repaired = { ...repaired, ...recovery }
+    if (repaired.status === 'paused' && repaired.pendingAddition) {
+      repaired = await recoverPendingAddition(repaired)
     }
 
     const executions = await listExecutions(session._id)
@@ -119,15 +135,36 @@ export function createSessionStore ({
     return { ...aggregate, session: { ...aggregate.session, ...fields } }
   }
 
-  async function attachTasks (sessionId, taskIds) {
-    const aggregate = await refresh(sessionId, now())
+  async function attachTasks (sessionId, taskIds, { suggestionTaskIds = null } = {}) {
+    const atMs = now()
+    const aggregate = await refresh(sessionId, atMs)
     if (aggregate.session.status !== 'paused') return aggregate
+    if (suggestionTaskIds) {
+      const ledgerIds = [...new Set(suggestionTaskIds)]
+      const ledgerTasks = await listTasks(ledgerIds)
+      const candidateIds = new Set(taskIds || [])
+      const eligibleCandidates = ledgerTasks.filter(task => candidateIds.has(task._id))
+      const allCandidatesEligible = eligibleCandidates.length === candidateIds.size &&
+        eligibleCandidates.every(task =>
+          (task.status === 'active' || task.status === 'approved_recurring') &&
+          Number(task.estimatedDuration) > 0
+        )
+      const estimateMs = ledgerTasks.reduce((sum, task) =>
+        sum + Math.max(0, Number(task.estimatedDuration || 0)) * 60000, 0
+      )
+      if (ledgerTasks.length !== ledgerIds.length || !allCandidatesEligible) {
+        throw new Error('That task is no longer available as a suggestion.')
+      }
+      if (estimateMs > remainingBudgetMs(aggregate.session, atMs)) {
+        throw new Error('That suggestion would exceed the remaining session budget.')
+      }
+    }
     const taskBundle = [...new Set([
       ...(aggregate.session.taskBundle || []),
       ...(taskIds || [])
     ])]
     await updateSessionRecord(sessionId, { taskBundle })
-    return refresh(sessionId, now())
+    return refresh(sessionId, atMs)
   }
 
   async function resume (sessionId, atMs = now()) {
@@ -146,34 +183,27 @@ export function createSessionStore ({
     if (!name) throw new Error('Enter a task title.')
     const session = await getSession(sessionId)
     if (!session) throw new Error('The current session is no longer available.')
-    const recoveringPendingAddition = !terminal(session) && Boolean(session.pendingAddition)
+    const recoveringPendingAddition = session.status === 'paused'
+      ? session.pendingAddition
+      : null
     const aggregate = await hydrate(session, now())
-    if (aggregate.session.status !== 'paused') {
-      pendingQuickAdds.delete(sessionId)
-      return aggregate
-    }
-    if (recoveringPendingAddition) {
-      pendingQuickAdds.delete(sessionId)
-      return aggregate
-    }
-    const pending = aggregate.session.pendingAddition || pendingQuickAdds.get(sessionId) || {
+    if (aggregate.session.status !== 'paused') return aggregate
+    if (recoveringPendingAddition?.title === name) return aggregate
+
+    const pending = {
       taskId: 'quick-' + sessionId + '-' + createId(),
       title: name,
-      createdAt: now()
+      createdAt: now(),
+      stage: 'creating'
     }
-    pendingQuickAdds.set(sessionId, pending)
-    if (!aggregate.session.pendingAddition) {
+    try {
       await updateSessionRecord(sessionId, { pendingAddition: pending })
+      return await refresh(sessionId, now())
+    } catch (error) {
+      const failure = error instanceof Error ? error : new Error(String(error))
+      failure.quickAddTaskId = pending.taskId
+      throw failure
     }
-    await createTaskRecord(pending.title, pending.taskId)
-    const taskBundle = [...new Set([
-      ...(aggregate.session.taskBundle || []),
-      pending.taskId
-    ])]
-    await updateSessionRecord(sessionId, { taskBundle, pendingAddition: null })
-    const refreshed = await refresh(sessionId, now())
-    pendingQuickAdds.delete(sessionId)
-    return refreshed
   }
 
   return { restoreCurrent, refresh, start, pause, conclude, attachTasks, quickAdd, resume }

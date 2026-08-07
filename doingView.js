@@ -149,7 +149,7 @@ function updateTimerDisplay () {
 function setSessionMutationControlsDisabled (disabled) {
   const content = document.getElementById('doingContent')
   if (!content) return
-  content.querySelectorAll('button').forEach(control => {
+  content.querySelectorAll('button, input').forEach(control => {
     if (control.id === 'retryCompletionBtn' || control.id === 'retrySessionMutationBtn') return
     control.disabled = disabled
   })
@@ -238,7 +238,8 @@ function handleDoingInput (event) {
 
 async function handleDoingChange (event) {
   const taskId = event.target?.dataset?.continuationSuggestionId
-  if (!taskId || !event.target.checked || state.currentSession?.status !== 'paused') return
+  if (sessionMutationInFlight || !taskId || !event.target.checked ||
+    state.currentSession?.status !== 'paused') return
   const candidate = continuationTasks.find(task => task._id === taskId)
   if (!candidate || state.currentSession.taskBundle?.includes(taskId)) return
   await acceptSuggestedTask(candidate, event.target)
@@ -309,8 +310,11 @@ function updateResumeAvailability () {
 
 async function acceptSuggestedTask (candidate, checkbox) {
   const remainingMs = remainingBudgetMs(state.currentSession, Date.now())
+  const otherSelections = continuationSuggestionSelections.filter(
+    task => task._id !== candidate._id
+  )
   if (!suggestionSelectionFits(
-    continuationSuggestionSelections,
+    otherSelections,
     candidate,
     remainingMs
   )) {
@@ -320,26 +324,32 @@ async function acceptSuggestedTask (candidate, checkbox) {
     return false
   }
 
-  continuationSuggestionSelections.push(candidate)
+  continuationSuggestionSelections = [...otherSelections, candidate]
   const attached = await runContinuationMutation(
-    () => sessionStore.attachTasks(state.currentSession._id, [candidate._id]),
+    () => sessionStore.attachTasks(
+      state.currentSession._id,
+      [candidate._id],
+      { suggestionTaskIds: continuationSuggestionSelections.map(task => task._id) }
+    ),
     'Could not add the suggested task',
-    () => acceptSuggestedTask(candidate)
+    () => acceptSuggestedTask(candidate),
+    aggregate => (aggregate.session.taskBundle || []).includes(candidate._id)
   )
-  if (!attached) {
+  if (attached === false) {
     continuationSuggestionSelections = continuationSuggestionSelections.filter(
       task => task._id !== candidate._id
     )
     if (checkbox) checkbox.checked = false
   }
-  return attached
+  return attached === true
 }
 
 function attachSearchedTask (taskId) {
   return runContinuationMutation(
     () => sessionStore.attachTasks(state.currentSession._id, [taskId]),
     'Could not add the searched task',
-    () => attachSearchedTask(taskId)
+    () => attachSearchedTask(taskId),
+    aggregate => (aggregate.session.taskBundle || []).includes(taskId)
   )
 }
 
@@ -348,7 +358,11 @@ function quickAddContinuation () {
   return runContinuationMutation(
     () => sessionStore.quickAdd(state.currentSession._id, title),
     'Could not add the quick task',
-    quickAddContinuation
+    quickAddContinuation,
+    (aggregate, error) => Boolean(
+      error.quickAddTaskId &&
+      (aggregate.session.taskBundle || []).includes(error.quickAddTaskId)
+    )
   )
 }
 
@@ -551,8 +565,8 @@ async function runSessionMutation (operation, failureMessage, retry) {
   setSessionMutationControlsDisabled(false)
 }
 
-async function runContinuationMutation (operation, failureMessage, retry) {
-  if (sessionMutationInFlight) return false
+async function runContinuationMutation (operation, failureMessage, retry, wasApplied) {
+  if (sessionMutationInFlight) return null
   sessionMutationInFlight = true
   pendingSessionRetry = null
   clearDoingStatus()
@@ -562,10 +576,19 @@ async function runContinuationMutation (operation, failureMessage, retry) {
   try {
     aggregate = await operation()
   } catch (error) {
+    let reconciled = null
+    try {
+      reconciled = await sessionStore.refresh(state.currentSession._id, Date.now())
+      await applyAggregate(reconciled)
+      if (reconciled.session.status === 'paused') await openContinuePicker()
+    } catch {
+      reconciled = null
+    }
     sessionMutationInFlight = false
     setSessionMutationControlsDisabled(false)
+    if (reconciled && wasApplied?.(reconciled, error)) return true
     renderSessionMutationFailure(failureMessage + ': ' + error.message, retry)
-    return false
+    return reconciled ? false : null
   }
 
   await applyAggregate(aggregate)
