@@ -40,6 +40,24 @@ test('doing markup renders all unresolved task actions and escapes names', () =>
   assert.doesNotMatch(markup, /<img/)
 })
 
+test('active unavailable cards are Cancel-only while proposed Quick-add cards stay actionable', () => {
+  const markup = buildDoingSessionHtml({
+    status: 'active', timeBudgetMinutes: 15
+  }, [{
+    _id: 'archived', name: 'Old task', status: 'archived', unavailable: true
+  }, {
+    _id: 'quick', name: 'Quick task', status: 'proposed'
+  }], [], [])
+  const archivedCard = markup.match(/<article[^>]*data-task-id="archived"[\s\S]*?<\/article>/)[0]
+  const quickCard = markup.match(/<article[^>]*data-task-id="quick"[\s\S]*?<\/article>/)[0]
+
+  assert.match(archivedCard, /data-outcome="cancelled"/)
+  assert.doesNotMatch(archivedCard, /data-outcome="done"|data-outcome="already_done"/)
+  assert.match(quickCard, /data-outcome="done"/)
+  assert.match(quickCard, /data-outcome="already_done"/)
+  assert.match(quickCard, /data-outcome="cancelled"/)
+})
+
 test('resolved and unavailable cards remain visible without outcome controls while paused', () => {
   const markup = buildDoingSessionHtml({
     status: 'paused', timeBudgetMinutes: 15

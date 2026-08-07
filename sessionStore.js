@@ -17,6 +17,9 @@ import {
 
 const unavailableTask = id => ({ _id: id, name: 'Unavailable task', unavailable: true })
 const terminal = session => session.status === 'completed' || session.status === 'interrupted'
+const attachableTask = task => task?.status === 'active' || task?.status === 'approved_recurring'
+const usableBundledTask = task => attachableTask(task) ||
+  task?.status === 'proposed' || task?.status === 'draft'
 
 const greatestExecutionCheckpoint = executions => executions.reduce((greatest, execution) => {
   if (execution.activeElapsedMs === null || execution.activeElapsedMs === '') return greatest
@@ -109,7 +112,11 @@ export function createSessionStore ({
     const taskById = new Map(tasks.map(task => [task._id, task]))
     return {
       session: repaired,
-      bundle: (repaired.taskBundle || []).map(id => taskById.get(id) || unavailableTask(id)),
+      bundle: (repaired.taskBundle || []).map(id => {
+        const task = taskById.get(id)
+        if (!task) return unavailableTask(id)
+        return usableBundledTask(task) ? task : { ...task, unavailable: true }
+      }),
       executions
     }
   }
@@ -161,16 +168,21 @@ export function createSessionStore ({
     const atMs = now()
     const aggregate = await refresh(sessionId, atMs)
     if (aggregate.session.status !== 'paused') return aggregate
+    const requestedIds = [...new Set(taskIds || [])]
+    const requestedTasks = await listTasks(requestedIds)
+    if (requestedTasks.length !== requestedIds.length ||
+      requestedTasks.some(task => !attachableTask(task))) {
+      throw new Error(suggestionTaskIds
+        ? 'That task is no longer available as a suggestion.'
+        : 'That task is no longer available.')
+    }
     if (suggestionTaskIds) {
       const ledgerIds = [...new Set(suggestionTaskIds)]
       const ledgerTasks = await listTasks(ledgerIds)
-      const candidateIds = new Set(taskIds || [])
+      const candidateIds = new Set(requestedIds)
       const eligibleCandidates = ledgerTasks.filter(task => candidateIds.has(task._id))
       const allCandidatesEligible = eligibleCandidates.length === candidateIds.size &&
-        eligibleCandidates.every(task =>
-          (task.status === 'active' || task.status === 'approved_recurring') &&
-          Number(task.estimatedDuration) > 0
-        )
+        eligibleCandidates.every(task => attachableTask(task) && Number(task.estimatedDuration) > 0)
       const estimateMs = ledgerTasks.reduce((sum, task) =>
         sum + Math.max(0, Number(task.estimatedDuration || 0)) * 60000, 0
       )
@@ -183,7 +195,7 @@ export function createSessionStore ({
     }
     const taskBundle = [...new Set([
       ...(aggregate.session.taskBundle || []),
-      ...(taskIds || [])
+      ...requestedIds
     ])]
     await updateSessionRecord(sessionId, { taskBundle })
     return refresh(sessionId, atMs)

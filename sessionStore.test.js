@@ -29,6 +29,32 @@ test('restore chooses newest unfinished, interrupts older, and keeps missing car
   }])
 })
 
+test('hydrate makes archived bundle tasks unavailable but keeps proposed Quick-add tasks usable', async () => {
+  const session = {
+    _id: 's1', status: 'active', startTime: 1000,
+    taskBundle: ['archived', 'quick'], accumulatedActiveMs: 0,
+    activeStartedAt: 1000, checkpointElapsedMs: 0
+  }
+  const store = createSessionStore({
+    getSession: async () => structuredClone(session),
+    listExecutions: async () => [],
+    listTasks: async () => [{
+      _id: 'archived', name: 'Old task', status: 'archived'
+    }, {
+      _id: 'quick', name: 'Quick task', status: 'proposed'
+    }],
+    updateSessionRecord: async () => {}
+  })
+
+  const aggregate = await store.refresh('s1', 5000)
+
+  assert.deepEqual(aggregate.bundle[0], {
+    _id: 'archived', name: 'Old task', status: 'archived', unavailable: true
+  })
+  assert.equal(aggregate.bundle[1].status, 'proposed')
+  assert.equal(aggregate.bundle[1].unavailable, undefined)
+})
+
 test('restore repairs a final execution into paused state', async () => {
   const updates = []
   const session = {
@@ -265,6 +291,36 @@ test('attaching a searched task ignores the exhausted budget and deduplicates ID
   assert.deepEqual(aggregate.session.taskBundle, ['t1', 'searched-30m'])
   assert.equal(aggregate.bundle[1].estimatedDuration, 30)
   assert.equal(aggregate.session.status, 'paused')
+})
+
+test('attaching a searched task revalidates that it is still active before writing', async () => {
+  const session = {
+    _id: 's1', status: 'paused', startTime: 1000,
+    taskBundle: ['t1'], timeBudgetMinutes: 10,
+    accumulatedActiveMs: 10 * 60000, activeStartedAt: null,
+    checkpointElapsedMs: 10 * 60000, pausedAt: 601000
+  }
+  const tasks = new Map([
+    ['t1', { _id: 't1', name: 'Sink', status: 'active' }],
+    ['stale-search', { _id: 'stale-search', name: 'Garage', status: 'archived' }]
+  ])
+  const updates = []
+  const store = createSessionStore({
+    now: () => 700000,
+    getSession: async () => structuredClone(session),
+    listExecutions: async () => [{
+      taskId: 't1', endTime: 601000,
+      rawDurationMs: 10 * 60000, activeElapsedMs: 10 * 60000
+    }],
+    listTasks: async ids => ids.map(id => tasks.get(id)).filter(Boolean),
+    updateSessionRecord: async (id, fields) => updates.push({ id, fields })
+  })
+
+  await assert.rejects(
+    store.attachTasks('s1', ['stale-search']),
+    { message: 'That task is no longer available.' }
+  )
+  assert.deepEqual(updates, [])
 })
 
 test('suggestion attachment revalidates the cumulative ledger against authoritative remaining time', async () => {
