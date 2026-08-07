@@ -32,6 +32,17 @@ test('renders progressive controls and a human summary', () => {
   assert.match(markup, /data-schedule-group="fixed"/)
 })
 
+test('names every schedule form control for browser form semantics', () => {
+  const markup = scheduleEditorHtml({
+    scheduledDate: '2026-08-16',
+    schedule: { type: 'fixed', pattern: { kind: 'weekdays', weekdays: [7] } }
+  })
+  const controls = markup.match(/<(?:input|select)\b[^>]*>/g) || []
+
+  assert.ok(controls.length > 0)
+  controls.forEach(control => assert.match(control, /\bname="[^"]+"/))
+})
+
 test('converts form values into a validated schedule', () => {
   assert.deepEqual(scheduleFromEditorValues({
     scheduledDate: '2026-08-21',
