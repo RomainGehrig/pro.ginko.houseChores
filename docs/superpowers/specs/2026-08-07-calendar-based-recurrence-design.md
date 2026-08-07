@@ -95,7 +95,7 @@ Weekdays use ISO numbering: Monday is 1 and Sunday is 7. Duplicate weekdays are 
 
 Proposed tasks may have `scheduledDate: null`. Their AI schedule proposal is stored separately as `suggestedSchedule`, using the same typed shape. AI never chooses `scheduledDate`.
 
-Existing task statuses remain unchanged: repeating tasks use `approved_recurring`, one-off tasks use `active`, and completed one-off tasks become `archived`.
+Existing records are not bulk-migrated merely to change status. Whenever a task is approved or its schedule is saved, repeating tasks use `approved_recurring` and one-off tasks use `active`. Completed one-off tasks become `archived`.
 
 ## Schedule Semantics
 
@@ -130,6 +130,8 @@ Equivalently, the next fixed date is the first matching occurrence strictly afte
 ### Rule Editing
 
 Changing a repeat rule does not silently recalculate the current `scheduledDate`. The changed rule applies after the current occurrence is completed. The date changes only when the user edits it explicitly or a completion advances it.
+
+On initial approval, a fixed task's first scheduled date must match its selected fixed pattern. An active task's rule may later be changed without changing its current date; that current occurrence remains valid, and the new pattern controls the following occurrence. Saving a schedule also synchronizes the task status: `one_off` uses `active`, while `periodic` and `fixed` use `approved_recurring`.
 
 ## Prioritization and Language
 
@@ -169,7 +171,7 @@ Fixed calendar reveals a pattern choice:
 
 Active-task editing exposes the same scheduled-date and repeat controls. Saving repeat settings preserves the current scheduled date unless the user edited that field too.
 
-Validation errors appear inline and preserve all entered values. Approval requires a valid scheduled date and valid schedule. Active edits cannot save an incomplete or invalid schedule.
+Validation errors appear inline and preserve all entered values. Approval requires a valid scheduled date and valid schedule. The first date of a newly approved fixed schedule must match its pattern. Active edits cannot save an incomplete or invalid schedule, but an unchanged current date is allowed to differ from a newly edited fixed pattern as described above.
 
 ## AI Enrichment
 
@@ -232,6 +234,7 @@ At the application boundary, a pure normalizer supplies the new in-memory shape 
 - A positive numeric `recurrence` becomes `{ type: 'periodic', every: recurrence, unit: 'day' }`.
 - A missing recurrence becomes `{ type: 'one_off' }`.
 - A valid `nextDueDate` timestamp becomes a local `scheduledDate`.
+- A legacy active task with no usable date receives the normalizer's injected current local date in memory so it remains sortable and editable.
 
 The adapter does not write merely to convert a record. Normal task saves and completions write the new fields naturally. Legacy fields are retained but are not authoritative after the new fields exist.
 
@@ -244,7 +247,7 @@ No migration service, migration status, background retry, or generalized backfil
 - Invalid AI suggestions are discarded while the rest of enrichment remains usable.
 - An execution write failure leaves both history and task schedule unchanged.
 - A post-execution task-update failure exposes a task-update-only retry and prevents duplicate executions in the active session.
-- Unexpected legacy values fall back to a safe one-off in-memory model and remain editable.
+- Unexpected legacy values fall back to a one-off task scheduled for the injected current local date and remain editable.
 
 ## Testing and Verification
 
