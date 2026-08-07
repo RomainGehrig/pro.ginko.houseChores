@@ -34,6 +34,8 @@ export async function initTasksView() {
   document.getElementById('proposedCards').addEventListener('change', handleProposedScheduleChange)
   document.getElementById('proposedCards').addEventListener('input', handleProposedScheduleChange)
   document.getElementById('activeCards').addEventListener('click', handleActiveClick)
+  document.getElementById('activeCards').addEventListener('change', handleActiveScheduleChange)
+  document.getElementById('activeCards').addEventListener('input', handleActiveScheduleChange)
   categoryLocationStore.subscribe(renderTasks)
   await refreshTasksView()
 }
@@ -141,6 +143,11 @@ function handleProposedScheduleChange (evt) {
   if (editor) syncScheduleEditor(editor)
 }
 
+function handleActiveScheduleChange (evt) {
+  const editor = evt.target.closest('.schedule-editor')
+  if (editor) syncScheduleEditor(editor)
+}
+
 function referenceStateSuffix (reference) {
   if (reference.status === 'archived') return ' (Archived)'
   if (reference.unresolved) return ' (Unavailable)'
@@ -198,6 +205,7 @@ function taskEditorHtml(task, snapshot) {
       '<label>Category <select class="task-edit-category" name="categoryId">' +
         '<option value="">-</option>' + categoryOptions + '</select></label>' +
       '<fieldset class="location-options"><legend>Locations</legend>' + locationOptions + '</fieldset>' +
+      scheduleEditorHtml(buildScheduleEditorModel(task)) +
       '<div class="task-card-error" role="alert">' + escapeHtml(taskEditorError) + '</div>' +
     '</div>'
   )
@@ -262,6 +270,14 @@ export function buildApprovedTaskFields (task, referenceFields, duration, schedu
   }
 }
 
+export function buildActiveTaskScheduleFields (task, scheduleResult) {
+  return {
+    scheduledDate: scheduleResult.scheduledDate,
+    schedule: scheduleResult.schedule,
+    status: scheduleResult.schedule.type === 'one_off' ? 'active' : 'approved_recurring'
+  }
+}
+
 function syncEnrichmentAvailability() {
   const categories = selectableReferences(categoryLocationStore.getSnapshot().categories)
   const availability = buildEnrichmentAvailability(categories)
@@ -313,14 +329,25 @@ async function handleActiveClick(evt) {
   const errorElement = card.querySelector('.task-card-error')
   taskEditorError = ''
   errorElement.textContent = ''
+  const dateInput = card.querySelector('[data-schedule-field="date"]')
+  const scheduleResult = readScheduleEditor(card, {
+    requirePatternMatch: dateInput?.value !== String(task.scheduledDate ?? '')
+  })
+  if (!scheduleResult.ok) {
+    taskEditorError = scheduleResult.message
+    errorElement.textContent = taskEditorError
+    return
+  }
+  const referenceFields = {
+    categoryId,
+    category: resolveCategorySnapshotName(task, categoryId, categories),
+    locationIds
+  }
+  const scheduleFields = buildActiveTaskScheduleFields(task, scheduleResult)
   setTaskCardBusy(card, true)
   try {
     const result = await saveTaskWithRefresh(
-      () => updateTask(id, {
-        categoryId,
-        category: resolveCategorySnapshotName(task, categoryId, categories),
-        locationIds
-      }),
+      () => updateTask(id, { ...referenceFields, ...scheduleFields }),
       refreshTasksView
     )
     if (!result.ok) {

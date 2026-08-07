@@ -1,6 +1,9 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildApprovedTaskFields } from './tasksView.js'
+import {
+  buildActiveTaskScheduleFields,
+  buildApprovedTaskFields
+} from './tasksView.js'
 
 test('approval writes the reviewed schedule and clears AI suggestions', () => {
   assert.deepEqual(buildApprovedTaskFields({}, {
@@ -17,6 +20,22 @@ test('approval writes the reviewed schedule and clears AI suggestions', () => {
     suggestedCategory: null,
     suggestedDuration: null,
     suggestedSchedule: null,
+    status: 'approved_recurring'
+  })
+})
+
+test('active schedule edits preserve the current date unless explicitly changed', () => {
+  const task = {
+    scheduledDate: '2026-08-16',
+    schedule: { type: 'fixed', pattern: { kind: 'weekdays', weekdays: [7] } }
+  }
+  assert.deepEqual(buildActiveTaskScheduleFields(task, {
+    ok: true,
+    scheduledDate: '2026-08-16',
+    schedule: { type: 'fixed', pattern: { kind: 'weekdays', weekdays: [1] } }
+  }), {
+    scheduledDate: '2026-08-16',
+    schedule: { type: 'fixed', pattern: { kind: 'weekdays', weekdays: [1] } },
     status: 'approved_recurring'
   })
 })

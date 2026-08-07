@@ -1,7 +1,8 @@
 // ABOUTME: Pure task-presentation helpers for stable reference labels and safe markup.
 // ABOUTME: Keeps stored task and category values escaped before they enter HTML contexts.
 
-import { escapeHtml, formatDate, formatDuration } from './helpers.js'
+import { escapeHtml, formatDuration } from './helpers.js'
+import { formatScheduledDate, scheduleSummary } from './scheduleLogic.js'
 
 export function buildEnrichmentAvailability (categories) {
   return {
@@ -33,14 +34,15 @@ export function buildDoingTaskHtml (task, bundleIndex, bundleLength, categories 
 export function buildActiveTaskDetailsHtml (task, categories = []) {
   return '<div class="task-meta">' + escapeHtml(resolveTaskCategoryName(task, categories)) + ' \u00b7 ' +
     formatDuration(task?.estimatedDuration) +
-    (task?.recurrence ? ' \u00b7 every ' + task.recurrence + 'd' : '') + '</div>' +
-    '<div class="task-meta">Next due: ' + formatDate(task?.nextDueDate) + '</div>'
+    ' \u00b7 ' + escapeHtml(scheduleSummary(task?.schedule)) + '</div>' +
+    '<div class="task-meta">Scheduled: ' + escapeHtml(formatScheduledDate(task?.scheduledDate)) + '</div>'
 }
 
 export function buildBundlePreviewHtml (bundle) {
   const total = bundle.reduce((sum, task) => sum + task.estimatedDuration, 0)
   return '<h3>Proposed bundle (' + formatDuration(total) + ')</h3><ul>' +
     bundle.map(task => '<li>' + escapeHtml(String(task?.name ?? '')) + ' - ' + formatDuration(task.estimatedDuration) +
-      ' <span class="task-meta">(due ' + formatDate(task.nextDueDate) + ')</span></li>').join('') +
+      ' <span class="task-meta">(scheduled ' + escapeHtml(formatScheduledDate(task?.scheduledDate)) +
+      ' \u00b7 ' + escapeHtml(scheduleSummary(task?.schedule)) + ')</span></li>').join('') +
     '</ul>'
 }

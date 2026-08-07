@@ -42,8 +42,8 @@ test('doing markup resolves a renamed category by stable id and escapes stored n
     categoryId: 'category-1',
     category: 'Stale category snapshot',
     estimatedDuration: 15,
-    recurrence: null,
-    nextDueDate: 0
+    scheduledDate: '2026-08-16',
+    schedule: { type: 'one_off' }
   }, [{
     _id: 'category-1',
     name: '<svg onload=alert(2)>Renamed category',
@@ -58,9 +58,24 @@ test('bundle preview escapes stored task names', () => {
     _id: 'task-1',
     name: '</li><script>globalThis.compromised = true</script><li>',
     estimatedDuration: 5,
-    nextDueDate: 0
+    scheduledDate: '2026-08-16',
+    schedule: { type: 'one_off' }
   }])
 
   assert.match(markup, /&lt;\/li&gt;&lt;script&gt;globalThis\.compromised = true&lt;\/script&gt;&lt;li&gt;/)
   assert.doesNotMatch(markup, /<script>/)
+})
+
+test('task and bundle markup use scheduled language and schedule summaries', () => {
+  const task = {
+    name: 'Water plants',
+    category: 'Home',
+    estimatedDuration: 10,
+    scheduledDate: '2026-08-16',
+    schedule: { type: 'periodic', every: 3, unit: 'day' }
+  }
+  const markup = buildActiveTaskDetailsHtml(task, []) + buildBundlePreviewHtml([task])
+  assert.match(markup, /Scheduled:/)
+  assert.match(markup, /About every 3 days after completion/)
+  assert.doesNotMatch(markup, /\bdue\b|overdue/i)
 })
