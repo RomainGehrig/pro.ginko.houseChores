@@ -205,6 +205,10 @@ function validOutcome (outcome) {
   return outcome === 'done' || outcome === 'already_done' || outcome === 'cancelled'
 }
 
+function terminalSession (session) {
+  return session.status === 'completed' || session.status === 'interrupted'
+}
+
 async function completeTask (taskId, outcome) {
   if (sessionMutationInFlight || !validOutcome(outcome)) return
   sessionMutationInFlight = true
@@ -214,6 +218,13 @@ async function completeTask (taskId, outcome) {
 
   try {
     const aggregate = await sessionStore.refresh(state.currentSession._id, Date.now())
+    if (terminalSession(aggregate.session)) {
+      pendingCompletion = null
+      pendingCompletionStage = null
+      await applyAggregate(aggregate)
+      releaseCompletionLockIfSettled()
+      return
+    }
     const existing = aggregate.executions.find(execution => execution.taskId === taskId)
     if (existing) {
       pendingCompletion = null

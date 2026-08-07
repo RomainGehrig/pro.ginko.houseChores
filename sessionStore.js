@@ -14,6 +14,7 @@ import {
 } from './sessionLogic.js'
 
 const unavailableTask = id => ({ _id: id, name: 'Unavailable task', unavailable: true })
+const terminal = session => session.status === 'completed' || session.status === 'interrupted'
 
 export function createSessionStore ({
   listSessions = listUnfinishedSessions,
@@ -86,13 +87,14 @@ export function createSessionStore ({
 
   async function pause (sessionId, atMs = now()) {
     const aggregate = await refresh(sessionId, atMs)
-    if (aggregate.session.status === 'paused') return aggregate
+    if (aggregate.session.status === 'paused' || terminal(aggregate.session)) return aggregate
     await updateSessionRecord(sessionId, pauseFields(aggregate.session, atMs))
     return refresh(sessionId, atMs)
   }
 
   async function conclude (sessionId, atMs = now()) {
     const aggregate = await refresh(sessionId, atMs)
+    if (terminal(aggregate.session)) return aggregate
     const fields = conclusionFields(aggregate.session, aggregate.executions, atMs)
     await updateSessionRecord(sessionId, fields)
     return { ...aggregate, session: { ...aggregate.session, ...fields } }

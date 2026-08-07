@@ -139,3 +139,26 @@ test('conclude stores active time not assigned to an execution', async () => {
   assert.equal(aggregate.session.status, 'completed')
   assert.equal(aggregate.session.unassignedDurationMs, 5000)
 })
+
+test('pause and conclude return terminal authoritative sessions without writes', async () => {
+  for (const status of ['completed', 'interrupted']) {
+    for (const method of ['pause', 'conclude']) {
+      const updates = []
+      const session = {
+        _id: 's1', status, startTime: 1000, taskBundle: ['t1'],
+        accumulatedActiveMs: 9000, activeStartedAt: null, checkpointElapsedMs: 0
+      }
+      const store = createSessionStore({
+        getSession: async () => ({ ...session }),
+        listExecutions: async () => [],
+        listTasks: async () => [{ _id: 't1', name: 'Sink' }],
+        updateSessionRecord: async (id, fields) => updates.push({ id, fields })
+      })
+
+      const aggregate = await store[method]('s1', 10000)
+
+      assert.equal(aggregate.session.status, status)
+      assert.equal(updates.length, 0, `${method} wrote a ${status} session`)
+    }
+  }
+})

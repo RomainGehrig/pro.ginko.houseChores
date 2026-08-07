@@ -180,6 +180,7 @@ function createPersistence ({
   const executions = new Map()
   const taskUpdates = []
   let executionCalls = 0
+  let sessionUpdateCalls = 0
   let remainingSessionUpdateFailures = failSessionUpdates
 
   const freezr = {
@@ -200,6 +201,7 @@ function createPersistence ({
     },
     updateFields: async (collection, id, fields) => {
       if (collection === 'sessions') {
+        sessionUpdateCalls++
         if (remainingSessionUpdateFailures > 0) {
           remainingSessionUpdateFailures--
           throw new Error('session offline')
@@ -220,7 +222,8 @@ function createPersistence ({
     taskUpdates,
     patchSession (fields) { session = { ...session, ...clone(fields) } },
     get session () { return session },
-    get executionCalls () { return executionCalls }
+    get executionCalls () { return executionCalls },
+    get sessionUpdateCalls () { return sessionUpdateCalls }
   }
 }
 
@@ -309,6 +312,117 @@ test('resolves tasks in any order from persisted time without interval ticks', a
     assert.equal(executions.get(completionAttemptIdFor('session-1', 'task-2')).rawDurationMs, 60000)
     assert.equal(executions.get(completionAttemptIdFor('session-1', 'task-2')).outcome, 'cancelled')
     assert.equal(executions.size, 2)
+  })
+})
+
+test('stale outcome applies a completed authoritative aggregate without writes', async () => {
+  const task1 = task('task-1')
+  const session = {
+    _id: 'session-1', status: 'active', startTime: 10000,
+    taskBundle: ['task-1'], timeBudgetMinutes: 15,
+    accumulatedActiveMs: 0, activeStartedAt: 10000, checkpointElapsedMs: 0
+  }
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [task1],
+    bundle: [task1]
+  }, async ({ document, persistence, clock }) => {
+    clock.setNow(70000)
+    persistence.patchSession({
+      status: 'completed', endTime: 60000, activeStartedAt: null
+    })
+
+    await document.clickOutcome('task-1', 'done')
+
+    assert.equal(persistence.executionCalls, 0)
+    assert.equal(persistence.taskUpdates.length, 0)
+    assert.equal(persistence.session.status, 'completed')
+    assert.equal(state.currentSession.status, 'completed')
+    assert.equal(document.control('view-review').style.display, 'block')
+  })
+})
+
+test('stale outcome renders an interrupted authoritative aggregate without writes', async () => {
+  const task1 = task('task-1')
+  const session = {
+    _id: 'session-1', status: 'active', startTime: 10000,
+    taskBundle: ['task-1'], timeBudgetMinutes: 15,
+    accumulatedActiveMs: 0, activeStartedAt: 10000, checkpointElapsedMs: 0
+  }
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [task1],
+    bundle: [task1]
+  }, async ({ document, persistence, clock }) => {
+    clock.setNow(70000)
+    persistence.patchSession({
+      status: 'interrupted', endTime: 60000, activeStartedAt: null
+    })
+
+    await document.clickOutcome('task-1', 'done')
+
+    assert.equal(persistence.executionCalls, 0)
+    assert.equal(persistence.taskUpdates.length, 0)
+    assert.equal(persistence.session.status, 'interrupted')
+    assert.equal(state.currentSession.status, 'interrupted')
+    assert.match(
+      document.control('doingContent').children[0].textContent,
+      /superseded by newer unfinished work/
+    )
+  })
+})
+
+test('stale Pause applies completed state without a session write', async () => {
+  const task1 = task('task-1')
+  const session = {
+    _id: 'session-1', status: 'active', startTime: 10000,
+    taskBundle: ['task-1'], timeBudgetMinutes: 15,
+    accumulatedActiveMs: 0, activeStartedAt: 10000, checkpointElapsedMs: 0
+  }
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [task1],
+    bundle: [task1]
+  }, async ({ document, persistence }) => {
+    persistence.patchSession({
+      status: 'completed', endTime: 60000, activeStartedAt: null
+    })
+
+    await document.clickControl('pauseSessionBtn')
+
+    assert.equal(persistence.sessionUpdateCalls, 0)
+    assert.equal(state.currentSession.status, 'completed')
+    assert.equal(document.control('view-review').style.display, 'block')
+  })
+})
+
+test('stale Conclude renders interrupted state without a session write', async () => {
+  const task1 = task('task-1')
+  const session = {
+    _id: 'session-1', status: 'paused', startTime: 10000,
+    taskBundle: ['task-1'], timeBudgetMinutes: 15,
+    accumulatedActiveMs: 9000, activeStartedAt: null,
+    pausedAt: 19000, checkpointElapsedMs: 0
+  }
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [task1],
+    bundle: [task1]
+  }, async ({ document, persistence }) => {
+    persistence.patchSession({ status: 'interrupted', endTime: 20000 })
+
+    await document.clickControl('concludeSessionBtn')
+
+    assert.equal(persistence.sessionUpdateCalls, 0)
+    assert.equal(state.currentSession.status, 'interrupted')
+    assert.match(
+      document.control('doingContent').children[0].textContent,
+      /superseded by newer unfinished work/
+    )
   })
 })
 
