@@ -207,9 +207,12 @@ test('reference publication preserves every proposed and active task draft contr
           {
             _id: 'task-proposed', name: 'Review supplies', status: 'proposed',
             categoryId: 'category-1', category: 'Cleaning', locationIds: ['location-1'],
-            estimatedDuration: 15, scheduledDate: '2026-08-20',
-            schedule: { type: 'periodic', every: 2, unit: 'week' },
-            suggestedCategory: null, suggestedDuration: null, suggestedSchedule: null
+            estimatedDuration: 15, scheduledDate: null,
+            schedule: { type: 'one_off' },
+            suggestedCategory: null, suggestedDuration: null,
+            suggestedSchedule: {
+              type: 'fixed', pattern: { kind: 'weekdays', weekdays: [1] }
+            }
           },
           {
             _id: 'task-active', name: 'Clean kitchen', status: 'approved_recurring',
@@ -258,6 +261,7 @@ test('reference publication preserves every proposed and active task draft contr
       }
       const draftSnapshot = (card, categorySelector, locationSelector, durationSelector = null) => ({
         scheduledDate: card.querySelector('[data-schedule-field="date"]').value,
+        dateOwner: card.querySelector('.schedule-editor').dataset.scheduleDateOwner,
         duration: durationSelector ? card.querySelector(durationSelector).value : null,
         categoryId: card.querySelector(categorySelector).value,
         locationIds: [...card.querySelectorAll(locationSelector + ':checked')].map(control => control.value),
@@ -314,6 +318,7 @@ test('reference publication preserves every proposed and active task draft contr
   assert.deepEqual(result, {
     proposed: {
       scheduledDate: '2026-09-18',
+      dateOwner: 'user',
       duration: '47',
       categoryId: 'category-2',
       locationIds: ['location-2'],
@@ -329,6 +334,7 @@ test('reference publication preserves every proposed and active task draft contr
     },
     active: {
       scheduledDate: '2026-10-31',
+      dateOwner: 'user',
       duration: null,
       categoryId: 'category-2',
       locationIds: ['location-2'],
@@ -343,6 +349,108 @@ test('reference publication preserves every proposed and active task draft contr
       summary: 'Every year on October 31'
     }
   })
+})
+
+test('infers a fixed date then approves a manual off-pattern override', async () => {
+  const result = await runBrowserScenario({
+    body: '<button id="addTasksBtn"></button><button id="enrichBtn"></button>' +
+      '<span id="enrichStatus"></span><div id="proposedCards"></div>' +
+      '<div id="activeCards"></div><div id="archivedCards"></div>',
+    script: `
+      const suggestedSchedule = {
+        type: 'fixed', pattern: { kind: 'annual_date', month: 1, day: 1 }
+      }
+      const records = {
+        categories: [],
+        locations: [],
+        tasks: [{
+          _id: 'insurance', name: 'Pay car insurance', status: 'proposed',
+          categoryId: null, locationIds: [], estimatedDuration: 10,
+          scheduledDate: null, schedule: { type: 'one_off' },
+          suggestedCategory: null, suggestedDuration: null,
+          suggestedSchedule
+        }]
+      }
+      const clone = value => structuredClone(value)
+      window.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async (collection, fields, options = {}) => {
+          const record = { _id: options.data_object_id || collection + '-new', ...clone(fields) }
+          records[collection].push(record)
+          return clone(record)
+        },
+        updateFields: async (collection, id, fields) => {
+          const record = records[collection].find(item => item._id === id)
+          Object.assign(record, clone(fields))
+          return clone(record)
+        }
+      }
+
+      const scheduleLogic = await import(applicationUrl + 'scheduleLogic.js')
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      await categoryLocationStore.initialize()
+      await initTasksView()
+
+      const today = scheduleLogic.localDateFromDate()
+      const tomorrow = scheduleLogic.addCalendarPeriod(today, 1, 'day')
+      const expectedInitial = scheduleLogic.suggestScheduledDate(suggestedSchedule, today)
+      const card = document.querySelector('[data-id="insurance"]')
+      const editor = card.querySelector('.schedule-editor')
+      const dateInput = editor.querySelector('[data-schedule-field="date"]')
+      const initialDate = dateInput.value
+      const initialOwner = editor.dataset.scheduleDateOwner
+      const hint = editor.querySelector('.schedule-date-hint').textContent
+
+      dateInput.value = tomorrow
+      dateInput.dispatchEvent(new Event('input', { bubbles: true }))
+
+      const tomorrowParts = scheduleLogic.parseLocalDate(tomorrow)
+      const changedRule = tomorrowParts.month === 1 && tomorrowParts.day === 1
+        ? { month: 7, day: 1 }
+        : { month: 1, day: 1 }
+      const monthInput = editor.querySelector('[data-schedule-field="annual-month"]')
+      const dayInput = editor.querySelector('[data-schedule-field="annual-day"]')
+      monthInput.value = String(changedRule.month)
+      monthInput.dispatchEvent(new Event('change', { bubbles: true }))
+      dayInput.value = String(changedRule.day)
+      dayInput.dispatchEvent(new Event('change', { bubbles: true }))
+
+      const dateAfterRuleChange = dateInput.value
+      const ownerAfterEdit = editor.dataset.scheduleDateOwner
+      card.querySelector('.approve-btn').click()
+      for (let attempt = 0; attempt < 20 && records.tasks[0].status === 'proposed'; attempt++) {
+        await new Promise(resolve => setTimeout(resolve, 0))
+      }
+
+      const saved = records.tasks[0]
+      const result = {
+        expectedInitial,
+        initialDate,
+        initialOwner,
+        hint,
+        tomorrow,
+        dateAfterRuleChange,
+        ownerAfterEdit,
+        savedDate: saved.scheduledDate,
+        savedSchedule: saved.schedule,
+        savedStatus: saved.status,
+        changedRule
+      }
+    `
+  })
+
+  assert.equal(result.initialDate, result.expectedInitial)
+  assert.equal(result.initialOwner, 'app')
+  assert.equal(result.hint, 'Suggested from the calendar; choose any date.')
+  assert.equal(result.dateAfterRuleChange, result.tomorrow)
+  assert.equal(result.ownerAfterEdit, 'user')
+  assert.equal(result.savedDate, result.tomorrow)
+  assert.deepEqual(result.savedSchedule, {
+    type: 'fixed',
+    pattern: { kind: 'annual_date', ...result.changedRule }
+  })
+  assert.equal(result.savedStatus, 'approved_recurring')
 })
 
 test('computed styles hide inactive fixed groups across transitions without clearing values', async () => {

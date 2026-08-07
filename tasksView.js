@@ -70,21 +70,24 @@ function captureTaskEditorDrafts () {
     for (const card of container.querySelectorAll('.task-card')) {
       if (!accepts(card)) continue
       const controls = [...card.querySelectorAll('input[name], select[name], textarea[name]')]
-      drafts.set(id + ':' + card.dataset.id, controls.map(control => ({
-        tagName: control.tagName,
-        name: control.name,
-        value: control.value,
-        checked: control.type === 'checkbox' || control.type === 'radio'
-          ? control.checked
-          : null
-      })))
+      drafts.set(id + ':' + card.dataset.id, {
+        controls: controls.map(control => ({
+          tagName: control.tagName,
+          name: control.name,
+          value: control.value,
+          checked: control.type === 'checkbox' || control.type === 'radio'
+            ? control.checked
+            : null
+        })),
+        scheduleDateOwner: card.querySelector('.schedule-editor')?.dataset.scheduleDateOwner || null
+      })
     }
   }
   return drafts
 }
 
 function restoreTaskEditorDrafts (drafts) {
-  for (const [key, values] of drafts) {
+  for (const [key, draft] of drafts) {
     const separator = key.indexOf(':')
     const container = document.getElementById(key.slice(0, separator))
     const taskId = key.slice(separator + 1)
@@ -93,19 +96,24 @@ function restoreTaskEditorDrafts (drafts) {
     if (!card) continue
 
     const controls = [...card.querySelectorAll('input[name], select[name], textarea[name]')]
-    for (const draft of values) {
+    for (const draftControl of draft.controls) {
       const control = controls.find(candidate =>
-        candidate.tagName === draft.tagName &&
-        candidate.name === draft.name &&
-        (draft.checked === null || candidate.value === draft.value)
+        candidate.tagName === draftControl.tagName &&
+        candidate.name === draftControl.name &&
+        (draftControl.checked === null || candidate.value === draftControl.value)
       )
       if (!control) continue
-      if (draft.checked === null) control.value = draft.value
-      else control.checked = draft.checked
+      if (draftControl.checked === null) control.value = draftControl.value
+      else control.checked = draftControl.checked
     }
 
     const scheduleEditor = card.querySelector('.schedule-editor')
-    if (scheduleEditor) syncScheduleEditor(scheduleEditor)
+    if (scheduleEditor) {
+      if (draft.scheduleDateOwner) {
+        scheduleEditor.dataset.scheduleDateOwner = draft.scheduleDateOwner
+      }
+      syncScheduleEditor(scheduleEditor)
+    }
   }
 }
 
@@ -197,12 +205,20 @@ function proposedCardHtml(task, snapshot) {
 
 function handleProposedScheduleChange (evt) {
   const editor = evt.target.closest('.schedule-editor')
-  if (editor) syncScheduleEditor(editor)
+  if (editor) {
+    syncScheduleEditor(editor, {
+      userEditedDate: evt.target.matches('[data-schedule-field="date"]')
+    })
+  }
 }
 
 function handleActiveScheduleChange (evt) {
   const editor = evt.target.closest('.schedule-editor')
-  if (editor) syncScheduleEditor(editor)
+  if (editor) {
+    syncScheduleEditor(editor, {
+      userEditedDate: evt.target.matches('[data-schedule-field="date"]')
+    })
+  }
 }
 
 function referenceStateSuffix (reference) {
@@ -297,7 +313,7 @@ async function handleProposedClick(evt) {
   const duration = Number(card.querySelector('.f-duration').value) || null
   const errorElement = card.querySelector('.task-card-error')
   errorElement.textContent = ''
-  const scheduleResult = readScheduleEditor(card, { requirePatternMatch: true })
+  const scheduleResult = readScheduleEditor(card)
   if (!scheduleResult.ok) {
     errorElement.textContent = scheduleResult.message
     return
@@ -402,10 +418,7 @@ async function handleActiveClick(evt) {
   const errorElement = card.querySelector('.task-card-error')
   taskEditorError = ''
   errorElement.textContent = ''
-  const dateInput = card.querySelector('[data-schedule-field="date"]')
-  const scheduleResult = readScheduleEditor(card, {
-    requirePatternMatch: dateInput?.value !== String(task.scheduledDate ?? '')
-  })
+  const scheduleResult = readScheduleEditor(card)
   if (!scheduleResult.ok) {
     taskEditorError = scheduleResult.message
     errorElement.textContent = taskEditorError
