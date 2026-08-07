@@ -18,6 +18,14 @@ import {
 const unavailableTask = id => ({ _id: id, name: 'Unavailable task', unavailable: true })
 const terminal = session => session.status === 'completed' || session.status === 'interrupted'
 
+const greatestExecutionCheckpoint = executions => executions.reduce((greatest, execution) => {
+  if (execution.activeElapsedMs === null || execution.activeElapsedMs === '') return greatest
+  const checkpoint = Number(execution.activeElapsedMs)
+  return Number.isFinite(checkpoint) && checkpoint >= 0
+    ? Math.max(greatest, checkpoint)
+    : greatest
+}, 0)
+
 export function createSessionStore ({
   listSessions = listUnfinishedSessions,
   getSession = getSessionById,
@@ -62,8 +70,20 @@ export function createSessionStore ({
     const executions = await listExecutions(session._id)
     if (!terminal(repaired)) {
       const normalize = normalizationFields(repaired, executions, nowMs)
-      repaired = { ...repaired, ...normalize }
-      if (Object.keys(normalize).length) await updateSessionRecord(repaired._id, normalize)
+      const normalized = { ...repaired, ...normalize }
+      const persistedCheckpoint = greatestExecutionCheckpoint(executions)
+      const currentCheckpoint = Number(normalized.checkpointElapsedMs)
+      const checkpointElapsedMs = Number.isFinite(currentCheckpoint) && currentCheckpoint >= 0
+        ? Math.max(currentCheckpoint, persistedCheckpoint)
+        : persistedCheckpoint
+      const repair = {
+        ...normalize,
+        ...(checkpointElapsedMs > (Number(normalized.checkpointElapsedMs) || 0)
+          ? { checkpointElapsedMs }
+          : {})
+      }
+      repaired = { ...repaired, ...repair }
+      if (Object.keys(repair).length) await updateSessionRecord(repaired._id, repair)
 
       const resolved = resolvedTaskIds(executions)
       const allResolved = repaired.taskBundle?.length > 0 &&
@@ -117,7 +137,9 @@ export function createSessionStore ({
     const existing = await restoreCurrent(nowMs)
     if (existing) return { aggregate: existing, restored: true }
     const created = await createSessionRecord(buildSessionDraft(proposal, nowMs))
-    return { aggregate: await hydrate(created, nowMs), restored: false }
+    const persisted = created?._id ? await getSession(created._id) : null
+    if (!persisted) throw new Error('The new session could not be read after creation.')
+    return { aggregate: await hydrate(persisted, nowMs), restored: false }
   }
 
   async function pause (sessionId, atMs = now()) {

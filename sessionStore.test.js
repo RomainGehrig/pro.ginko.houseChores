@@ -90,6 +90,77 @@ test('start creates one compact snapshot when none is unfinished', async () => {
   assert.deepEqual(result.aggregate.session.taskBundle, ['t1'])
 })
 
+test('start re-reads the persisted snapshot after Freezr returns only create metadata', async () => {
+  let persisted
+  const store = createSessionStore({
+    listSessions: async () => [],
+    getSession: async id => persisted?._id === id ? structuredClone(persisted) : null,
+    listExecutions: async () => [],
+    listTasks: async ids => ids.map(_id => ({ _id, name: _id })),
+    createSessionRecord: async draft => {
+      persisted = { ...structuredClone(draft), _id: 'new' }
+      return { _id: 'new', _date_modified: 12345 }
+    },
+    updateSessionRecord: async () => {}
+  })
+
+  const result = await store.start({
+    tasks: [{ _id: 't1' }], timeBudgetMinutes: 15,
+    categoryFilterId: null, categoryFilter: null
+  }, 9000)
+
+  assert.equal(result.aggregate.session.status, 'active')
+  assert.equal(result.aggregate.session.activeStartedAt, 9000)
+  assert.deepEqual(result.aggregate.session.taskBundle, ['t1'])
+  assert.deepEqual(result.aggregate.bundle.map(task => task._id), ['t1'])
+})
+
+test('refresh repairs a lagging checkpoint for an active unfinished session', async () => {
+  const updates = []
+  const session = {
+    _id: 's1', status: 'active', startTime: 1000, taskBundle: ['t1', 't2'],
+    accumulatedActiveMs: 0, activeStartedAt: 1000, checkpointElapsedMs: 1000
+  }
+  const store = createSessionStore({
+    getSession: async () => structuredClone(session),
+    listExecutions: async () => [{
+      taskId: 't1', endTime: 6000, rawDurationMs: 5000, activeElapsedMs: 5000
+    }],
+    listTasks: async ids => ids.map(_id => ({ _id, name: _id })),
+    updateSessionRecord: async (id, fields) => updates.push({ id, fields })
+  })
+
+  const aggregate = await store.refresh('s1', 9000)
+
+  assert.equal(aggregate.session.status, 'active')
+  assert.equal(aggregate.session.checkpointElapsedMs, 5000)
+  assert.deepEqual(updates, [{ id: 's1', fields: { checkpointElapsedMs: 5000 } }])
+})
+
+test('refresh repairs a lagging checkpoint for an early-paused unfinished session', async () => {
+  const updates = []
+  const session = {
+    _id: 's1', status: 'paused', startTime: 1000, taskBundle: ['t1', 't2'],
+    accumulatedActiveMs: 9000, activeStartedAt: null, checkpointElapsedMs: 1000,
+    pausedAt: 10000
+  }
+  const store = createSessionStore({
+    getSession: async () => structuredClone(session),
+    listExecutions: async () => [{
+      taskId: 't1', endTime: 6000, rawDurationMs: 5000, activeElapsedMs: 5000
+    }],
+    listTasks: async ids => ids.map(_id => ({ _id, name: _id })),
+    updateSessionRecord: async (id, fields) => updates.push({ id, fields })
+  })
+
+  const aggregate = await store.refresh('s1', 12000)
+
+  assert.equal(aggregate.session.status, 'paused')
+  assert.equal(aggregate.session.checkpointElapsedMs, 5000)
+  assert.equal(aggregate.session.pausedAt, 10000)
+  assert.deepEqual(updates, [{ id: 's1', fields: { checkpointElapsedMs: 5000 } }])
+})
+
 test('pause persists active elapsed time from the injected clock', async () => {
   let session = {
     _id: 's1', status: 'active', startTime: 1000, taskBundle: ['t1'],
