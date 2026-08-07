@@ -3,6 +3,11 @@
 
 const PERIOD_UNITS = new Set(['day', 'week', 'month', 'year'])
 const ACTIVE_STATUSES = new Set(['active', 'approved_recurring'])
+const WEEKDAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
+const MONTH_NAMES = [
+  'January', 'February', 'March', 'April', 'May', 'June',
+  'July', 'August', 'September', 'October', 'November', 'December'
+]
 
 export function daysInMonth (year, month) {
   return new Date(year, month, 0, 12).getDate()
@@ -29,6 +34,117 @@ export function localDateFromDate (date = new Date()) {
     month: date.getMonth() + 1,
     day: date.getDate()
   })
+}
+
+function localDateObject (value) {
+  const parts = parseLocalDate(value)
+  return parts ? new Date(parts.year, parts.month - 1, parts.day, 12) : null
+}
+
+function clampedDate (year, month, requestedDay) {
+  return formatLocalDate({
+    year,
+    month,
+    day: Math.min(requestedDay, daysInMonth(year, month))
+  })
+}
+
+function addCalendarDays (value, count) {
+  const date = localDateObject(value)
+  date.setDate(date.getDate() + count)
+  return localDateFromDate(date)
+}
+
+export function addCalendarPeriod (value, every, unit) {
+  if (unit === 'day') return addCalendarDays(value, every)
+  if (unit === 'week') return addCalendarDays(value, every * 7)
+  const { year, month, day } = parseLocalDate(value)
+  const offset = unit === 'month' ? every : every * 12
+  const zeroBased = (month - 1) + offset
+  const targetYear = year + Math.floor(zeroBased / 12)
+  const targetMonth = ((zeroBased % 12) + 12) % 12 + 1
+  return clampedDate(targetYear, targetMonth, day)
+}
+
+function isoWeekday (value) {
+  return localDateObject(value).getDay() || 7
+}
+
+function nextFixedDate (pattern, threshold) {
+  if (pattern.kind === 'weekdays') {
+    let candidate = addCalendarDays(threshold, 1)
+    while (!pattern.weekdays.includes(isoWeekday(candidate))) candidate = addCalendarDays(candidate, 1)
+    return candidate
+  }
+
+  const { year, month } = parseLocalDate(threshold)
+  if (pattern.kind === 'month_day') {
+    const sameMonth = clampedDate(year, month, pattern.day)
+    if (sameMonth > threshold) return sameMonth
+    const nextMonth = month === 12
+      ? { year: year + 1, month: 1 }
+      : { year, month: month + 1 }
+    return clampedDate(nextMonth.year, nextMonth.month, pattern.day)
+  }
+
+  const sameYear = clampedDate(year, pattern.month, pattern.day)
+  return sameYear > threshold
+    ? sameYear
+    : clampedDate(year + 1, pattern.month, pattern.day)
+}
+
+export function nextScheduledDate (task, completionDate) {
+  const schedule = normalizeSchedule(task.schedule)
+  if (schedule?.type === 'one_off') return null
+  if (schedule?.type === 'periodic') {
+    return addCalendarPeriod(completionDate, schedule.every, schedule.unit)
+  }
+  const threshold = task.scheduledDate > completionDate ? task.scheduledDate : completionDate
+  return nextFixedDate(schedule.pattern, threshold)
+}
+
+export function taskUpdateForOutcome (task, outcome, completion) {
+  if (outcome === 'cancelled') return null
+
+  const schedule = normalizeSchedule(task.schedule)
+  if (schedule?.type === 'one_off') {
+    return { lastCompletedDate: completion.completedAt, status: 'archived' }
+  }
+
+  return {
+    lastCompletedDate: completion.completedAt,
+    scheduledDate: nextScheduledDate(task, completion.completionDate)
+  }
+}
+
+function joinNames (names) {
+  if (names.length < 2) return names[0]
+  if (names.length === 2) return names.join(' and ')
+  return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
+}
+
+export function scheduleSummary (schedule) {
+  const normalizedSchedule = normalizeSchedule(schedule)
+  if (!normalizedSchedule) return ''
+  if (normalizedSchedule.type === 'one_off') return 'Once'
+  if (normalizedSchedule.type === 'periodic') {
+    const { every, unit } = normalizedSchedule
+    return `About every ${every === 1 ? '' : every + ' '}${unit}${every === 1 ? '' : 's'} after completion`
+  }
+
+  const { pattern } = normalizedSchedule
+  if (pattern.kind === 'weekdays') {
+    return `Every ${joinNames(pattern.weekdays.map(day => WEEKDAY_NAMES[day - 1]))}`
+  }
+  if (pattern.kind === 'month_day') return `Monthly on day ${pattern.day}`
+  return `Every year on ${MONTH_NAMES[pattern.month - 1]} ${pattern.day}`
+}
+
+export function formatScheduledDate (value, locales) {
+  const parts = parseLocalDate(value)
+  return parts
+    ? new Date(parts.year, parts.month - 1, parts.day, 12).toLocaleDateString(locales)
+    : ''
 }
 
 function normalizeFixedPattern (pattern) {
