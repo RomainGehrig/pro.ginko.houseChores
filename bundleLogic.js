@@ -43,7 +43,13 @@ export function buildSessionDraft (proposal, startTime) {
     taskBundle: proposal.tasks.map(task => task._id),
     startTime,
     endTime: null,
-    status: 'active'
+    status: 'active',
+    accumulatedActiveMs: 0,
+    activeStartedAt: startTime,
+    checkpointElapsedMs: 0,
+    pausedAt: null,
+    unassignedDurationMs: 0,
+    pendingAddition: null
   }
 }
 
