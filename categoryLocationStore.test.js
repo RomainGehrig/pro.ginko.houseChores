@@ -154,7 +154,7 @@ test('initialization merges metadata-only default creates before a failed refres
   assert.match(snapshot.error, /category refresh unavailable/)
 })
 
-test('blocks category mutations when failed seeding leaves the cache incomplete', async () => {
+test('blocks category mutations when empty-message seed failures leave the cache incomplete', async () => {
   const persistedCategories = []
   let categoryListCalls = 0
   let nextUserCategoryId = 0
@@ -162,7 +162,7 @@ test('blocks category mutations when failed seeding leaves the cache incomplete'
     listCategories: async () => {
       categoryListCalls++
       if (categoryListCalls === 1) return []
-      throw new Error('category refresh unavailable')
+      throw new Error()
     },
     createCategory: async (data, options = {}) => {
       const id = options.dataObjectId || `category-user-${++nextUserCategoryId}`
@@ -170,7 +170,7 @@ test('blocks category mutations when failed seeding leaves the cache incomplete'
       const existing = persistedCategories.find(category => category._id === id)
       if (existing) Object.assign(existing, record)
       else persistedCategories.push(record)
-      if (options.upsert) throw new Error('seed response lost')
+      if (options.upsert) throw new Error()
       return clone(record)
     },
     updateCategory: async () => { throw new Error('unexpected category update') },
@@ -193,26 +193,19 @@ test('blocks category mutations when failed seeding leaves the cache incomplete'
   }
 
   assert.deepEqual({
-    initializedCategories: initialized.categories,
+    initializedNames: initialized.categories.map(category => category.normalizedName),
     readiness: initialized.readiness,
     categoryError: initialized.errors.categories,
     mutationError,
-    persistedCategories,
-    finalCategories: store.getSnapshot().categories
+    persistedNames: persistedCategories.map(category => category.normalizedName),
+    finalNames: store.getSnapshot().categories.map(category => category.normalizedName)
   }, {
-    initializedCategories: [],
+    initializedNames: [],
     readiness: { categories: false, locations: true },
-    categoryError: 'seed response lost\ncategory refresh unavailable',
+    categoryError: null,
     mutationError: 'Categories must load successfully before they can be changed.',
-    persistedCategories: [{
-      _id: 'category-default-admin',
-      name: 'Admin',
-      seedKey: 'admin',
-      displayOrder: 0,
-      normalizedName: 'admin',
-      status: 'active'
-    }],
-    finalCategories: []
+    persistedNames: ['admin'],
+    finalNames: []
   })
 })
 

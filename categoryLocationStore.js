@@ -66,10 +66,11 @@ export function createCategoryLocationStore ({ referenceData, taskData }) {
     return state
   }
 
-  const recordStageError = async (errors, key, operation) => {
+  const recordStageError = async (errors, stageFailures, key, operation) => {
     try {
       return await operation()
     } catch (error) {
+      stageFailures[key] = true
       errors[key] = joinMessages([errors[key], errorMessage(error)])
       return undefined
     }
@@ -161,6 +162,7 @@ export function createCategoryLocationStore ({ referenceData, taskData }) {
 
   const runInitialization = async () => {
     const errors = { categories: null, locations: null, tasks: null }
+    const stageFailures = { categories: false, tasks: false }
     const readiness = { categories: false, locations: false }
     let categoriesLoaded = false
     let tasksLoaded = false
@@ -194,11 +196,12 @@ export function createCategoryLocationStore ({ referenceData, taskData }) {
     if (categoriesLoaded && tasksLoaded) {
       const defaults = await recordStageError(
         errors,
+        stageFailures,
         'categories',
         async () => planDefaultCategories(state.categories)
       )
       if (defaults) {
-        await recordStageError(errors, 'categories', async () => {
+        await recordStageError(errors, stageFailures, 'categories', async () => {
           for (const adoption of defaults.adoptions) {
             const metadata = await referenceData.updateCategory(adoption.id, adoption.fields)
             state.categories = state.categories.map(category =>
@@ -206,7 +209,7 @@ export function createCategoryLocationStore ({ referenceData, taskData }) {
             )
           }
         })
-        await recordStageError(errors, 'categories', async () => {
+        await recordStageError(errors, stageFailures, 'categories', async () => {
           for (const category of defaults.creates) {
             const metadata = await referenceData.createCategory(category, {
               dataObjectId: stableCategoryObjectId('default', category.seedKey),
@@ -217,6 +220,7 @@ export function createCategoryLocationStore ({ referenceData, taskData }) {
         })
         const refreshedCategories = await recordStageError(
           errors,
+          stageFailures,
           'categories',
           () => referenceData.listCategories()
         )
@@ -225,12 +229,13 @@ export function createCategoryLocationStore ({ referenceData, taskData }) {
 
       const missingLegacyCategories = await recordStageError(
         errors,
+        stageFailures,
         'categories',
         async () => listMissingLegacyCategoryNames(state.categories, tasks)
       )
       let customCategoryCreated = false
       if (missingLegacyCategories) {
-        await recordStageError(errors, 'categories', async () => {
+        await recordStageError(errors, stageFailures, 'categories', async () => {
           let displayOrder = nextDisplayOrder(state.categories)
           for (const category of missingLegacyCategories) {
             const fields = {
@@ -252,6 +257,7 @@ export function createCategoryLocationStore ({ referenceData, taskData }) {
       if (customCategoryCreated) {
         const refreshedCategories = await recordStageError(
           errors,
+          stageFailures,
           'categories',
           () => referenceData.listCategories()
         )
@@ -260,11 +266,12 @@ export function createCategoryLocationStore ({ referenceData, taskData }) {
 
       const backfills = await recordStageError(
         errors,
+        stageFailures,
         'categories',
         async () => planLegacyCategoryBackfills(state.categories, tasks)
       )
       if (backfills) {
-        await recordStageError(errors, 'tasks', async () => {
+        await recordStageError(errors, stageFailures, 'tasks', async () => {
           for (const backfill of backfills) {
             await taskData.updateTask(backfill.id, backfill.fields)
           }
@@ -272,7 +279,7 @@ export function createCategoryLocationStore ({ referenceData, taskData }) {
       }
     }
 
-    readiness.categories = categoriesLoaded && !errors.categories
+    readiness.categories = categoriesLoaded && !stageFailures.categories
     state = {
       ...state,
       initialized: true,
