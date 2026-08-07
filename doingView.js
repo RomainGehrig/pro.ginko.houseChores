@@ -7,6 +7,11 @@ import { findFillerTask } from './bundleLogic.js'
 import { formatTimer, formatDuration } from './helpers.js'
 import { buildDoingTaskHtml } from './taskPresentationLogic.js'
 import { createCompletionCoordinator } from './completionSaveLogic.js'
+import {
+  continueAfterCompletion,
+  endDoingSession,
+  retryCompletionForStage
+} from './doingCompletionLogic.js'
 import { localDateFromDate, taskUpdateForOutcome } from './scheduleLogic.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
 import { showView, setNavVisible } from './viewRouter.js'
@@ -109,13 +114,15 @@ async function handleCompletionResult(result) {
 
   const continuation = pendingContinuation
   if (!continuation) return
-  pendingContinuation = null
   usedTaskIds.push(continuation.task._id)
 
-  await maybeAddFillerTask(continuation.actualDuration, continuation.task.estimatedDuration)
-
-  state.currentBundleIndex += 1
-  renderCurrentTask()
+  await continueAfterCompletion({
+    offerFiller: () => maybeAddFillerTask(continuation.actualDuration, continuation.task.estimatedDuration),
+    reportFillerFailure: error => console.error('Could not offer a filler task after completion.', error),
+    advanceBundle: () => { state.currentBundleIndex += 1 },
+    renderNextTask: renderCurrentTask
+  })
+  pendingContinuation = null
 }
 
 function renderCompletionFailure(result) {
@@ -131,13 +138,14 @@ function renderCompletionFailure(result) {
     const endSessionButton = document.getElementById('endSessionBtn')
     if (endSessionButton) endSessionButton.disabled = true
 
-    const retryResult = result.stage === 'execution'
-      ? await completionCoordinator.complete({
-          execution: pendingContinuation.execution,
-          taskId: pendingContinuation.task._id,
-          taskUpdate: pendingContinuation.taskUpdate
-        })
-      : await completionCoordinator.retryTaskUpdate()
+    const retryResult = await retryCompletionForStage(result.stage, {
+      retryExecution: () => completionCoordinator.complete({
+        execution: pendingContinuation.execution,
+        taskId: pendingContinuation.task._id,
+        taskUpdate: pendingContinuation.taskUpdate
+      }),
+      retryTaskUpdate: completionCoordinator.retryTaskUpdate
+    })
     await handleCompletionResult(retryResult)
   })
   status.appendChild(retryButton)
@@ -158,17 +166,18 @@ async function maybeAddFillerTask(actualDuration, estimatedDuration) {
 }
 
 async function endSession() {
-  if (completionCoordinator.hasPendingTaskUpdate()) {
-    const shouldEnd = confirm('The completion is recorded, but the schedule was not updated and will need manual correction. End session anyway?')
-    if (!shouldEnd) return
-    completionCoordinator.discardPendingTaskUpdate()
-  }
-
-  pendingContinuation = null
   clearInterval(timerInterval)
-  await updateSession(state.currentSession._id, { endTime: Date.now(), status: 'completed' })
-  setNavVisible('doing', false)
-  setNavVisible('review', true)
-  showView('review')
-  await startReview()
+  await endDoingSession({
+    hasPendingTaskUpdate: completionCoordinator.hasPendingTaskUpdate,
+    confirmDiscard: () => confirm('The completion is recorded, but the schedule was not updated and will need manual correction. End session anyway?'),
+    saveSession: () => updateSession(state.currentSession._id, { endTime: Date.now(), status: 'completed' }),
+    discardPendingTaskUpdate: completionCoordinator.discardPendingTaskUpdate,
+    clearPendingContinuation: () => { pendingContinuation = null },
+    showReview: async () => {
+      setNavVisible('doing', false)
+      setNavVisible('review', true)
+      showView('review')
+      await startReview()
+    }
+  })
 }
