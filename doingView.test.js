@@ -488,6 +488,35 @@ test('stale outcome renders an interrupted authoritative aggregate without write
   })
 })
 
+test('stale outcome applies a paused authoritative aggregate without writes', async () => {
+  const task1 = task('task-1')
+  const session = {
+    _id: 'session-1', status: 'active', startTime: 10000,
+    taskBundle: ['task-1'], timeBudgetMinutes: 15,
+    accumulatedActiveMs: 0, activeStartedAt: 10000, checkpointElapsedMs: 0
+  }
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [task1],
+    bundle: [task1]
+  }, async ({ document, persistence }) => {
+    const staleDone = document.outcomeControl('task-1', 'done')
+    persistence.patchSession({
+      status: 'paused', accumulatedActiveMs: 9000,
+      activeStartedAt: null, pausedAt: 19000
+    })
+
+    await document.dispatchStaleControl(staleDone)
+
+    assert.equal(persistence.executionCalls, 0)
+    assert.equal(persistence.taskUpdates.length, 0)
+    assert.equal(persistence.sessionUpdateCalls, 0)
+    assert.equal(state.currentSession.status, 'paused')
+    assert.equal(document.control('doingDecisionPanel').hidden, false)
+  })
+})
+
 test('stale Pause applies completed state without a session write', async () => {
   const task1 = task('task-1')
   const session = {
@@ -543,6 +572,35 @@ test('stale Conclude renders interrupted state without a session write', async (
       document.control('doingContent').children[0].textContent,
       /superseded by newer unfinished work/
     )
+  })
+})
+
+test('stale Conclude applies a resumed authoritative session without a write', async () => {
+  const task1 = task('task-1')
+  const session = {
+    _id: 'session-1', status: 'paused', startTime: 10000,
+    taskBundle: ['task-1'], timeBudgetMinutes: 15,
+    accumulatedActiveMs: 9000, activeStartedAt: null,
+    pausedAt: 19000, checkpointElapsedMs: 0
+  }
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [task1],
+    bundle: [task1]
+  }, async ({ document, persistence, clock }) => {
+    clock.setNow(40000)
+    persistence.patchSession({
+      status: 'active', activeStartedAt: 30000, pausedAt: null
+    })
+
+    await document.clickControl('concludeSessionBtn')
+
+    assert.equal(persistence.sessionUpdateCalls, 0)
+    assert.equal(persistence.session.status, 'active')
+    assert.equal(persistence.session.activeStartedAt, 30000)
+    assert.equal(state.currentSession.status, 'active')
+    assert.equal(document.control('doingDecisionPanel').hidden, true)
   })
 })
 

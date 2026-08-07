@@ -40,7 +40,7 @@ test('doing markup renders all unresolved task actions and escapes names', () =>
   assert.doesNotMatch(markup, /<img/)
 })
 
-test('resolved and unavailable cards remain visible in paused state', () => {
+test('resolved and unavailable cards remain visible without outcome controls while paused', () => {
   const markup = buildDoingSessionHtml({
     status: 'paused', timeBudgetMinutes: 15
   }, [
@@ -49,7 +49,7 @@ test('resolved and unavailable cards remain visible in paused state', () => {
   ], [{ taskId: 't1', outcome: 'done', rawDurationMs: 5000 }], [])
   assert.match(markup, /data-task-id="t1"[\s\S]*Done · 00:05/)
   assert.match(markup, /data-task-id="missing"[\s\S]*Unavailable task/)
-  assert.match(markup, /data-task-id="missing"[\s\S]*data-outcome="cancelled"/)
+  assert.doesNotMatch(markup, /data-outcome=/)
   assert.match(markup, /id="doingDecisionPanel"/)
   assert.match(markup, />Conclude</)
   assert.match(markup, />Continue</)

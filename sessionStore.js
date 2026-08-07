@@ -151,7 +151,7 @@ export function createSessionStore ({
 
   async function conclude (sessionId, atMs = now()) {
     const aggregate = await refresh(sessionId, atMs)
-    if (terminal(aggregate.session)) return aggregate
+    if (aggregate.session.status !== 'paused') return aggregate
     const fields = conclusionFields(aggregate.session, aggregate.executions, atMs)
     await updateSessionRecord(sessionId, fields)
     return { ...aggregate, session: { ...aggregate.session, ...fields } }

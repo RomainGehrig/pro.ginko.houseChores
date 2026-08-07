@@ -41,13 +41,16 @@ const executionSeconds = execution => Math.max(0,
 
 export function buildDoingSessionHtml (session, bundle, executions, categories = []) {
   const executionByTaskId = new Map(executions.map(execution => [execution.taskId, execution]))
+  const active = session?.status === 'active'
   const tasksHtml = bundle.map(task => {
     const execution = executionByTaskId.get(task._id)
     const categoryName = resolveTaskCategoryName(task, categories)
     const resultHtml = execution
       ? '<div class="doing-task-result">' + escapeHtml(outcomeLabel(execution.outcome)) +
         ' \u00b7 ' + formatTimer(executionSeconds(execution)) + '</div>'
-      : '<div class="doing-task-actions">' + outcomeActionsHtml(task) + '</div>'
+      : active
+        ? '<div class="doing-task-actions">' + outcomeActionsHtml(task) + '</div>'
+        : ''
     return '<article class="doing-task' + (execution ? ' is-resolved' : '') +
       '" data-task-id="' + escapeHtml(task._id) + '">' +
         '<div class="task-name">' + escapeHtml(String(task?.name ?? '')) + '</div>' +

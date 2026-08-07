@@ -628,6 +628,27 @@ test('conclude stores active time not assigned to an execution', async () => {
   assert.equal(aggregate.session.unassignedDurationMs, 5000)
 })
 
+test('conclude applies a refreshed active session without writing', async () => {
+  const session = {
+    _id: 's1', status: 'active', startTime: 1000, taskBundle: ['t1'],
+    accumulatedActiveMs: 9000, activeStartedAt: 20000,
+    checkpointElapsedMs: 0, pausedAt: null
+  }
+  const updates = []
+  const store = createSessionStore({
+    getSession: async () => structuredClone(session),
+    listExecutions: async () => [],
+    listTasks: async () => [{ _id: 't1', name: 'Sink', status: 'active' }],
+    updateSessionRecord: async (id, fields) => updates.push({ id, fields })
+  })
+
+  const aggregate = await store.conclude('s1', 30000)
+
+  assert.equal(aggregate.session.status, 'active')
+  assert.equal(aggregate.session.activeStartedAt, 20000)
+  assert.deepEqual(updates, [])
+})
+
 test('refresh still normalizes unfinished legacy sessions', async () => {
   const cases = [{
     status: 'active',
