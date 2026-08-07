@@ -330,13 +330,16 @@ test('stale outcome applies a completed authoritative aggregate without writes',
   }, async ({ document, persistence, clock }) => {
     clock.setNow(70000)
     persistence.patchSession({
-      status: 'completed', endTime: 60000, activeStartedAt: null
+      status: 'completed', endTime: 60000,
+      accumulatedActiveMs: undefined, activeStartedAt: undefined,
+      checkpointElapsedMs: undefined
     })
 
     await document.clickOutcome('task-1', 'done')
 
     assert.equal(persistence.executionCalls, 0)
     assert.equal(persistence.taskUpdates.length, 0)
+    assert.equal(persistence.sessionUpdateCalls, 0)
     assert.equal(persistence.session.status, 'completed')
     assert.equal(state.currentSession.status, 'completed')
     assert.equal(document.control('view-review').style.display, 'block')
@@ -358,13 +361,16 @@ test('stale outcome renders an interrupted authoritative aggregate without write
   }, async ({ document, persistence, clock }) => {
     clock.setNow(70000)
     persistence.patchSession({
-      status: 'interrupted', endTime: 60000, activeStartedAt: null
+      status: 'interrupted', endTime: 60000,
+      accumulatedActiveMs: undefined, activeStartedAt: undefined,
+      checkpointElapsedMs: undefined
     })
 
     await document.clickOutcome('task-1', 'done')
 
     assert.equal(persistence.executionCalls, 0)
     assert.equal(persistence.taskUpdates.length, 0)
+    assert.equal(persistence.sessionUpdateCalls, 0)
     assert.equal(persistence.session.status, 'interrupted')
     assert.equal(state.currentSession.status, 'interrupted')
     assert.match(
@@ -388,7 +394,9 @@ test('stale Pause applies completed state without a session write', async () => 
     bundle: [task1]
   }, async ({ document, persistence }) => {
     persistence.patchSession({
-      status: 'completed', endTime: 60000, activeStartedAt: null
+      status: 'completed', endTime: 60000,
+      accumulatedActiveMs: undefined, activeStartedAt: undefined,
+      checkpointElapsedMs: undefined
     })
 
     await document.clickControl('pauseSessionBtn')
@@ -413,7 +421,11 @@ test('stale Conclude renders interrupted state without a session write', async (
     persistedTasks: [task1],
     bundle: [task1]
   }, async ({ document, persistence }) => {
-    persistence.patchSession({ status: 'interrupted', endTime: 20000 })
+    persistence.patchSession({
+      status: 'interrupted', endTime: 20000,
+      accumulatedActiveMs: undefined, activeStartedAt: undefined,
+      checkpointElapsedMs: undefined
+    })
 
     await document.clickControl('concludeSessionBtn')
 

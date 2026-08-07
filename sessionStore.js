@@ -27,27 +27,30 @@ export function createSessionStore ({
 } = {}) {
   async function hydrate (session, nowMs) {
     const executions = await listExecutions(session._id)
-    const normalize = normalizationFields(session, executions, nowMs)
-    let repaired = { ...session, ...normalize }
-    if (Object.keys(normalize).length) await updateSessionRecord(session._id, normalize)
+    let repaired = { ...session }
+    if (!terminal(session)) {
+      const normalize = normalizationFields(session, executions, nowMs)
+      repaired = { ...repaired, ...normalize }
+      if (Object.keys(normalize).length) await updateSessionRecord(session._id, normalize)
 
-    const resolved = resolvedTaskIds(executions)
-    const allResolved = repaired.taskBundle?.length > 0 &&
-      repaired.taskBundle.every(taskId => resolved.has(taskId))
-    if (repaired.status === 'active' && allResolved) {
-      const finalExecution = [...executions].sort((left, right) =>
-        Number(right.endTime || 0) - Number(left.endTime || 0)
-      )[0]
-      const atMs = Number(finalExecution.endTime)
-      const pause = {
-        ...pauseFields(repaired, atMs),
-        checkpointElapsedMs: Math.max(
-          Number(repaired.checkpointElapsedMs || 0),
-          Number(finalExecution.activeElapsedMs || 0)
-        )
+      const resolved = resolvedTaskIds(executions)
+      const allResolved = repaired.taskBundle?.length > 0 &&
+        repaired.taskBundle.every(taskId => resolved.has(taskId))
+      if (repaired.status === 'active' && allResolved) {
+        const finalExecution = [...executions].sort((left, right) =>
+          Number(right.endTime || 0) - Number(left.endTime || 0)
+        )[0]
+        const atMs = Number(finalExecution.endTime)
+        const pause = {
+          ...pauseFields(repaired, atMs),
+          checkpointElapsedMs: Math.max(
+            Number(repaired.checkpointElapsedMs || 0),
+            Number(finalExecution.activeElapsedMs || 0)
+          )
+        }
+        await updateSessionRecord(session._id, pause)
+        repaired = { ...repaired, ...pause }
       }
-      await updateSessionRecord(session._id, pause)
-      repaired = { ...repaired, ...pause }
     }
 
     const tasks = await listTasks(repaired.taskBundle || [])

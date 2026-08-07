@@ -140,17 +140,45 @@ test('conclude stores active time not assigned to an execution', async () => {
   assert.equal(aggregate.session.unassignedDurationMs, 5000)
 })
 
-test('pause and conclude return terminal authoritative sessions without writes', async () => {
+test('refresh still normalizes unfinished legacy sessions', async () => {
+  const cases = [{
+    status: 'active',
+    fields: { accumulatedActiveMs: 0, activeStartedAt: 1000, checkpointElapsedMs: 0 }
+  }, {
+    status: 'paused',
+    fields: { accumulatedActiveMs: 9000, activeStartedAt: null, checkpointElapsedMs: 0 }
+  }]
+
+  for (const { status, fields } of cases) {
+    const updates = []
+    const store = createSessionStore({
+      getSession: async () => ({
+        _id: 's1', status, startTime: 1000, taskBundle: ['t1']
+      }),
+      listExecutions: async () => [],
+      listTasks: async () => [{ _id: 't1', name: 'Sink' }],
+      updateSessionRecord: async (id, updateFields) => updates.push({ id, fields: updateFields })
+    })
+
+    const aggregate = await store.refresh('s1', 10000)
+
+    assert.deepEqual(updates, [{ id: 's1', fields }])
+    assert.equal(aggregate.session.status, status)
+  }
+})
+
+test('refresh, pause, and conclude hydrate legacy terminal sessions without writes', async () => {
   for (const status of ['completed', 'interrupted']) {
-    for (const method of ['pause', 'conclude']) {
+    for (const method of ['refresh', 'pause', 'conclude']) {
       const updates = []
       const session = {
-        _id: 's1', status, startTime: 1000, taskBundle: ['t1'],
-        accumulatedActiveMs: 9000, activeStartedAt: null, checkpointElapsedMs: 0
+        _id: 's1', status, startTime: 1000, endTime: 9000, taskBundle: ['t1']
       }
       const store = createSessionStore({
         getSession: async () => ({ ...session }),
-        listExecutions: async () => [],
+        listExecutions: async () => [{
+          taskId: 't1', endTime: 8000, rawDurationMs: 7000, activeElapsedMs: 7000
+        }],
         listTasks: async () => [{ _id: 't1', name: 'Sink' }],
         updateSessionRecord: async (id, fields) => updates.push({ id, fields })
       })
@@ -158,6 +186,8 @@ test('pause and conclude return terminal authoritative sessions without writes',
       const aggregate = await store[method]('s1', 10000)
 
       assert.equal(aggregate.session.status, status)
+      assert.equal(aggregate.bundle[0].name, 'Sink')
+      assert.equal(aggregate.executions.length, 1)
       assert.equal(updates.length, 0, `${method} wrote a ${status} session`)
     }
   }
