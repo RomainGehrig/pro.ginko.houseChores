@@ -266,6 +266,12 @@
   font-size: 12px;
 }
 
+.schedule-date-hint {
+  color: #666;
+  font-size: 12px;
+  margin: 0;
+}
+
 .archived-badge {
   background: #eee;
   border-radius: 999px;

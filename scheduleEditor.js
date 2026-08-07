@@ -4,8 +4,10 @@
 import { escapeAttribute } from './categoryLocationView.js'
 import { escapeHtml } from './helpers.js'
 import {
+  localDateFromDate,
   normalizeSchedule,
   scheduleSummary,
+  suggestScheduledDate,
   validateScheduleInput
 } from './scheduleLogic.js'
 
@@ -60,18 +62,27 @@ function editorValues (root) {
   }
 }
 
-export function buildScheduleEditorModel (task = {}, useSuggestion = false) {
+export function buildScheduleEditorModel (
+  task = {},
+  useSuggestion = false,
+  today = localDateFromDate()
+) {
   const schedule = normalizeSchedule(useSuggestion ? task.suggestedSchedule : task.schedule) ||
     normalizeSchedule(task.schedule) || { type: 'one_off' }
+  const hasScheduledDate = task.scheduledDate != null && String(task.scheduledDate) !== ''
   return {
-    scheduledDate: task.scheduledDate == null ? '' : String(task.scheduledDate),
-    schedule
+    scheduledDate: hasScheduledDate
+      ? String(task.scheduledDate)
+      : (suggestScheduledDate(schedule, today) || ''),
+    schedule,
+    dateOwner: hasScheduledDate ? 'user' : 'app'
   }
 }
 
 export function scheduleEditorHtml (model = {}) {
   const schedule = normalizeSchedule(model.schedule) || { type: 'one_off' }
   const scheduledDate = model.scheduledDate == null ? '' : String(model.scheduledDate)
+  const dateOwner = model.dateOwner === 'app' ? 'app' : 'user'
   const periodic = schedule.type === 'periodic'
   const fixed = schedule.type === 'fixed'
   const pattern = fixed ? schedule.pattern : { kind: 'weekdays', weekdays: [] }
@@ -88,9 +99,11 @@ export function scheduleEditorHtml (model = {}) {
       checked(weekdays, day) + '> ' + name + '</label>'
   }).join('')
 
-  return '<section class="schedule-editor">' +
+  return '<section class="schedule-editor" data-schedule-date-owner="' + dateOwner + '">' +
     '<label class="schedule-row">Scheduled date <input type="date" name="scheduledDate" aria-label="Scheduled date" data-schedule-field="date" value="' +
       escapeAttribute(scheduledDate) + '"></label>' +
+    '<p class="schedule-date-hint"' + (fixed ? '' : ' hidden') +
+      '>Suggested from the calendar; choose any date.</p>' +
     '<label class="schedule-row">Repeats <select name="scheduleType" aria-label="Repeat type" data-schedule-field="type">' +
       '<option value="one_off"' + selected(schedule.type, 'one_off') + '>Once</option>' +
       '<option value="periodic"' + selected(schedule.type, 'periodic') + '>Flexible cadence</option>' +
@@ -122,18 +135,19 @@ export function scheduleEditorHtml (model = {}) {
   '</section>'
 }
 
-export function scheduleFromEditorValues (values, options) {
+export function scheduleFromEditorValues (values) {
   return validateScheduleInput({
     scheduledDate: values?.scheduledDate,
     schedule: scheduleFromValues(values)
-  }, options)
+  })
 }
 
-export function readScheduleEditor (root, options) {
-  return scheduleFromEditorValues(editorValues(root), options)
+export function readScheduleEditor (root) {
+  return scheduleFromEditorValues(editorValues(root))
 }
 
-export function syncScheduleEditor (root) {
+export function syncScheduleEditor (root, options = {}) {
+  if (options.userEditedDate) root.dataset.scheduleDateOwner = 'user'
   const values = editorValues(root)
   const periodic = root.querySelector('[data-schedule-group="periodic"]')
   const fixed = root.querySelector('[data-schedule-group="fixed"]')
@@ -149,6 +163,19 @@ export function syncScheduleEditor (root) {
     if (group) group.hidden = values.type !== 'fixed' || values.fixedKind !== kind
   }
 
+  const schedule = scheduleFromValues(values)
+  const dateInput = root.querySelector('[data-schedule-field="date"]')
+  if (root.dataset.scheduleDateOwner !== 'user' && dateInput) {
+    const suggestion = suggestScheduledDate(
+      schedule,
+      options.today || localDateFromDate()
+    )
+    if (suggestion) dateInput.value = suggestion
+  }
+
+  const dateHint = root.querySelector('.schedule-date-hint')
+  if (dateHint) dateHint.hidden = schedule?.type !== 'fixed'
+
   const summary = root.querySelector('.schedule-summary')
-  if (summary) summary.textContent = scheduleSummary(scheduleFromValues(values))
+  if (summary) summary.textContent = scheduleSummary(schedule)
 }

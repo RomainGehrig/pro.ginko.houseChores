@@ -8,18 +8,30 @@ import {
   syncScheduleEditor
 } from './scheduleEditor.js'
 
-test('uses an AI rule suggestion without inventing a date', () => {
+test('keeps a blank app-managed date for a flexible AI rule', () => {
   assert.deepEqual(buildScheduleEditorModel({
     scheduledDate: null,
     schedule: { type: 'one_off' },
     suggestedSchedule: { type: 'periodic', every: 2, unit: 'week' }
-  }, true), {
+  }, true, '2026-08-07'), {
     scheduledDate: '',
-    schedule: { type: 'periodic', every: 2, unit: 'week' }
+    schedule: { type: 'periodic', every: 2, unit: 'week' },
+    dateOwner: 'app'
   })
 })
 
-test('prefills an AI annual rule while keeping the user-owned date empty', () => {
+test('keeps a blank app-managed date for a one-off task', () => {
+  assert.deepEqual(buildScheduleEditorModel({
+    scheduledDate: null,
+    schedule: { type: 'one_off' }
+  }, false, '2026-08-07'), {
+    scheduledDate: '',
+    schedule: { type: 'one_off' },
+    dateOwner: 'app'
+  })
+})
+
+test('infers an app-managed date from an AI fixed calendar rule', () => {
   assert.deepEqual(buildScheduleEditorModel({
     scheduledDate: null,
     schedule: { type: 'one_off' },
@@ -27,12 +39,30 @@ test('prefills an AI annual rule while keeping the user-owned date empty', () =>
       type: 'fixed',
       pattern: { kind: 'annual_date', month: 2, day: 29 }
     }
-  }, true), {
-    scheduledDate: '',
+  }, true, '2026-08-07'), {
+    scheduledDate: '2027-02-28',
+    schedule: {
+      type: 'fixed',
+      pattern: { kind: 'annual_date', month: 2, day: 29 }
+    },
+    dateOwner: 'app'
+  })
+})
+
+test('treats an existing scheduled date as user-managed', () => {
+  assert.deepEqual(buildScheduleEditorModel({
+    scheduledDate: '2026-08-08',
     schedule: {
       type: 'fixed',
       pattern: { kind: 'annual_date', month: 2, day: 29 }
     }
+  }, false, '2026-08-07'), {
+    scheduledDate: '2026-08-08',
+    schedule: {
+      type: 'fixed',
+      pattern: { kind: 'annual_date', month: 2, day: 29 }
+    },
+    dateOwner: 'user'
   })
 })
 
@@ -47,6 +77,9 @@ test('renders progressive controls and a human summary', () => {
   assert.match(markup, /Fixed calendar/)
   assert.match(markup, /Every Sunday/)
   assert.match(markup, /data-schedule-group="fixed"/)
+  assert.match(markup, /data-schedule-date-owner="user"/)
+  assert.match(markup, /class="schedule-date-hint"/)
+  assert.match(markup, /Suggested from the calendar; choose any date\./)
 })
 
 test('names every schedule form control for browser form semantics', () => {
@@ -95,7 +128,7 @@ test('converts form values into a validated schedule', () => {
     type: 'periodic',
     every: '2',
     unit: 'week'
-  }, { requirePatternMatch: true }), {
+  }), {
     ok: true,
     scheduledDate: '2026-08-21',
     schedule: { type: 'periodic', every: 2, unit: 'week' }
@@ -116,14 +149,14 @@ test('serializes one-off, monthly, and annual editor flows', () => {
     type: 'fixed',
     fixedKind: 'month_day',
     monthDay: '31'
-  }, { requirePatternMatch: true }).ok, true)
+  }).ok, true)
   assert.equal(scheduleFromEditorValues({
-    scheduledDate: '2026-02-28',
+    scheduledDate: '2026-08-08',
     type: 'fixed',
     fixedKind: 'annual_date',
-    annualMonth: '2',
-    annualDay: '29'
-  }, { requirePatternMatch: true }).ok, true)
+    annualMonth: '7',
+    annualDay: '1'
+  }).ok, true)
 })
 
 test('rejects an unknown fixed pattern instead of treating it as annual', () => {
@@ -154,10 +187,12 @@ function scheduleRoot (values) {
     ['[data-schedule-fixed-group="weekdays"]', { hidden: false }],
     ['[data-schedule-fixed-group="month_day"]', { hidden: false }],
     ['[data-schedule-fixed-group="annual_date"]', { hidden: false }],
+    ['.schedule-date-hint', { hidden: false }],
     ['.schedule-summary', { textContent: '' }]
   ])
   const weekdays = values.weekdays.map(value => ({ value }))
   return {
+    dataset: { scheduleDateOwner: values.dateOwner || 'app' },
     querySelector: selector => nodes.get(selector) || null,
     querySelectorAll: selector => selector === '[data-schedule-field="weekday"]:checked' ? weekdays : [],
     node: selector => nodes.get(selector)
@@ -177,7 +212,7 @@ test('reads the stable controls into a validated fixed schedule', () => {
     annualDay: '1'
   })
 
-  assert.deepEqual(readScheduleEditor(root, { requirePatternMatch: true }), {
+  assert.deepEqual(readScheduleEditor(root), {
     ok: true,
     scheduledDate: '2026-08-16',
     schedule: { type: 'fixed', pattern: { kind: 'weekdays', weekdays: [7] } }
@@ -186,7 +221,8 @@ test('reads the stable controls into a validated fixed schedule', () => {
 
 test('syncs visible schedule groups and summary without changing values', () => {
   const root = scheduleRoot({
-    scheduledDate: '2026-08-21',
+    scheduledDate: '',
+    dateOwner: 'app',
     type: 'periodic',
     every: '2',
     unit: 'week',
@@ -204,6 +240,72 @@ test('syncs visible schedule groups and summary without changing values', () => 
   assert.equal(root.node('[data-schedule-fixed-group="weekdays"]').hidden, true)
   assert.equal(root.node('.schedule-summary').textContent, 'About every 2 weeks after completion')
   assert.equal(root.node('[data-schedule-field="every"]').value, '2')
+  assert.equal(root.node('[data-schedule-field="date"]').value, '')
+})
+
+test('updates a fixed date while it remains app-managed', () => {
+  const root = scheduleRoot({
+    scheduledDate: '',
+    dateOwner: 'app',
+    type: 'fixed',
+    every: '1',
+    unit: 'week',
+    fixedKind: 'annual_date',
+    weekdays: [],
+    monthDay: '1',
+    annualMonth: '2',
+    annualDay: '29'
+  })
+
+  syncScheduleEditor(root, { today: '2026-08-07' })
+  assert.equal(root.node('[data-schedule-field="date"]').value, '2027-02-28')
+
+  root.node('[data-schedule-field="annual-month"]').value = '12'
+  root.node('[data-schedule-field="annual-day"]').value = '25'
+  syncScheduleEditor(root, { today: '2026-08-07' })
+  assert.equal(root.node('[data-schedule-field="date"]').value, '2026-12-25')
+})
+
+test('preserves a manually edited date across later fixed rule changes', () => {
+  const root = scheduleRoot({
+    scheduledDate: '2027-02-28',
+    dateOwner: 'app',
+    type: 'fixed',
+    every: '1',
+    unit: 'week',
+    fixedKind: 'annual_date',
+    weekdays: [],
+    monthDay: '1',
+    annualMonth: '2',
+    annualDay: '29'
+  })
+
+  root.node('[data-schedule-field="date"]').value = '2026-08-08'
+  syncScheduleEditor(root, { today: '2026-08-07', userEditedDate: true })
+  root.node('[data-schedule-field="annual-month"]').value = '12'
+  root.node('[data-schedule-field="annual-day"]').value = '25'
+  syncScheduleEditor(root, { today: '2026-08-07' })
+
+  assert.equal(root.dataset.scheduleDateOwner, 'user')
+  assert.equal(root.node('[data-schedule-field="date"]').value, '2026-08-08')
+})
+
+test('waits on an invalid fixed rule without clearing an app-managed date', () => {
+  const root = scheduleRoot({
+    scheduledDate: '2026-08-08',
+    dateOwner: 'app',
+    type: 'fixed',
+    every: '1',
+    unit: 'week',
+    fixedKind: 'annual_date',
+    weekdays: [],
+    monthDay: '1',
+    annualMonth: '2',
+    annualDay: '99'
+  })
+
+  syncScheduleEditor(root, { today: '2026-08-07' })
+  assert.equal(root.node('[data-schedule-field="date"]').value, '2026-08-08')
 })
 
 test('validation preserves invalid annual values for correction', () => {
@@ -219,7 +321,7 @@ test('validation preserves invalid annual values for correction', () => {
     annualDay: '99'
   })
 
-  assert.equal(readScheduleEditor(root, { requirePatternMatch: true }).ok, false)
+  assert.equal(readScheduleEditor(root).ok, false)
   assert.equal(root.node('[data-schedule-field="annual-month"]').value, '2')
   assert.equal(root.node('[data-schedule-field="annual-day"]').value, '99')
 })
