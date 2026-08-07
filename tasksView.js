@@ -16,6 +16,12 @@ import {
   buildEnrichmentAvailability
 } from './taskPresentationLogic.js'
 import { saveTaskWithRefresh } from './taskSaveLogic.js'
+import {
+  buildScheduleEditorModel,
+  readScheduleEditor,
+  scheduleEditorHtml,
+  syncScheduleEditor
+} from './scheduleEditor.js'
 
 let tasksCache = []
 let editingTaskId = null
@@ -25,6 +31,8 @@ export async function initTasksView() {
   document.getElementById('addTasksBtn').addEventListener('click', handleAddTasks)
   document.getElementById('enrichBtn').addEventListener('click', handleEnrich)
   document.getElementById('proposedCards').addEventListener('click', handleProposedClick)
+  document.getElementById('proposedCards').addEventListener('change', handleProposedScheduleChange)
+  document.getElementById('proposedCards').addEventListener('input', handleProposedScheduleChange)
   document.getElementById('activeCards').addEventListener('click', handleActiveClick)
   categoryLocationStore.subscribe(renderTasks)
   await refreshTasksView()
@@ -79,7 +87,7 @@ async function handleEnrich() {
       await updateTask(proposed[i]._id, {
         suggestedCategory: s.category || null,
         suggestedDuration: s.estimatedDuration || null,
-        suggestedRecurrenceDays: s.recurrenceDays ?? null
+        suggestedSchedule: s.schedule
       })
     }
     statusEl.textContent = 'Suggestions ready - review below'
@@ -102,7 +110,6 @@ function proposedCardHtml(task, snapshot) {
   const model = buildProposedTaskEditorModel(task, snapshot)
   const categoryId = model.categoryId
   const duration = task.suggestedDuration || task.estimatedDuration || ''
-  const recurrence = task.suggestedRecurrenceDays ?? task.recurrence ?? ''
   const categoryOptions = model.categoryOptions.map(category =>
     '<option value="' + escapeAttribute(category._id) + '"' +
       (category._id === categoryId ? ' selected' : '') + '>' +
@@ -122,11 +129,16 @@ function proposedCardHtml(task, snapshot) {
       '<label>Category <select class="f-category" name="categoryId"><option value="">-</option>' + categoryOptions + '</select></label>' +
       '<fieldset class="f-locations"><legend>Locations</legend>' + locationOptions + '</fieldset>' +
       '<label>Duration (min) <input class="f-duration" name="estimatedDuration" type="number" min="1" value="' + escapeAttribute(duration) + '"></label>' +
-      '<label>Recurrence (days, blank = one-off) <input class="f-recurrence" name="recurrence" type="number" min="1" value="' + escapeAttribute(recurrence) + '"></label>' +
+      scheduleEditorHtml(buildScheduleEditorModel(task, true)) +
       '<button class="approve-btn">Approve</button>' +
       '<div class="task-card-error" role="alert"></div>' +
     '</div>'
   )
+}
+
+function handleProposedScheduleChange (evt) {
+  const editor = evt.target.closest('.schedule-editor')
+  if (editor) syncScheduleEditor(editor)
 }
 
 function referenceStateSuffix (reference) {
@@ -212,23 +224,19 @@ async function handleProposedClick(evt) {
   const categoryId = validateCategoryId(selectedCategoryId, categories, task.categoryId)
   const locationIds = sanitizeLocationIds(selectedLocationIds, locations, task.locationIds || [])
   const duration = Number(card.querySelector('.f-duration').value) || null
-  const recurrenceVal = card.querySelector('.f-recurrence').value
-  const recurrence = recurrenceVal ? Number(recurrenceVal) : null
-
-  const fields = {
-    categoryId,
-    category: resolveCategorySnapshotName(task, categoryId, categories),
-    locationIds,
-    estimatedDuration: duration,
-    recurrence,
-    suggestedCategory: null,
-    suggestedDuration: null,
-    suggestedRecurrenceDays: null,
-    status: recurrence ? 'approved_recurring' : 'active',
-    nextDueDate: Date.now()
-  }
   const errorElement = card.querySelector('.task-card-error')
   errorElement.textContent = ''
+  const scheduleResult = readScheduleEditor(card, { requirePatternMatch: true })
+  if (!scheduleResult.ok) {
+    errorElement.textContent = scheduleResult.message
+    return
+  }
+  const referenceFields = {
+    categoryId,
+    category: resolveCategorySnapshotName(task, categoryId, categories),
+    locationIds
+  }
+  const fields = buildApprovedTaskFields(task, referenceFields, duration, scheduleResult)
   setTaskCardBusy(card, true)
   try {
     const result = await saveTaskWithRefresh(
@@ -238,6 +246,19 @@ async function handleProposedClick(evt) {
     if (!result.ok) errorElement.textContent = result.message
   } finally {
     setTaskCardBusy(card, false)
+  }
+}
+
+export function buildApprovedTaskFields (task, referenceFields, duration, scheduleResult) {
+  return {
+    ...referenceFields,
+    estimatedDuration: duration,
+    scheduledDate: scheduleResult.scheduledDate,
+    schedule: scheduleResult.schedule,
+    suggestedCategory: null,
+    suggestedDuration: null,
+    suggestedSchedule: null,
+    status: scheduleResult.schedule.type === 'one_off' ? 'active' : 'approved_recurring'
   }
 }
 
