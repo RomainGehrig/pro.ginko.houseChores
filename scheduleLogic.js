@@ -79,8 +79,11 @@ export function scheduleMatchesDate (schedule, scheduledDate) {
     const weekday = new Date(date.year, date.month - 1, date.day, 12).getDay() || 7
     return pattern.weekdays.includes(weekday)
   }
-  if (pattern.kind === 'month_day') return pattern.day === date.day
-  return pattern.month === date.month && pattern.day === date.day
+  if (pattern.kind === 'month_day') {
+    return date.day === Math.min(pattern.day, daysInMonth(date.year, date.month))
+  }
+  return pattern.month === date.month &&
+    date.day === Math.min(pattern.day, daysInMonth(date.year, pattern.month))
 }
 
 export function validateScheduleInput (input = {}, options = {}) {

@@ -43,6 +43,20 @@ test('validates a fixed first date but allows a preserved current occurrence', (
   ).ok, true)
 })
 
+test('matches fixed calendar dates clamped to February', () => {
+  const monthly = { type: 'fixed', pattern: { kind: 'month_day', day: 31 } }
+  const annual = { type: 'fixed', pattern: { kind: 'annual_date', month: 2, day: 29 } }
+
+  assert.equal(scheduleMatchesDate(monthly, '2026-02-28'), true)
+  assert.equal(scheduleMatchesDate(monthly, '2024-02-29'), true)
+  assert.equal(scheduleMatchesDate(annual, '2026-02-28'), true)
+  assert.equal(scheduleMatchesDate(annual, '2024-02-29'), true)
+  assert.equal(validateScheduleInput(
+    { scheduledDate: '2026-02-28', schedule: annual },
+    { requirePatternMatch: true }
+  ).ok, true)
+})
+
 test('normalizes current local records without writing a migration', () => {
   assert.deepEqual(normalizeTaskSchedule({
     _id: 'legacy-recurring',
