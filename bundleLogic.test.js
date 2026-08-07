@@ -8,16 +8,20 @@ import {
 } from './bundleLogic.js'
 
 const tasks = [
-  { _id: 't1', category: 'Same label', categoryId: 'c1', estimatedDuration: 5, nextDueDate: 1 },
-  { _id: 't2', category: 'Same label', categoryId: 'c2', estimatedDuration: 5, nextDueDate: 2 }
+  { _id: 't1', categoryId: 'c1', estimatedDuration: 5, scheduledDate: '2026-08-20' },
+  { _id: 't2', categoryId: 'c2', estimatedDuration: 5, scheduledDate: '2026-08-10' }
 ]
+
+test('scheduled dates change priority without hiding future tasks', () => {
+  assert.deepEqual(buildBundle(tasks, 10, null).map(task => task._id), ['t2', 't1'])
+})
 
 test('bundle filters by stable category id', () => {
   assert.deepEqual(buildBundle(tasks, 10, 'c2').map(task => task._id), ['t2'])
 })
 
 test('unfiltered bundle still considers every task', () => {
-  assert.deepEqual(buildBundle(tasks, 10, null).map(task => task._id), ['t1', 't2'])
+  assert.deepEqual(buildBundle(tasks, 10, null).map(task => task._id), ['t2', 't1'])
 })
 
 test('filler selection uses the stable category id', () => {

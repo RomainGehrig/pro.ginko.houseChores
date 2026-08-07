@@ -1,23 +1,32 @@
-export const listAllTasks = () => freezr.query('tasks', {}, { sort: { _date_modified: -1 } })
+import { localDateFromDate, normalizeTaskSchedule } from './scheduleLogic.js'
 
-export const createTask = (name) => freezr.create('tasks', {
-  name,
-  category: null,
-  categoryId: null,
-  locationIds: [],
-  estimatedDuration: null,
-  recurrence: null,
-  lastCompletedDate: null,
-  nextDueDate: Date.now(),
-  status: 'proposed',
-  suggestedCategory: null,
-  suggestedDuration: null,
-  suggestedRecurrenceDays: null
-})
+export function buildNewTaskRecord (name) {
+  return {
+    name,
+    category: null,
+    categoryId: null,
+    locationIds: [],
+    estimatedDuration: null,
+    scheduledDate: null,
+    schedule: { type: 'one_off' },
+    lastCompletedDate: null,
+    status: 'proposed',
+    suggestedCategory: null,
+    suggestedDuration: null,
+    suggestedSchedule: null
+  }
+}
 
+export const listAllTasks = async () => {
+  const tasks = await freezr.query('tasks', {}, { sort: { _date_modified: -1 } })
+  const today = localDateFromDate(new Date())
+  return tasks.map(task => normalizeTaskSchedule(task, today))
+}
+
+export const createTask = name => freezr.create('tasks', buildNewTaskRecord(name))
 export const updateTask = (id, fields) => freezr.updateFields('tasks', id, fields)
 
-export const listTasksByIds = async (ids) => {
-  const all = await freezr.query('tasks', {}, { sort: { _date_modified: -1 } })
-  return all.filter(t => ids.includes(t._id))
+export const listTasksByIds = async ids => {
+  const all = await listAllTasks()
+  return all.filter(task => ids.includes(task._id))
 }

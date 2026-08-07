@@ -1,9 +1,9 @@
-export function prioritizeTasks(tasks, now = Date.now()) {
+export function prioritizeTasks(tasks) {
   return [...tasks].sort((a, b) => {
-    const aOverdue = (a.nextDueDate || 0) <= now
-    const bOverdue = (b.nextDueDate || 0) <= now
-    if (aOverdue !== bOverdue) return aOverdue ? -1 : 1
-    return (a.nextDueDate || 0) - (b.nextDueDate || 0)
+    if (!a.scheduledDate && !b.scheduledDate) return 0
+    if (!a.scheduledDate) return 1
+    if (!b.scheduledDate) return -1
+    return a.scheduledDate.localeCompare(b.scheduledDate)
   })
 }
 
