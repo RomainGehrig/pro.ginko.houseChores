@@ -63,6 +63,7 @@ test('declining pending-update discard leaves the session and retry state untouc
 
 test('failed session persistence retains the confirmed pending update for retry', async () => {
   const calls = []
+  let controlsDisabled = false
 
   await assert.rejects(endDoingSession({
     hasPendingTaskUpdate: () => true,
@@ -74,12 +75,63 @@ test('failed session persistence retains the confirmed pending update for retry'
       calls.push('save')
       throw new Error('session offline')
     },
+    setCompletionControlsDisabled: disabled => {
+      controlsDisabled = disabled
+      calls.push('controls:' + disabled)
+    },
     discardPendingTaskUpdate: () => calls.push('discard'),
     clearPendingContinuation: () => calls.push('clear'),
     showReview: async () => calls.push('review')
   }), /session offline/)
 
-  assert.deepEqual(calls, ['confirm', 'save'])
+  assert.equal(controlsDisabled, false)
+  assert.deepEqual(calls, ['confirm', 'controls:true', 'save', 'controls:false'])
+
+  await retryCompletionForStage('task_update', {
+    actionsBlocked: () => controlsDisabled,
+    retryExecution: async () => calls.push('execution'),
+    retryTaskUpdate: async () => calls.push('task_update')
+  })
+  assert.equal(calls.at(-1), 'task_update')
+})
+
+test('blocks completion retry while confirmed session persistence is pending', async () => {
+  const calls = []
+  let controlsDisabled = false
+  let finishSave
+  const savePending = new Promise(resolve => { finishSave = resolve })
+
+  const endOptions = {
+    actionsBlocked: () => controlsDisabled,
+    hasPendingTaskUpdate: () => true,
+    confirmDiscard: () => true,
+    saveSession: async () => {
+      calls.push('save')
+      await savePending
+    },
+    setCompletionControlsDisabled: disabled => { controlsDisabled = disabled },
+    discardPendingTaskUpdate: () => calls.push('discard'),
+    clearPendingContinuation: () => calls.push('clear'),
+    showReview: async () => calls.push('review')
+  }
+  const ending = endDoingSession(endOptions)
+  await Promise.resolve()
+  const duplicateEnding = endDoingSession(endOptions)
+
+  const retryResult = await retryCompletionForStage('task_update', {
+    actionsBlocked: () => controlsDisabled,
+    retryExecution: async () => calls.push('execution'),
+    retryTaskUpdate: async () => calls.push('task_update')
+  })
+
+  assert.equal(controlsDisabled, true)
+  assert.equal(retryResult, null)
+  assert.deepEqual(calls, ['save'])
+
+  finishSave()
+  await ending
+  assert.equal(await duplicateEnding, false)
+  assert.deepEqual(calls, ['save', 'discard', 'clear', 'review'])
 })
 
 test('confirmed discard happens only after session persistence succeeds', async () => {
@@ -91,11 +143,12 @@ test('confirmed discard happens only after session persistence succeeds', async 
       return true
     },
     saveSession: async () => calls.push('save'),
+    setCompletionControlsDisabled: disabled => calls.push('controls:' + disabled),
     discardPendingTaskUpdate: () => calls.push('discard'),
     clearPendingContinuation: () => calls.push('clear'),
     showReview: async () => calls.push('review')
   })
 
   assert.equal(ended, true)
-  assert.deepEqual(calls, ['confirm', 'save', 'discard', 'clear', 'review'])
+  assert.deepEqual(calls, ['confirm', 'controls:true', 'save', 'discard', 'clear', 'review', 'controls:false'])
 })

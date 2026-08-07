@@ -17,24 +17,39 @@ export async function continueAfterCompletion ({
   renderNextTask()
 }
 
-export function retryCompletionForStage (stage, { retryExecution, retryTaskUpdate }) {
+export function retryCompletionForStage (stage, {
+  actionsBlocked = () => false,
+  retryExecution,
+  retryTaskUpdate
+}) {
+  if (actionsBlocked()) return null
   return stage === 'execution' ? retryExecution() : retryTaskUpdate()
 }
 
 export async function endDoingSession ({
+  actionsBlocked = () => false,
   hasPendingTaskUpdate,
   confirmDiscard,
   saveSession,
+  setCompletionControlsDisabled = () => {},
   discardPendingTaskUpdate,
   clearPendingContinuation,
   showReview
 }) {
+  if (actionsBlocked()) return false
   const shouldDiscardPendingUpdate = hasPendingTaskUpdate()
   if (shouldDiscardPendingUpdate && !confirmDiscard()) return false
 
-  await saveSession()
+  setCompletionControlsDisabled(true)
+  try {
+    await saveSession()
+  } catch (error) {
+    setCompletionControlsDisabled(false)
+    throw error
+  }
   if (shouldDiscardPendingUpdate) discardPendingTaskUpdate()
   clearPendingContinuation()
   await showReview()
+  setCompletionControlsDisabled(false)
   return true
 }

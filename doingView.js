@@ -21,6 +21,7 @@ let timerInterval = null
 let taskStartTime = null
 let usedTaskIds = []
 let pendingContinuation = null
+let sessionSaveInFlight = false
 
 const completionCoordinator = createCompletionCoordinator({ createExecution, updateTask })
 
@@ -106,6 +107,14 @@ function setCompletionControlsDisabled(disabled) {
   }
 }
 
+function setSessionSaveControlsDisabled(disabled) {
+  sessionSaveInFlight = disabled
+  for (const id of ['retryCompletionBtn', 'endSessionBtn']) {
+    const control = document.getElementById(id)
+    if (control) control.disabled = disabled
+  }
+}
+
 async function handleCompletionResult(result) {
   if (!result.ok) {
     renderCompletionFailure(result)
@@ -134,11 +143,13 @@ function renderCompletionFailure(result) {
   retryButton.id = 'retryCompletionBtn'
   retryButton.textContent = 'Retry completion'
   retryButton.addEventListener('click', async () => {
+    if (sessionSaveInFlight) return
     retryButton.disabled = true
     const endSessionButton = document.getElementById('endSessionBtn')
     if (endSessionButton) endSessionButton.disabled = true
 
     const retryResult = await retryCompletionForStage(result.stage, {
+      actionsBlocked: () => sessionSaveInFlight,
       retryExecution: () => completionCoordinator.complete({
         execution: pendingContinuation.execution,
         taskId: pendingContinuation.task._id,
@@ -146,6 +157,7 @@ function renderCompletionFailure(result) {
       }),
       retryTaskUpdate: completionCoordinator.retryTaskUpdate
     })
+    if (!retryResult) return
     await handleCompletionResult(retryResult)
   })
   status.appendChild(retryButton)
@@ -168,9 +180,11 @@ async function maybeAddFillerTask(actualDuration, estimatedDuration) {
 async function endSession() {
   clearInterval(timerInterval)
   await endDoingSession({
+    actionsBlocked: () => sessionSaveInFlight,
     hasPendingTaskUpdate: completionCoordinator.hasPendingTaskUpdate,
     confirmDiscard: () => confirm('The completion is recorded, but the schedule was not updated and will need manual correction. End session anyway?'),
     saveSession: () => updateSession(state.currentSession._id, { endTime: Date.now(), status: 'completed' }),
+    setCompletionControlsDisabled: setSessionSaveControlsDisabled,
     discardPendingTaskUpdate: completionCoordinator.discardPendingTaskUpdate,
     clearPendingContinuation: () => { pendingContinuation = null },
     showReview: async () => {
