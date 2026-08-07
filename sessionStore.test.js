@@ -451,6 +451,86 @@ test('a fresh store recovers a persisted Quick add after its attachment response
   assert.equal(aggregate.session.pendingAddition, null)
 })
 
+test('a different Quick add intent survives ambiguous recovery of a persisted marker', async () => {
+  let session = {
+    _id: 's1', status: 'paused', startTime: 1000, taskBundle: ['t1'],
+    accumulatedActiveMs: 9000, activeStartedAt: null, checkpointElapsedMs: 9000,
+    pausedAt: 10000,
+    pendingAddition: {
+      taskId: 'quick-s1-old', title: 'Replace hallway bulb', createdAt: 15000
+    }
+  }
+  let createIdCalls = 0
+  let loseOldAttachmentResponse = true
+  const records = new Map()
+  const createCalls = []
+  const attachmentWrites = []
+  const store = createSessionStore({
+    now: () => 20000,
+    createId: () => {
+      createIdCalls++
+      return 'new-intent-id'
+    },
+    getSession: async () => structuredClone(session),
+    listExecutions: async () => [{
+      taskId: 't1', endTime: 10000, rawDurationMs: 9000, activeElapsedMs: 9000
+    }],
+    listTasks: async ids => ids.map(id => records.get(id) || (
+      id === 't1' ? { _id: 't1', name: 'Sink' } : null
+    )).filter(Boolean),
+    createTaskRecord: async (title, id) => {
+      createCalls.push({ title, id })
+      records.set(id, { _id: id, name: title, status: 'proposed' })
+    },
+    updateSessionRecord: async (id, fields) => {
+      session = { ...session, ...structuredClone(fields) }
+      if (fields.taskBundle) {
+        attachmentWrites.push([...fields.taskBundle])
+        if (loseOldAttachmentResponse) {
+          loseOldAttachmentResponse = false
+          throw new Error('old attachment response lost')
+        }
+      }
+    }
+  })
+
+  let recoveryFailure
+  try {
+    await store.quickAdd('s1', 'Wipe the mirror')
+  } catch (error) {
+    recoveryFailure = error
+  }
+
+  assert.deepEqual(recoveryFailure?.quickAddIntent, {
+    taskId: 'quick-s1-new-intent-id',
+    title: 'Wipe the mirror',
+    createdAt: 20000,
+    stage: 'creating'
+  })
+
+  await store.refresh('s1')
+  const aggregate = await store.quickAdd(
+    's1',
+    'Wipe the mirror',
+    recoveryFailure.quickAddIntent
+  )
+
+  assert.equal(createIdCalls, 1)
+  assert.deepEqual(createCalls, [{
+    title: 'Replace hallway bulb', id: 'quick-s1-old'
+  }, {
+    title: 'Wipe the mirror', id: 'quick-s1-new-intent-id'
+  }])
+  assert.deepEqual(attachmentWrites, [
+    ['t1', 'quick-s1-old'],
+    ['t1', 'quick-s1-old', 'quick-s1-new-intent-id']
+  ])
+  assert.deepEqual(aggregate.session.taskBundle, [
+    't1', 'quick-s1-old', 'quick-s1-new-intent-id'
+  ])
+  assert.equal(aggregate.session.pendingAddition, null)
+})
+
 test('conclude stores active time not assigned to an execution', async () => {
   let session = {
     _id: 's1', status: 'paused', startTime: 1000, taskBundle: ['t1'],

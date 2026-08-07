@@ -863,6 +863,61 @@ test('Quick add treats an attached staged task as successful after its response 
   })
 })
 
+test('Quick add Retry preserves a new title across ambiguous recovery of an older marker', async () => {
+  const original = task('original-task')
+  const session = {
+    _id: 'quick-intent-session', status: 'paused', startTime: 10000,
+    taskBundle: ['original-task'], timeBudgetMinutes: 10,
+    accumulatedActiveMs: 5 * 60000, activeStartedAt: null,
+    pausedAt: 310000, checkpointElapsedMs: 5 * 60000,
+    pendingAddition: {
+      taskId: 'quick-intent-session-old',
+      title: 'Replace hallway bulb',
+      createdAt: 300000
+    }
+  }
+  const executions = [{
+    taskId: 'original-task', sessionId: session._id, outcome: 'done',
+    startTime: 10000, endTime: 310000, rawDurationMs: 5 * 60000,
+    activeElapsedMs: 5 * 60000, actualDuration: 5
+  }]
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [original],
+    bundle: [original],
+    executions,
+    loseQuickAddAttachmentResponse: true
+  }, async ({ document, persistence }) => {
+    await document.clickControl('openContinueBtn')
+    await document.inputControl('continueQuickTitle', 'Wipe the mirror')
+    await document.clickControl('continueQuickAddBtn')
+
+    assert.ok(document.control('retrySessionMutationBtn'))
+    assert.equal(document.control('continueQuickTitle').value, '')
+    await document.clickControl('retrySessionMutationBtn')
+
+    assert.deepEqual(
+      persistence.quickCreates.map(record => record.name),
+      ['Replace hallway bulb', 'Wipe the mirror']
+    )
+    const [oldTask, newTask] = persistence.quickCreates
+    assert.equal(oldTask._id, 'quick-intent-session-old')
+    assert.notEqual(newTask._id, oldTask._id)
+    assert.equal(new Set(persistence.quickCreates.map(record => record._id)).size, 2)
+    assert.equal(
+      persistence.session.taskBundle.filter(id => id === oldTask._id).length,
+      1
+    )
+    assert.equal(
+      persistence.session.taskBundle.filter(id => id === newTask._id).length,
+      1
+    )
+    assert.equal(persistence.session.pendingAddition, null)
+    assert.equal(document.control('retrySessionMutationBtn'), null)
+  })
+})
+
 test('suggestion inputs are disabled while an attachment is in flight', async () => {
   const original = task('original-task')
   const suggested = { ...task('suggested-2m'), estimatedDuration: 2 }

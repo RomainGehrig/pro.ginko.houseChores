@@ -353,12 +353,12 @@ function attachSearchedTask (taskId) {
   )
 }
 
-function quickAddContinuation () {
-  const title = document.getElementById('continueQuickTitle')?.value
+function quickAddContinuation (retryIntent = null) {
+  const title = retryIntent?.title || document.getElementById('continueQuickTitle')?.value
   return runContinuationMutation(
-    () => sessionStore.quickAdd(state.currentSession._id, title),
+    () => sessionStore.quickAdd(state.currentSession._id, title, retryIntent),
     'Could not add the quick task',
-    quickAddContinuation,
+    error => quickAddContinuation(error.quickAddIntent || retryIntent || { title }),
     (aggregate, error) => Boolean(
       error.quickAddTaskId &&
       (aggregate.session.taskBundle || []).includes(error.quickAddTaskId)
@@ -587,7 +587,7 @@ async function runContinuationMutation (operation, failureMessage, retry, wasApp
     sessionMutationInFlight = false
     setSessionMutationControlsDisabled(false)
     if (reconciled && wasApplied?.(reconciled, error)) return true
-    renderSessionMutationFailure(failureMessage + ': ' + error.message, retry)
+    renderSessionMutationFailure(failureMessage + ': ' + error.message, () => retry(error))
     return reconciled ? false : null
   }
 

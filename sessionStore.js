@@ -178,7 +178,7 @@ export function createSessionStore ({
     return refresh(sessionId, atMs)
   }
 
-  async function quickAdd (sessionId, title) {
+  async function quickAdd (sessionId, title, retryIntent = null) {
     const name = String(title || '').trim()
     if (!name) throw new Error('Enter a task title.')
     const session = await getSession(sessionId)
@@ -186,22 +186,46 @@ export function createSessionStore ({
     const recoveringPendingAddition = session.status === 'paused'
       ? session.pendingAddition
       : null
-    const aggregate = await hydrate(session, now())
+    const suppliedIntent = retryIntent?.taskId &&
+      String(retryIntent.title || '').trim() === name
+      ? {
+          taskId: String(retryIntent.taskId),
+          title: name,
+          createdAt: Number(retryIntent.createdAt) || now(),
+          stage: 'creating'
+        }
+      : null
+    const requestedIntent = recoveringPendingAddition?.title === name
+      ? null
+      : suppliedIntent || {
+          taskId: 'quick-' + sessionId + '-' + createId(),
+          title: name,
+          createdAt: now(),
+          stage: 'creating'
+        }
+
+    let aggregate
+    try {
+      aggregate = await hydrate(session, now())
+    } catch (error) {
+      const failure = error instanceof Error ? error : new Error(String(error))
+      if (requestedIntent) failure.quickAddIntent = requestedIntent
+      else if (recoveringPendingAddition?.taskId) {
+        failure.quickAddTaskId = recoveringPendingAddition.taskId
+      }
+      throw failure
+    }
     if (aggregate.session.status !== 'paused') return aggregate
     if (recoveringPendingAddition?.title === name) return aggregate
 
-    const pending = {
-      taskId: 'quick-' + sessionId + '-' + createId(),
-      title: name,
-      createdAt: now(),
-      stage: 'creating'
-    }
+    const pending = requestedIntent
     try {
       await updateSessionRecord(sessionId, { pendingAddition: pending })
       return await refresh(sessionId, now())
     } catch (error) {
       const failure = error instanceof Error ? error : new Error(String(error))
       failure.quickAddTaskId = pending.taskId
+      failure.quickAddIntent = pending
       throw failure
     }
   }
