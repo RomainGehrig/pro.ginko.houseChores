@@ -3,7 +3,14 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { createExecution } from './executionData.js'
+import { completionAttemptIdFor, createExecution } from './executionData.js'
+
+test('session and task IDs produce one deterministic execution identity', () => {
+  assert.equal(
+    completionAttemptIdFor('session 1', 'task/2'),
+    'session-task-session%201-task%2F2'
+  )
+})
 
 test('repeated creates with one completion-attempt id upsert one execution record', async () => {
   const originalFreezr = globalThis.freezr
