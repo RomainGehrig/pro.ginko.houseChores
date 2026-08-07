@@ -803,6 +803,34 @@ test('focus refresh applies a pause written by another device', async () => {
   })
 })
 
+test('focus refresh does not navigate away from a different active view', async () => {
+  const task1 = task('task-1')
+  const session = {
+    _id: 'session-1', status: 'active', startTime: 10000,
+    taskBundle: ['task-1'], timeBudgetMinutes: 15,
+    accumulatedActiveMs: 0, activeStartedAt: 10000, checkpointElapsedMs: 0
+  }
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [task1],
+    bundle: [task1]
+  }, async ({ document, window, persistence }) => {
+    document.control('view-doing').style.display = 'none'
+    document.control('view-tasks').style.display = 'block'
+    persistence.patchSession({
+      status: 'completed', endTime: 20000,
+      accumulatedActiveMs: 10000, activeStartedAt: null
+    })
+
+    await window.dispatch('focus')
+
+    assert.equal(state.currentSession.status, 'completed')
+    assert.equal(document.control('view-tasks').style.display, 'block')
+    assert.notEqual(document.control('view-review').style.display, 'block')
+  })
+})
+
 test('paused picker attaches suggestions and search, quick-adds a proposed task, and resumes', async () => {
   const elapsedBeforePicker = 10 * 60000
   const resumeClickedAt = 1200000
@@ -1065,6 +1093,67 @@ test('suggestion inputs are disabled while an attachment is in flight', async ()
     })
   } finally {
     sessionStore.attachTasks = originalAttachTasks
+  }
+})
+
+test('a later suggestion reconciles and drops an unattached ambiguous selection', async () => {
+  const original = task('original-task')
+  const first = { ...task('suggested-2m'), estimatedDuration: 2 }
+  const second = { ...task('suggested-4m'), estimatedDuration: 4 }
+  const session = {
+    _id: 'uncommitted-suggestion-session', status: 'paused', startTime: 10000,
+    taskBundle: ['original-task'], timeBudgetMinutes: 10,
+    accumulatedActiveMs: 5 * 60000, activeStartedAt: null,
+    pausedAt: 310000, checkpointElapsedMs: 5 * 60000,
+    pendingAddition: null
+  }
+  const executions = [{
+    taskId: 'original-task', sessionId: session._id, outcome: 'done',
+    startTime: 10000, endTime: 310000, rawDurationMs: 5 * 60000,
+    activeElapsedMs: 5 * 60000, actualDuration: 5
+  }]
+  const originalAttachTasks = sessionStore.attachTasks
+  const originalRefresh = sessionStore.refresh
+  const attachCalls = []
+  let failReconciliationRefresh = false
+
+  sessionStore.attachTasks = async (sessionId, taskIds, options) => {
+    attachCalls.push(...taskIds)
+    if (taskIds.includes('suggested-2m')) {
+      failReconciliationRefresh = true
+      throw new Error('attachment write failed')
+    }
+    return originalAttachTasks(sessionId, taskIds, options)
+  }
+  sessionStore.refresh = async (...args) => {
+    if (failReconciliationRefresh) {
+      failReconciliationRefresh = false
+      throw new Error('refresh offline')
+    }
+    return originalRefresh(...args)
+  }
+
+  try {
+    await withDoingEnvironment({
+      session,
+      persistedTasks: [original, first, second],
+      bundle: [original],
+      executions
+    }, async ({ document, persistence }) => {
+      await document.clickControl('openContinueBtn')
+      await document.checkSuggestion('suggested-2m')
+      assert.ok(document.control('retrySessionMutationBtn'))
+
+      await document.checkSuggestion('suggested-4m')
+
+      assert.deepEqual(attachCalls, ['suggested-2m', 'suggested-4m'])
+      assert.deepEqual(persistence.session.taskBundle, [
+        'original-task', 'suggested-4m'
+      ])
+    })
+  } finally {
+    sessionStore.attachTasks = originalAttachTasks
+    sessionStore.refresh = originalRefresh
   }
 })
 

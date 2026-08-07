@@ -42,6 +42,7 @@ let boundWindow = null
 let continuationTasks = []
 let continuationSuggestionSelections = []
 let continuationPauseKey = null
+const ambiguousSuggestionIds = new Set()
 
 const completionCoordinator = createCompletionCoordinator({
   createExecution,
@@ -58,7 +59,9 @@ export function initDoingView () {
   bindDoingContent()
   if (typeof window !== 'undefined' && boundWindow !== window) {
     boundWindow = window
-    window.addEventListener('focus', () => refreshDoing())
+    window.addEventListener('focus', () => refreshDoing({
+      allowNavigation: document.getElementById('view-doing')?.style.display === 'block'
+    }))
   }
 }
 
@@ -80,14 +83,14 @@ export function startDoing (aggregate) {
   })
 }
 
-export async function refreshDoing () {
+export async function refreshDoing ({ allowNavigation = true } = {}) {
   if (!state.currentSession?._id ||
     !['active', 'paused'].includes(state.currentSession.status) ||
     sessionMutationInFlight) return null
   try {
     const aggregate = await sessionStore.refresh(state.currentSession._id, Date.now())
     pendingSessionRetry = null
-    await applyAggregate(aggregate)
+    await applyAggregate(aggregate, { allowNavigation })
     return aggregate
   } catch (error) {
     renderSessionMutationFailure(
@@ -98,18 +101,19 @@ export async function refreshDoing () {
   }
 }
 
-async function applyAggregate (aggregate) {
+async function applyAggregate (aggregate, { allowNavigation = true } = {}) {
   setCurrentSessionAggregate(aggregate)
   if (aggregate.session.status !== 'paused') {
     continuationTasks = []
     continuationSuggestionSelections = []
     continuationPauseKey = null
+    ambiguousSuggestionIds.clear()
   }
   if (aggregate.session.status === 'completed') {
     clearInterval(timerInterval)
     setNavVisible('doing', false)
     setNavVisible('review', true)
-    showView('review')
+    if (allowNavigation) showView('review')
     await startReview()
     return
   }
@@ -259,6 +263,7 @@ async function openContinuePicker () {
   if (key !== continuationPauseKey) {
     continuationPauseKey = key
     continuationSuggestionSelections = []
+    ambiguousSuggestionIds.clear()
   }
 
   try {
@@ -309,7 +314,46 @@ function updateResumeAvailability () {
   button.disabled = (state.currentSession.taskBundle || []).every(id => resolved.has(id))
 }
 
+async function reconcileAmbiguousSuggestionSelections (retry) {
+  if (!ambiguousSuggestionIds.size) return true
+  sessionMutationInFlight = true
+  clearDoingStatus()
+  setSessionMutationControlsDisabled(true)
+  try {
+    const aggregate = await sessionStore.refresh(state.currentSession._id, Date.now())
+    pendingSessionRetry = null
+    await applyAggregate(aggregate)
+    const attachedIds = new Set(aggregate.session.taskBundle || [])
+    continuationSuggestionSelections = continuationSuggestionSelections.filter(task =>
+      !ambiguousSuggestionIds.has(task._id) || attachedIds.has(task._id)
+    )
+    ambiguousSuggestionIds.clear()
+    if (aggregate.session.status === 'paused') await openContinuePicker()
+    return true
+  } catch (error) {
+    renderSessionMutationFailure(
+      'Could not verify previously selected suggestions: ' + error.message,
+      retry
+    )
+    return false
+  } finally {
+    sessionMutationInFlight = false
+    setSessionMutationControlsDisabled(false)
+  }
+}
+
 async function acceptSuggestedTask (candidate, checkbox) {
+  if (ambiguousSuggestionIds.size) {
+    const reconciled = await reconcileAmbiguousSuggestionSelections(
+      () => acceptSuggestedTask(candidate)
+    )
+    if (!reconciled) {
+      if (checkbox) checkbox.checked = false
+      return false
+    }
+    if (state.currentSession?.taskBundle?.includes(candidate._id)) return true
+    if (state.currentSession?.status !== 'paused') return false
+  }
   const remainingMs = remainingBudgetMs(state.currentSession, Date.now())
   const otherSelections = continuationSuggestionSelections.filter(
     task => task._id !== candidate._id
@@ -336,6 +380,8 @@ async function acceptSuggestedTask (candidate, checkbox) {
     () => acceptSuggestedTask(candidate),
     aggregate => (aggregate.session.taskBundle || []).includes(candidate._id)
   )
+  if (attached === null) ambiguousSuggestionIds.add(candidate._id)
+  else ambiguousSuggestionIds.delete(candidate._id)
   if (attached === false) {
     continuationSuggestionSelections = continuationSuggestionSelections.filter(
       task => task._id !== candidate._id
