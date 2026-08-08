@@ -21,11 +21,19 @@ const attachableTask = task => task?.status === 'active' || task?.status === 'ap
 const usableBundledTask = task => attachableTask(task) ||
   task?.status === 'proposed' || task?.status === 'draft'
 
+function finiteNumericMarker (value) {
+  if ((typeof value !== 'number' && typeof value !== 'string') ||
+    (typeof value === 'string' && !value.trim())) return null
+  const numeric = Number(value)
+  return Number.isFinite(numeric) ? numeric : null
+}
+
 function validTaskUpdateSnapshot (execution) {
   const source = execution?.taskUpdateSnapshot
-  const completedAt = Number(execution?.endTime)
-  if (!source || typeof source !== 'object' || !Number.isFinite(completedAt) ||
-    Number(source.lastCompletedDate) !== completedAt) return null
+  const completedAt = finiteNumericMarker(execution?.endTime)
+  const snapshotCompletedAt = finiteNumericMarker(source?.lastCompletedDate)
+  if (!source || typeof source !== 'object' || completedAt === null ||
+    snapshotCompletedAt === null || snapshotCompletedAt !== completedAt) return null
   const snapshot = { lastCompletedDate: completedAt }
   if (typeof source.scheduledDate === 'string') snapshot.scheduledDate = source.scheduledDate
   if (source.status === 'archived') snapshot.status = 'archived'
@@ -89,12 +97,9 @@ export function createSessionStore ({
     for (const execution of executions) {
       const snapshot = validTaskUpdateSnapshot(execution)
       const task = taskById.get(execution.taskId)
-      const completedAt = Number(task?.lastCompletedDate)
-      const hasCompletionMarker = task?.lastCompletedDate !== null &&
-        task?.lastCompletedDate !== undefined && task?.lastCompletedDate !== ''
+      const completedAt = finiteNumericMarker(task?.lastCompletedDate)
       if (!snapshot || !task ||
-        (hasCompletionMarker && Number.isFinite(completedAt) &&
-          completedAt === Number(execution.endTime))) continue
+        (completedAt !== null && completedAt === snapshot.lastCompletedDate)) continue
       await updateTaskRecord(execution.taskId, snapshot)
       taskById.set(execution.taskId, { ...task, ...snapshot })
     }

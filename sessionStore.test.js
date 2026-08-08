@@ -137,6 +137,37 @@ test('hydrate treats a missing completion marker as unapplied at the epoch', asy
   assert.equal(task.scheduledDate, '2026-08-15')
 })
 
+test('hydrate ignores snapshots with empty completion markers', async () => {
+  for (const { endTime, lastCompletedDate } of [{
+    endTime: null, lastCompletedDate: 0
+  }, {
+    endTime: '', lastCompletedDate: 0
+  }, {
+    endTime: 0, lastCompletedDate: null
+  }, {
+    endTime: 0, lastCompletedDate: ''
+  }]) {
+    let updates = 0
+    const store = createSessionStore({
+      getSession: async () => activeSession({ taskBundle: ['weekly'] }),
+      listExecutions: async () => [{
+        taskId: 'weekly', sessionId: 's1', endTime,
+        taskUpdateSnapshot: { lastCompletedDate, scheduledDate: '2026-08-15' }
+      }],
+      listTasks: async () => [{
+        _id: 'weekly', status: 'active', scheduledDate: '2026-08-08',
+        lastCompletedDate: null
+      }],
+      updateSessionRecord: async () => {},
+      updateTaskRecord: async () => { updates++ }
+    })
+
+    await store.refresh('s1', 0)
+
+    assert.equal(updates, 0, `accepted ${JSON.stringify({ endTime, lastCompletedDate })}`)
+  }
+})
+
 test('restore chooses newest unfinished, interrupts older, and keeps missing cards', async () => {
   const updates = []
   const sessions = [

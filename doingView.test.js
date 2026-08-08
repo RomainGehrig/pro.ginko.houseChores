@@ -707,6 +707,7 @@ test('retry repairs a committed task update without recomputing its recurrence',
 
     const execution = persistence.executions.get(completionAttemptIdFor('session-1', 'fixed'))
     assert.equal(persistence.taskUpdates.length, 1)
+    assert.deepEqual(execution.taskUpdateSnapshot, persistence.taskUpdates[0].fields)
     assert.equal(persistence.getTask('fixed').scheduledDate, persistence.taskUpdates[0].fields.scheduledDate)
     assert.equal(persistence.getTask('fixed').lastCompletedDate, execution.endTime)
     assert.equal(document.control('retryCompletionBtn'), null)

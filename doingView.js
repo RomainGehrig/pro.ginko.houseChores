@@ -563,7 +563,7 @@ async function prepareAndCompletePendingTask () {
     }
   }
 
-  const taskUpdate = prepared.task.status === 'proposed' ? null : prepared.taskUpdate
+  const taskUpdate = prepared.task.status === 'proposed' ? null : { ...prepared.taskUpdate }
   pendingCompletion = {
     ...attempt,
     task: prepared.task,
