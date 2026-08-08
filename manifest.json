@@ -46,6 +46,8 @@
     { "path": "continuationLogic.test.js", "Description": "Node tests covering continuation suggestions, search, exclusions, ordering, and budget selection." },
     { "path": "bundleLogic.js", "Description": "Pure functions that prioritize eligible tasks by scheduled date and build category-ID-filtered time-boxed bundles and filler suggestions." },
     { "path": "bundleLogic.test.js", "Description": "Node tests covering scheduled-date ordering, future-task eligibility, and stable category-ID filtering for bundles and filler suggestions." },
+    { "path": "undoToast.js", "Description": "DOM-free optimistic archive transactions and a one-action undo queue with expiry, key-scoped settlement, and singleton wrappers." },
+    { "path": "undoToast.test.js", "Description": "Node tests covering deep archive round-trips, alias isolation, queued commits, expiry, key-scoped undo, and reverse results." },
     { "path": "aiEnrich.js", "Description": "Calls the LLM to suggest category, duration, and a validated typed schedule for new tasks, plus a duration-history heuristic." },
     { "path": "aiEnrich.test.js", "Description": "Node tests covering dynamic AI enrichment prompt construction." },
     { "path": "tasksView.js", "Description": "Renders due-first active ledgers and wires task intake, schedule review, reference assignments, AI enrichment, approval, and editing." },
