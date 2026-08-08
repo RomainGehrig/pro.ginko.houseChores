@@ -676,6 +676,78 @@ test('bottom primary navigation has phone-sized targets, fixed safe-area placeme
   assert.ok(Number.parseFloat(result.transitionDuration) <= 0.001, JSON.stringify(result))
 })
 
+test('bottom sheet traps focus, renders safe text, dismisses, and restores prior focus', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 640 },
+    body: '<main id="app"><button id="opener">Open</button></main>' +
+      '<div id="sheetScrim" hidden></div>' +
+      '<section id="bottomSheet" hidden role="dialog" aria-modal="true" aria-labelledby="bottomSheetTitle">' +
+        '<h2 id="bottomSheetTitle"></h2><p id="bottomSheetMessage"></p>' +
+        '<div id="bottomSheetActions"></div>' +
+      '</section>',
+    script: `
+      const { initSheet, openSheet } = await import(applicationUrl + 'sheet.js')
+      const opener = document.getElementById('opener')
+      opener.focus()
+      initSheet()
+      initSheet()
+      const firstOpen = openSheet({
+        title: '<img src=x onerror=alert(1)>',
+        message: '<script>unsafe<\\/script>',
+        actions: [
+          { value: 'keep', label: 'Keep', className: 'btn-quiet' },
+          { value: 'delete', label: 'Delete permanently', className: 'btn-danger' }
+        ]
+      })
+      const sheet = document.getElementById('bottomSheet')
+      const buttons = [...document.querySelectorAll('#bottomSheetActions button')]
+      const initialFocus = document.activeElement.textContent
+      buttons[1].focus()
+      sheet.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', bubbles: true, cancelable: true }))
+      const tabWrap = document.activeElement.textContent
+      buttons[0].focus()
+      sheet.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }))
+      const shiftTabWrap = document.activeElement.textContent
+      const minActionHeights = buttons.map(button => button.getBoundingClientRect().height)
+      sheet.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+      const firstResult = await firstOpen
+      const restoredAfterEscape = document.activeElement.id
+
+      const replaced = openSheet({ title: 'First', message: 'First', actions: [{ value: 'one', label: 'One' }] })
+      const replacement = openSheet({ title: 'Second', message: 'Second', actions: [{ value: 'two', label: 'Two' }] })
+      const replacedResult = await replaced
+      document.getElementById('sheetScrim').click()
+      const replacementResult = await replacement
+
+      const result = {
+        initialFocus, tabWrap, shiftTabWrap, firstResult, restoredAfterEscape,
+        replacedResult, replacementResult,
+        titleText: document.getElementById('bottomSheetTitle').textContent,
+        titleChildren: document.getElementById('bottomSheetTitle').children.length,
+        messageChildren: document.getElementById('bottomSheetMessage').children.length,
+        hidden: sheet.hidden,
+        minActionHeights
+      }
+    `
+  })
+
+  assert.deepEqual(result, {
+    initialFocus: 'Keep',
+    tabWrap: 'Keep',
+    shiftTabWrap: 'Delete permanently',
+    firstResult: null,
+    restoredAfterEscape: 'opener',
+    replacedResult: null,
+    replacementResult: null,
+    titleText: 'Second',
+    titleChildren: 0,
+    messageChildren: 0,
+    hidden: true,
+    minActionHeights: result.minActionHeights
+  })
+  assert.ok(result.minActionHeights.every(height => height >= 44.5), JSON.stringify(result))
+})
+
 test('archived and saving states keep full contrast and state their status', async () => {
   const result = await runBrowserScenario({
     body: '<main id="app">' +
