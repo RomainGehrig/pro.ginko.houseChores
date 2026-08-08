@@ -101,7 +101,7 @@ select,
 input,
 textarea,
 summary {
-  min-height: 44px;
+  min-height: 45px;
   border-color: var(--edge);
   color: var(--ink);
   font: inherit;
@@ -125,7 +125,7 @@ label:has(input[type="checkbox"]),
 label:has(input[type="radio"]) {
   align-items: center;
   display: inline-flex;
-  min-height: 44px;
+  min-height: 45px;
 }
 
 .fig,
@@ -735,7 +735,7 @@ textarea {
 }
 
 .doing-session button {
-  min-height: 44px;
+  min-height: 45px;
 }
 
 .doing-progress {
@@ -810,7 +810,7 @@ textarea {
 #doingContinuePanel input[type="search"],
 #doingContinuePanel input:not([type]) {
   box-sizing: border-box;
-  min-height: 44px;
+  min-height: 45px;
   padding: 6px 8px;
   width: 100%;
 }

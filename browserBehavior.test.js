@@ -604,9 +604,9 @@ test('enamel foundation gives controls a 44px floor, visible focus, and reduced 
     `
   })
 
-  assert.ok(result.controlHeights.every(height => height >= 44), JSON.stringify(result))
+  assert.ok(result.controlHeights.every(height => height >= 44.5), JSON.stringify(result))
   assert.ok(result.controlFontSizes.every(size => size === '16px'), JSON.stringify(result))
-  assert.ok(result.checkboxTargetHeight >= 44, JSON.stringify(result))
+  assert.ok(result.checkboxTargetHeight >= 44.5, JSON.stringify(result))
   assert.notEqual(result.focusOutlineStyle, 'none', JSON.stringify(result))
   assert.ok(Number.parseFloat(result.focusOutlineWidth) >= 2, JSON.stringify(result))
   assert.ok(Number.parseFloat(result.transitionDuration) <= 0.001, JSON.stringify(result))
