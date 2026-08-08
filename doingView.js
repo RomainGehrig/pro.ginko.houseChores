@@ -563,10 +563,11 @@ async function prepareAndCompletePendingTask () {
     }
   }
 
+  const taskUpdate = prepared.task.status === 'proposed' ? null : prepared.taskUpdate
   pendingCompletion = {
     ...attempt,
     task: prepared.task,
-    taskUpdate: prepared.task.status === 'proposed' ? null : prepared.taskUpdate
+    taskUpdate
   }
   return completionCoordinator.complete({
     execution: {
@@ -577,10 +578,11 @@ async function prepareAndCompletePendingTask () {
       actualSeconds: attempt.timing.rawDurationMs / 1000,
       difficultyRating: null,
       notes: '',
-      completionAttemptId: completionAttemptIdFor(attempt.aggregate.session._id, attempt.taskId)
+      completionAttemptId: completionAttemptIdFor(attempt.aggregate.session._id, attempt.taskId),
+      taskUpdateSnapshot: taskUpdate
     },
     taskId: attempt.taskId,
-    taskUpdate: pendingCompletion.taskUpdate,
+    taskUpdate,
     sessionId: attempt.aggregate.session._id,
     sessionUpdate: attempt.sessionUpdate
   })
@@ -637,56 +639,11 @@ async function retryCompletion (button) {
     execution.taskId === attempt.taskId
   )
   if (persistedExecution) {
-    if (retryStage === 'session_update') {
-      await applyAuthoritativeCompletionState(aggregate)
-      return
-    }
     if (!executionMatchesPendingCompletion(persistedExecution, attempt)) {
       await applyAuthoritativeCompletionState(aggregate)
       return
     }
-
-    const task = aggregate.bundle.find(candidate => candidate._id === attempt.taskId) || attempt.task
-    let prepared
-    try {
-      prepared = await prepareCompletionAttempt({
-        taskSnapshot: task,
-        outcome: persistedExecution.outcome,
-        completion: {
-          completionDate: localDateFromDate(new Date(Number(persistedExecution.endTime))),
-          completedAt: Number(persistedExecution.endTime)
-        },
-        loadTask: async id => (await listTasksByIds([id]))[0] || null
-      })
-    } catch (error) {
-      renderCompletionFailure({
-        ok: false,
-        stage: 'task_read',
-        message: 'Could not refresh task before completion: ' + error.message,
-        canRetry: true
-      })
-      return
-    }
-    pendingCompletion = {
-      ...attempt,
-      aggregate,
-      task: prepared.task,
-      outcome: persistedExecution.outcome,
-      timing: {
-        startTime: Number(persistedExecution.startTime),
-        endTime: Number(persistedExecution.endTime),
-        rawDurationMs: Number(persistedExecution.rawDurationMs),
-        activeElapsedMs: Number(persistedExecution.activeElapsedMs),
-        actualDuration: Number(persistedExecution.actualDuration)
-      },
-      taskUpdate: prepared.task.status === 'proposed' ? null : prepared.taskUpdate,
-      sessionUpdate: null
-    }
-    const result = await completionCoordinator.continueAfterPersistedExecution({
-      taskId: attempt.taskId,
-      taskUpdate: pendingCompletion.taskUpdate
-    })
-    await handleCompletionResult(result)
+    await applyAuthoritativeCompletionState(aggregate)
     return
   }
 

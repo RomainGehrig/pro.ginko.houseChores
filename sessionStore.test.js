@@ -5,6 +5,138 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { createSessionStore } from './sessionStore.js'
 
+const activeSession = ({ taskBundle }) => ({
+  _id: 's1', status: 'active', startTime: 1723111140000, taskBundle,
+  accumulatedActiveMs: 0, activeStartedAt: 1723111140000, checkpointElapsedMs: 0
+})
+
+test('fresh store repairs the exact task update persisted with an execution', async () => {
+  const tasks = new Map([['weekly', {
+    _id: 'weekly', status: 'active', scheduledDate: '2026-08-08',
+    lastCompletedDate: null
+  }]])
+  const sessions = new Map([['s1', activeSession({ taskBundle: ['weekly'] })]])
+  const executions = [{
+    taskId: 'weekly', sessionId: 's1', endTime: 1723111200000,
+    activeElapsedMs: 60000, outcome: 'done',
+    taskUpdateSnapshot: {
+      lastCompletedDate: 1723111200000,
+      scheduledDate: '2026-08-15'
+    }
+  }]
+  let failOnce = true
+  const dependencies = {
+    getSession: async id => structuredClone(sessions.get(id)),
+    listExecutions: async () => structuredClone(executions),
+    listTasks: async ids => ids.map(id => tasks.get(id)).filter(Boolean)
+      .map(task => structuredClone(task)),
+    updateSessionRecord: async (id, fields) => sessions.set(id, {
+      ...sessions.get(id), ...fields
+    }),
+    updateTaskRecord: async (id, fields) => {
+      if (failOnce) { failOnce = false; throw new Error('offline') }
+      tasks.set(id, { ...tasks.get(id), ...fields })
+    }
+  }
+
+  await assert.rejects(
+    createSessionStore(dependencies).refresh('s1', 1723111200000),
+    { message: 'offline' }
+  )
+  await createSessionStore(dependencies).refresh('s1', 1723111200000)
+
+  assert.equal(tasks.get('weekly').scheduledDate, '2026-08-15')
+  assert.equal(tasks.get('weekly').lastCompletedDate, 1723111200000)
+})
+
+test('fresh store does not repeat a task update whose response was lost', async () => {
+  const tasks = new Map([['weekly', {
+    _id: 'weekly', status: 'active', scheduledDate: '2026-08-08',
+    lastCompletedDate: null
+  }]])
+  const sessions = new Map([['s1', activeSession({ taskBundle: ['weekly'] })]])
+  const executions = [{
+    taskId: 'weekly', sessionId: 's1', endTime: 1723111200000,
+    activeElapsedMs: 60000, outcome: 'done',
+    taskUpdateSnapshot: {
+      lastCompletedDate: 1723111200000,
+      scheduledDate: '2026-08-15'
+    }
+  }]
+  let calls = 0
+  let loseResponse = true
+  const dependencies = {
+    getSession: async id => structuredClone(sessions.get(id)),
+    listExecutions: async () => structuredClone(executions),
+    listTasks: async ids => ids.map(id => tasks.get(id)).filter(Boolean)
+      .map(task => structuredClone(task)),
+    updateSessionRecord: async (id, fields) => sessions.set(id, {
+      ...sessions.get(id), ...fields
+    }),
+    updateTaskRecord: async (id, fields) => {
+      calls++
+      tasks.set(id, { ...tasks.get(id), ...fields })
+      if (loseResponse) { loseResponse = false; throw new Error('response lost') }
+    }
+  }
+
+  await assert.rejects(
+    createSessionStore(dependencies).refresh('s1', 1723111200000),
+    { message: 'response lost' }
+  )
+  await createSessionStore(dependencies).refresh('s1', 1723111200000)
+
+  assert.equal(calls, 1)
+  assert.equal(tasks.get('weekly').scheduledDate, '2026-08-15')
+  assert.equal(tasks.get('weekly').lastCompletedDate, 1723111200000)
+})
+
+test('hydrate leaves executions without a task update snapshot unchanged', async () => {
+  const task = {
+    _id: 'weekly', status: 'active', scheduledDate: '2026-08-08',
+    lastCompletedDate: null
+  }
+  let taskUpdates = 0
+  const store = createSessionStore({
+    getSession: async () => activeSession({ taskBundle: ['weekly'] }),
+    listExecutions: async () => [{
+      taskId: 'weekly', sessionId: 's1', endTime: 1723111200000,
+      activeElapsedMs: 60000, outcome: 'done'
+    }],
+    listTasks: async () => [structuredClone(task)],
+    updateSessionRecord: async () => {},
+    updateTaskRecord: async () => { taskUpdates++ }
+  })
+
+  const aggregate = await store.refresh('s1', 1723111200000)
+
+  assert.equal(taskUpdates, 0)
+  assert.equal(aggregate.bundle[0].scheduledDate, '2026-08-08')
+  assert.equal(aggregate.bundle[0].lastCompletedDate, null)
+})
+
+test('hydrate treats a missing completion marker as unapplied at the epoch', async () => {
+  let task = {
+    _id: 'weekly', status: 'active', scheduledDate: '2026-08-08',
+    lastCompletedDate: null
+  }
+  const store = createSessionStore({
+    getSession: async () => activeSession({ taskBundle: ['weekly'] }),
+    listExecutions: async () => [{
+      taskId: 'weekly', sessionId: 's1', endTime: 0,
+      taskUpdateSnapshot: { lastCompletedDate: 0, scheduledDate: '2026-08-15' }
+    }],
+    listTasks: async () => [structuredClone(task)],
+    updateSessionRecord: async () => {},
+    updateTaskRecord: async (id, fields) => { task = { ...task, ...fields } }
+  })
+
+  await store.refresh('s1', 0)
+
+  assert.equal(task.lastCompletedDate, 0)
+  assert.equal(task.scheduledDate, '2026-08-15')
+})
+
 test('restore chooses newest unfinished, interrupts older, and keeps missing cards', async () => {
   const updates = []
   const sessions = [

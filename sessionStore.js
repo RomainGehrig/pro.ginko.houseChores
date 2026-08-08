@@ -3,7 +3,7 @@
 
 import { createSession, getSessionById, listUnfinishedSessions, updateSession } from './sessionData.js'
 import { listExecutionsBySession } from './executionData.js'
-import { createTaskWithId, listTasksByIds } from './taskData.js'
+import { createTaskWithId, listTasksByIds, updateTask } from './taskData.js'
 import { buildSessionDraft } from './bundleLogic.js'
 import {
   chooseCurrentSession,
@@ -21,6 +21,17 @@ const attachableTask = task => task?.status === 'active' || task?.status === 'ap
 const usableBundledTask = task => attachableTask(task) ||
   task?.status === 'proposed' || task?.status === 'draft'
 
+function validTaskUpdateSnapshot (execution) {
+  const source = execution?.taskUpdateSnapshot
+  const completedAt = Number(execution?.endTime)
+  if (!source || typeof source !== 'object' || !Number.isFinite(completedAt) ||
+    Number(source.lastCompletedDate) !== completedAt) return null
+  const snapshot = { lastCompletedDate: completedAt }
+  if (typeof source.scheduledDate === 'string') snapshot.scheduledDate = source.scheduledDate
+  if (source.status === 'archived') snapshot.status = 'archived'
+  return snapshot
+}
+
 const greatestExecutionCheckpoint = executions => executions.reduce((greatest, execution) => {
   if (execution.activeElapsedMs === null || execution.activeElapsedMs === '') return greatest
   const checkpoint = Number(execution.activeElapsedMs)
@@ -37,6 +48,7 @@ export function createSessionStore ({
   createSessionRecord = createSession,
   updateSessionRecord = updateSession,
   createTaskRecord = createTaskWithId,
+  updateTaskRecord = updateTask,
   createId = () => crypto.randomUUID(),
   now = Date.now
 } = {}) {
@@ -72,6 +84,20 @@ export function createSessionStore ({
     }
 
     const executions = await listExecutions(session._id)
+    const tasks = await listTasks(repaired.taskBundle || [])
+    const taskById = new Map(tasks.map(task => [task._id, task]))
+    for (const execution of executions) {
+      const snapshot = validTaskUpdateSnapshot(execution)
+      const task = taskById.get(execution.taskId)
+      const completedAt = Number(task?.lastCompletedDate)
+      const hasCompletionMarker = task?.lastCompletedDate !== null &&
+        task?.lastCompletedDate !== undefined && task?.lastCompletedDate !== ''
+      if (!snapshot || !task ||
+        (hasCompletionMarker && Number.isFinite(completedAt) &&
+          completedAt === Number(execution.endTime))) continue
+      await updateTaskRecord(execution.taskId, snapshot)
+      taskById.set(execution.taskId, { ...task, ...snapshot })
+    }
     if (!terminal(repaired)) {
       const normalize = normalizationFields(repaired, executions, nowMs)
       const normalized = { ...repaired, ...normalize }
@@ -109,8 +135,6 @@ export function createSessionStore ({
       }
     }
 
-    const tasks = await listTasks(repaired.taskBundle || [])
-    const taskById = new Map(tasks.map(task => [task._id, task]))
     return {
       session: repaired,
       bundle: (repaired.taskBundle || []).map(id => {

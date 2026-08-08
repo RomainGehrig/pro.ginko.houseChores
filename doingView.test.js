@@ -253,6 +253,7 @@ function createPersistence ({
   initialTasks,
   initialExecutions = [],
   loseFirstExecutionResponse = false,
+  loseFirstTaskUpdateResponse = false,
   loseQuickAddAttachmentResponse = false,
   failSessionUpdates = 0
 }) {
@@ -267,6 +268,7 @@ function createPersistence ({
   let executionCalls = 0
   let sessionUpdateCalls = 0
   let remainingSessionUpdateFailures = failSessionUpdates
+  let shouldLoseTaskUpdateResponse = loseFirstTaskUpdateResponse
   let shouldLoseQuickAddAttachmentResponse = loseQuickAddAttachmentResponse
 
   const freezr = {
@@ -309,6 +311,10 @@ function createPersistence ({
       if (collection === 'tasks') {
         taskUpdates.push({ id, fields: clone(fields) })
         tasks.set(id, { ...tasks.get(id), ...clone(fields) })
+        if (shouldLoseTaskUpdateResponse) {
+          shouldLoseTaskUpdateResponse = false
+          throw new Error('task response lost')
+        }
       }
       return { _id: id, ...clone(fields) }
     }
@@ -344,6 +350,7 @@ async function withDoingEnvironment ({
   bundle,
   executions = [],
   loseFirstExecutionResponse,
+  loseFirstTaskUpdateResponse,
   loseQuickAddAttachmentResponse,
   failSessionUpdates
 }, run) {
@@ -357,6 +364,7 @@ async function withDoingEnvironment ({
     initialTasks: persistedTasks,
     initialExecutions: executions,
     loseFirstExecutionResponse,
+    loseFirstTaskUpdateResponse,
     loseQuickAddAttachmentResponse,
     failSessionUpdates
   })
@@ -675,6 +683,33 @@ test('production retry reuses the committed execution after its first response i
     assert.equal(persistence.executions.size, 1)
     assert.equal(persistence.taskUpdates.length, 1)
     assert.equal(state.currentExecutions.length, 1)
+  })
+})
+
+test('retry repairs a committed task update without recomputing its recurrence', async () => {
+  const fixed = task('fixed', { type: 'periodic', every: 1, unit: 'week' })
+  const nextTask = task('next-task')
+  const session = {
+    _id: 'session-1', status: 'active', startTime: 10000,
+    taskBundle: ['fixed', 'next-task'], timeBudgetMinutes: 15,
+    accumulatedActiveMs: 0, activeStartedAt: 10000, checkpointElapsedMs: 0
+  }
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [fixed, nextTask],
+    bundle: [fixed, nextTask],
+    loseFirstTaskUpdateResponse: true
+  }, async ({ document, persistence, clock }) => {
+    clock.setNow(70000)
+    await document.clickOutcome('fixed', 'done')
+    await document.clickControl('retryCompletionBtn')
+
+    const execution = persistence.executions.get(completionAttemptIdFor('session-1', 'fixed'))
+    assert.equal(persistence.taskUpdates.length, 1)
+    assert.equal(persistence.getTask('fixed').scheduledDate, persistence.taskUpdates[0].fields.scheduledDate)
+    assert.equal(persistence.getTask('fixed').lastCompletedDate, execution.endTime)
+    assert.equal(document.control('retryCompletionBtn'), null)
   })
 })
 

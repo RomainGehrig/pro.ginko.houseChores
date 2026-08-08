@@ -120,7 +120,8 @@
         "outcome": { "type": "String", "description": "One of: done, cancelled, already_done." },
         "difficultyRating": { "type": "String", "description": "Optional 1-5 difficulty rating set during review (numeric)." },
         "notes": { "type": "String", "description": "Optional free-text notes set during review." },
-        "completionAttemptId": { "type": "String", "description": "Stable client-generated ID reused to upsert one logical execution across lost-response retries." }
+        "completionAttemptId": { "type": "String", "description": "Stable client-generated ID reused to upsert one logical execution across lost-response retries." },
+        "taskUpdateSnapshot": { "type": "Object", "description": "Exact task fields intended by this outcome, used for idempotent recovery after an interrupted task update, or null." }
       }
     },
     "sessions": {
