@@ -586,6 +586,55 @@ git commit -m "fix: recover failed review loading"
 
 ---
 
+### Task 5: Reject stale successful outcomes for newly unavailable tasks
+
+**Files:**
+
+- Modify: `doingView.js`
+- Modify: `doingView.test.js`
+
+**Behavior:** After `completeTask` refreshes the authoritative aggregate, an unavailable bundled task remains Cancel-only. A stale Done or Already Done control must reapply authority without any execution/task/session write.
+
+- [ ] Add a failing DOM regression: capture a stale Done control, archive the persisted task before dispatch, then assert zero execution/task/session writes, the aggregate stays active, and the rerendered unavailable card exposes only Cancel.
+- [ ] Run `node --test doingView.test.js`; expect the stale Done path to persist before the fix.
+- [ ] Immediately after locating the refreshed task, add:
+
+```js
+if (task.unavailable && outcome !== 'cancelled') {
+  await applyAuthoritativeCompletionState(aggregate)
+  return
+}
+```
+
+- [ ] Run `node --test doingView.test.js sessionStore.test.js completionSaveLogic.test.js doingCompletionLogic.test.js` and expect all focused files to pass.
+- [ ] Commit `doingView.js` and `doingView.test.js` as `fix: reject stale outcomes for unavailable tasks`.
+
+---
+
+### Task 6: Preserve exact authoritative duration precision in History
+
+**Files:**
+
+- Modify: `historyLogic.js`
+- Modify: `historyLogic.test.js`
+
+**Behavior:** A valid `rawDurationMs` is authoritative and converts exactly to minutes. Missing/null/blank raw data falls back to legacy `actualDuration`; numeric zero remains zero.
+
+- [ ] Change the existing 90-second test to expect entry/total `1.5`, retain a legacy two-minute execution, and assert the combined total is `3.5`. Add or preserve numeric-zero coverage.
+- [ ] Run `node --test historyLogic.test.js`; expect the 90-second assertion to fail as `2 !== 1.5`.
+- [ ] Replace rounded/minimum-one conversion with:
+
+```js
+const executionMinutes = execution => hasRawDuration(execution.rawDurationMs)
+  ? Number(execution.rawDurationMs) / 60000
+  : Number(execution.actualDuration || 0)
+```
+
+- [ ] Run `node --test historyLogic.test.js`; all existing history tests must pass without weakening legacy fallback assertions.
+- [ ] Commit `historyLogic.js` and `historyLogic.test.js` as `fix: preserve exact history durations`.
+
+---
+
 ## Branch Verification and Handoff
 
 After both reviewed task commits:
