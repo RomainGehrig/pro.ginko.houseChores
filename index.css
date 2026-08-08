@@ -200,7 +200,7 @@ label:has(input[type="radio"]) {
 
 .nav-btn {
   padding: var(--s2) var(--s3);
-  min-height: 44px;
+  min-height: 45px;
   border: 1px solid color-mix(in srgb, var(--on-enamel) 55%, transparent);
   background: transparent;
   color: var(--on-enamel);

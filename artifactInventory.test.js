@@ -55,6 +55,13 @@ test('header navigation uses canonical hash anchors and every current screen has
   assert.equal(focusHeadings.length, 5)
 })
 
+test('navigation anchors use the project 45px control floor', async () => {
+  const css = await readFile(new URL('./index.css', import.meta.url), 'utf8')
+  const navRules = css.match(/\.nav-btn\s*\{([\s\S]*?)\n\}/)?.[1] || ''
+
+  assert.match(navRules, /min-height:\s*45px;/)
+})
+
 test('all view transitions use the hash router instead of the retired view router', async () => {
   const sources = await Promise.all([
     'index.js', 'sessionView.js', 'doingView.js', 'reviewView.js'
