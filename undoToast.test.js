@@ -110,6 +110,47 @@ test('overlapping pending actions serialize async commits without losing the thi
   assert.equal(queue.current(), third)
 })
 
+test('a failed prior commit rejects its displacement caller after installing the requested action', async () => {
+  const harness = schedulerHarness()
+  const changes = []
+  const committed = []
+  const failure = new Error('first commit failed')
+  const queue = createUndoQueue({
+    schedule: harness.schedule,
+    cancel: harness.cancel,
+    onChange: action => changes.push(action?.key || null)
+  })
+  const first = {
+    key: 'task:first-fails', label: 'First',
+    commit: async () => { committed.push('first'); throw failure },
+    revert: () => null
+  }
+  const second = {
+    key: 'task:second-survives', label: 'Second',
+    commit: async () => committed.push('second'),
+    revert: () => null
+  }
+  const third = {
+    key: 'task:third', label: 'Third',
+    commit: async () => committed.push('third'),
+    revert: () => null
+  }
+
+  await queue.pendingUndo(first)
+  await assert.rejects(queue.pendingUndo(second), failure)
+
+  assert.equal(queue.current(), second)
+  assert.deepEqual(changes, ['task:first-fails', null, 'task:second-survives'])
+  assert.equal(harness.timers.size, 1)
+
+  await queue.pendingUndo(third)
+  assert.deepEqual(committed, ['first', 'second'])
+  assert.equal(queue.current(), third)
+  assert.deepEqual(changes, [
+    'task:first-fails', null, 'task:second-survives', null, 'task:third'
+  ])
+})
+
 test('expiry commits exactly once and clears the pending action', async () => {
   const harness = schedulerHarness()
   let commitCount = 0

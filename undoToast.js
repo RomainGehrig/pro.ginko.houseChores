@@ -60,7 +60,14 @@ export function createUndoQueue({
   const undo = key => serialize(() => settle('revert', key))
 
   const pendingUndo = (action, ttl = 6000) => serialize(async () => {
-    if (currentAction) await settle('commit')
+    let priorError = null
+    if (currentAction) {
+      try {
+        await settle('commit')
+      } catch (error) {
+        priorError = error
+      }
+    }
 
     currentAction = action
     const token = {}
@@ -70,6 +77,7 @@ export function createUndoQueue({
       return commit(action.key).catch(onError)
     }, ttl)
     publish(action)
+    if (priorError) throw priorError
     return action
   })
 
