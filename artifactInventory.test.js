@@ -38,3 +38,19 @@ test('static budget choices mark only their figures as instrument text', async (
     '<span class="fig">30</span> min'
   ])
 })
+
+test('header navigation uses canonical hash anchors and every current screen has a route focus heading', async () => {
+  const html = await readFile(new URL('./index.html', import.meta.url), 'utf8')
+  const nav = [...html.matchAll(/<a class="nav-btn" data-view="([^"]+)" href="([^"]+)"/g)]
+    .map(match => [match[1], match[2]])
+  const focusHeadings = [...html.matchAll(/<h2 class="route-heading" tabindex="-1">/g)]
+
+  assert.deepEqual(nav, [
+    ['tasks', '#/chores'],
+    ['session', '#/today'],
+    ['history', '#/log'],
+    ['doing', '#/doing'],
+    ['review', '#/receipt/session']
+  ])
+  assert.equal(focusHeadings.length, 5)
+})

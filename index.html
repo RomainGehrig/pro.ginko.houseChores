@@ -2,15 +2,16 @@
   <header class="app-header">
     <h1>Chore Planner</h1>
     <nav class="view-nav">
-      <button class="nav-btn active" data-view="tasks">Tasks</button>
-      <button class="nav-btn" data-view="session">Start Session</button>
-      <button class="nav-btn" data-view="history">History</button>
-      <button class="nav-btn" data-view="doing" style="display:none">Doing</button>
-      <button class="nav-btn" data-view="review" style="display:none">Review</button>
+      <a class="nav-btn" data-view="tasks" href="#/chores">Tasks</a>
+      <a class="nav-btn" data-view="session" href="#/today">Start Session</a>
+      <a class="nav-btn" data-view="history" href="#/log">History</a>
+      <a class="nav-btn" data-view="doing" href="#/doing" style="display:none">Doing</a>
+      <a class="nav-btn" data-view="review" href="#/receipt/session" style="display:none">Review</a>
     </nav>
   </header>
 
   <section id="view-tasks" class="view">
+    <h2 class="route-heading" tabindex="-1">Chores</h2>
     <details id="referenceManager" class="reference-manager">
       <summary>Categories &amp; locations</summary>
       <div id="referenceManagerStatus" class="inline-status" role="status"></div>
@@ -59,7 +60,7 @@
   </section>
 
   <section id="view-session" class="view" style="display:none">
-    <h2>Start a Session</h2>
+    <h2 class="route-heading" tabindex="-1">Start a Session</h2>
     <div class="time-options">
       <button class="time-btn" data-minutes="5"><span class="fig">5</span> min</button>
       <button class="time-btn" data-minutes="15"><span class="fig">15</span> min</button>
@@ -80,17 +81,18 @@
   </section>
 
   <section id="view-doing" class="view" style="display:none" aria-label="Active chore session">
+    <h2 class="route-heading" tabindex="-1">Doing</h2>
     <div id="doingContent" class="doing-session"></div>
   </section>
 
   <section id="view-review" class="view" style="display:none">
-    <h2>Session Review</h2>
+    <h2 class="route-heading" tabindex="-1">Session Review</h2>
     <div id="reviewList"></div>
     <button id="finishReviewBtn">Finish</button>
   </section>
 
   <section id="view-history" class="view" style="display:none">
-    <h2>Session History</h2>
+    <h2 class="route-heading" tabindex="-1">Session History</h2>
     <div id="historyList"></div>
   </section>
 </div>

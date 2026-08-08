@@ -200,11 +200,15 @@ label:has(input[type="radio"]) {
 
 .nav-btn {
   padding: var(--s2) var(--s3);
+  min-height: 44px;
   border: 1px solid color-mix(in srgb, var(--on-enamel) 55%, transparent);
   background: transparent;
   color: var(--on-enamel);
   border-radius: var(--r-chip);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  text-decoration: none;
 }
 
 .nav-btn.active {
