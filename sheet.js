@@ -9,6 +9,7 @@ let activeOpen = null
 let openingFrame = null
 let closeTimer = null
 let closingValue = null
+let closing = false
 
 function enabledActions () {
   return [...elements.actions.querySelectorAll('button:not([disabled])')]
@@ -50,24 +51,40 @@ function finishClose () {
   elements.sheet.dataset.state = 'closed'
   if (priorFocus?.isConnected) priorFocus.focus()
   priorFocus = null
-  resolve(closingValue)
+  const value = closingValue
   closingValue = null
+  closing = false
+  resolve(value)
   return true
 }
 
-function closeSheet (value = null, { immediate = false } = {}) {
-  if (!resolveOpen) return false
+function closeSheet (value = null) {
+  if (!resolveOpen || closing) return false
+  closing = true
   closingValue = value
   const wasOpen = elements.sheet.dataset.state === 'open'
   activeOpen = null
   cancelScheduledFrame(openingFrame)
   openingFrame = null
   elements.sheet.dataset.state = 'closed'
-  if (immediate || !wasOpen) return finishClose()
+  if (!wasOpen) return finishClose()
 
   clearTimeout(closeTimer)
   closeTimer = setTimeout(finishClose, transitionTimeMilliseconds() + 50)
   return true
+}
+
+function finishForReplacement () {
+  if (!resolveOpen) return false
+  if (!closing) {
+    closing = true
+    closingValue = null
+    activeOpen = null
+    cancelScheduledFrame(openingFrame)
+    openingFrame = null
+    elements.sheet.dataset.state = 'closed'
+  }
+  return finishClose()
 }
 
 function handleKeydown (event) {
@@ -105,7 +122,7 @@ export function initSheet () {
   elements = { scrim, sheet, title, message, actions }
   sheet.addEventListener('keydown', handleKeydown)
   sheet.addEventListener('transitionend', event => {
-    if (event.propertyName === 'transform' && sheet.dataset.state === 'closed') finishClose()
+    if (closing && event.propertyName === 'transform' && sheet.dataset.state === 'closed') finishClose()
   })
   scrim.addEventListener('click', () => closeSheet(null))
   initialized = true
@@ -114,7 +131,7 @@ export function initSheet () {
 
 export function openSheet ({ title, message, actions = [] }) {
   if (!initSheet()) return Promise.resolve(null)
-  closeSheet(null, { immediate: true })
+  finishForReplacement()
 
   priorFocus = document.activeElement
   elements.title.textContent = String(title ?? '')
@@ -131,6 +148,7 @@ export function openSheet ({ title, message, actions = [] }) {
   }
 
   const promise = new Promise(resolve => { resolveOpen = resolve })
+  closing = false
   closingValue = null
   elements.sheet.dataset.state = 'closed'
   elements.scrim.hidden = false

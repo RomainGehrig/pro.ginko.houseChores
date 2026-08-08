@@ -814,6 +814,90 @@ test('bottom sheet paints a vertical closed state before transitioning open and 
   assert.equal(result.restoredFocus, 'opener')
 })
 
+test('bottom sheet preserves its first close value through repeated input and replacement', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 640 },
+    body: '<main id="app"><button id="opener">Open</button></main>' +
+      '<div id="sheetScrim" hidden></div>' +
+      '<section id="bottomSheet" hidden role="dialog" aria-modal="true" aria-labelledby="bottomSheetTitle" aria-describedby="bottomSheetMessage">' +
+        '<h2 id="bottomSheetTitle"></h2><p id="bottomSheetMessage"></p>' +
+        '<div id="bottomSheetActions"></div>' +
+      '</section>',
+    script: `
+      const { initSheet, openSheet } = await import(applicationUrl + 'sheet.js')
+      const sheet = document.getElementById('bottomSheet')
+      const scrim = document.getElementById('sheetScrim')
+      const settleOpening = async () => {
+        await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+        sheet.getAnimations().forEach(animation => animation.finish())
+        await Promise.resolve()
+      }
+      const choices = () => [...document.querySelectorAll('#bottomSheetActions button')]
+      const opener = document.getElementById('opener')
+      opener.focus()
+      initSheet()
+
+      const attacked = openSheet({
+        title: 'Delete chore permanently?',
+        message: 'Clean attic will be removed permanently.',
+        actions: [
+          { value: 'keep', label: 'Keep' },
+          { value: 'delete', label: 'Delete permanently' }
+        ]
+      })
+      await settleOpening()
+      const attackedChoices = choices()
+      attackedChoices[0].click()
+      attackedChoices[1].click()
+      sheet.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+      scrim.click()
+      sheet.dispatchEvent(new TransitionEvent('transitionend', { propertyName: 'transform', bubbles: true }))
+      const attackedResult = await attacked
+      const focusAfterAttackedClose = document.activeElement.id
+
+      const replaced = openSheet({
+        title: 'First sheet', message: 'First message',
+        actions: [{ value: 'keep', label: 'Keep' }]
+      })
+      await settleOpening()
+      choices()[0].click()
+      const replacement = openSheet({
+        title: 'Replacement sheet', message: 'Replacement message',
+        actions: [{ value: 'new', label: 'Use replacement' }]
+      })
+      const replacedResult = await replaced
+      const replacementTitle = document.getElementById('bottomSheetTitle').textContent
+      const replacementFocus = document.activeElement.textContent
+      await settleOpening()
+      choices()[0].click()
+      sheet.dispatchEvent(new TransitionEvent('transitionend', { propertyName: 'transform', bubbles: true }))
+      const replacementResult = await replacement
+
+      const result = {
+        attackedResult,
+        focusAfterAttackedClose,
+        replacedResult,
+        replacementTitle,
+        replacementFocus,
+        replacementResult,
+        hiddenAfterReplacement: sheet.hidden,
+        finalFocus: document.activeElement.id
+      }
+    `
+  })
+
+  assert.deepEqual(result, {
+    attackedResult: 'keep',
+    focusAfterAttackedClose: 'opener',
+    replacedResult: 'keep',
+    replacementTitle: 'Replacement sheet',
+    replacementFocus: 'Use replacement',
+    replacementResult: 'new',
+    hiddenAfterReplacement: true,
+    finalFocus: 'opener'
+  })
+})
+
 test('shared undo toast reads as one action and clears above the phone navigation', async () => {
   const result = await runBrowserScenario({
     viewport: { width: 390, height: 640 },
