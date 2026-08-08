@@ -9,7 +9,8 @@ import {
   buildContinuationSearchResultsHtml,
   buildContinuationSuggestionsHtml,
   buildDoingSessionHtml,
-  buildEnrichmentAvailability
+  buildEnrichmentAvailability,
+  buildTaskLedgerSummaryHtml
 } from './taskPresentationLogic.js'
 
 test('uses neutral no-category copy for unavailable AI enrichment', () => {
@@ -183,4 +184,63 @@ test('non-editing task details safely mark unresolved retained assignments unava
   assert.match(markup, /Unknown location/)
   assert.equal((markup.match(/>Unavailable</g) || []).length, 2)
   assert.doesNotMatch(markup, /<img/)
+})
+
+test('ledger summary presents periodic ripeness as neutral completion and cadence facts', () => {
+  const markup = buildTaskLedgerSummaryHtml({
+    name: '<img src=x onerror=alert(1)>',
+    estimatedDuration: 45,
+    scheduledDate: '2026-08-07',
+    lastCompletedDate: Date.UTC(2026, 7, 1, 12),
+    schedule: { type: 'periodic', every: 1, unit: 'week' }
+  }, '2026-08-08')
+
+  assert.match(markup, /class="row-stamp fig">7d</)
+  assert.match(markup, /class="row-name">&lt;img src=x onerror=alert\(1\)&gt;</)
+  assert.match(markup, /class="row-fig fig">45 min</)
+  assert.match(markup, /class="row-tag fig">7d</)
+  assert.match(markup, /last done <span class="fig">7d<\/span> ago · about every <span class="fig">7<\/span>/)
+  assert.doesNotMatch(markup, /<img|\b(?:late|overdue|slip)\b|\+\d+d/i)
+})
+
+test('ledger summary uses an em dash until a periodic chore has completion history', () => {
+  const markup = buildTaskLedgerSummaryHtml({
+    name: 'Vacuum bedroom',
+    estimatedDuration: 15,
+    scheduledDate: '2026-08-07',
+    lastCompletedDate: null,
+    schedule: { type: 'periodic', every: 2, unit: 'week' }
+  }, '2026-08-08')
+
+  assert.match(markup, /class="row-stamp fig">—</)
+  assert.match(markup, /not yet done · about every <span class="fig">14<\/span>/)
+})
+
+test('ledger summary states a fixed date once without turning it into an overdue tally', () => {
+  const markup = buildTaskLedgerSummaryHtml({
+    name: 'Pay bills',
+    estimatedDuration: 20,
+    scheduledDate: '2026-08-05',
+    schedule: { type: 'fixed', pattern: { kind: 'month_day', day: 5 } }
+  }, '2026-08-08')
+
+  assert.equal((markup.match(/5 Aug/g) || []).length, 1)
+  assert.match(markup, /Monthly on day <span class="fig">5<\/span>/)
+  assert.doesNotMatch(markup, /\b(?:due|late|overdue)\b|\+\d+d/i)
+})
+
+test('ledger summary gives today a filled state and keeps one-off dates neutral', () => {
+  const todayMarkup = buildTaskLedgerSummaryHtml({
+    name: 'Today task', estimatedDuration: 5, scheduledDate: '2026-08-08',
+    schedule: { type: 'one_off' }
+  }, '2026-08-08')
+  const pastMarkup = buildTaskLedgerSummaryHtml({
+    name: 'One-off wish', estimatedDuration: 5, scheduledDate: '2026-08-07',
+    schedule: { type: 'one_off' }
+  }, '2026-08-08')
+
+  assert.match(todayMarkup, /class="row-stamp stamp is-today">TODAY</)
+  assert.match(pastMarkup, /class="row-stamp fig">7 Aug</)
+  assert.match(pastMarkup, /class="row-note">Once</)
+  assert.doesNotMatch(todayMarkup + pastMarkup, /\b(?:due|late|overdue)\b|\+\d+d/i)
 })

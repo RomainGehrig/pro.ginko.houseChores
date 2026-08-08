@@ -12,8 +12,11 @@ import { escapeAttribute } from './categoryLocationView.js'
 import { escapeHtml } from './helpers.js'
 import {
   buildActiveTaskDetailsHtml,
-  buildEnrichmentAvailability
+  buildEnrichmentAvailability,
+  buildTaskLedgerSummaryHtml
 } from './taskPresentationLogic.js'
+import { groupAndSort } from './slip.js'
+import { localDateFromDate } from './scheduleLogic.js'
 import { saveTaskWithRefresh } from './taskSaveLogic.js'
 import {
   buildScheduleEditorModel,
@@ -231,27 +234,47 @@ function renderActive() {
   const container = document.getElementById('activeCards')
   const active = getActiveTasks()
   const snapshot = categoryLocationStore.getSnapshot()
-  container.innerHTML = active.length
-    ? active.map(task => activeTaskCardHtml(task, snapshot)).join('')
-    : '<p class="empty">No active tasks.</p>'
+  container.innerHTML = activeTaskGroupsHtml(active, snapshot, localDateFromDate(new Date()))
 }
 
-export function activeTaskCardHtml(task, snapshot) {
+function dueGroupSlug (name) {
+  return name.toLowerCase().replace(/\s+/g, '-')
+}
+
+export function activeTaskGroupsHtml (tasks, snapshot, today) {
+  const groups = groupAndSort(tasks, today)
+  if (!groups.length) return '<p class="empty">No active tasks.</p>'
+
+  return groups.map(group => {
+    const slug = dueGroupSlug(group.name)
+    return '<section class="ledger-group" aria-labelledby="ledger-' + slug + '">' +
+      '<h3 id="ledger-' + slug + '" class="ledger-eyebrow stamp"><span>' + group.name +
+        '</span><span class="ledger-count fig">' + group.tasks.length + '</span></h3>' +
+      '<ul class="ledger">' +
+        group.tasks.map(task => activeTaskCardHtml(task, snapshot, today)).join('') +
+      '</ul>' +
+    '</section>'
+  }).join('')
+}
+
+export function activeTaskCardHtml (task, snapshot, today = localDateFromDate(new Date())) {
   const isEditing = task._id === editingTaskId
-  const content = isEditing
-    ? taskEditorHtml(task, snapshot)
-    : buildActiveTaskDetailsHtml(task, snapshot)
+  const editor = isEditing
+    ? '<div class="ledger-row-editor">' + taskEditorHtml(task, snapshot) + '</div>'
+    : ''
   const actions = isEditing
     ? '<button class="save-task-edit-btn" type="button">Save</button>' +
       '<button class="cancel-task-edit-btn" type="button">Cancel</button>'
     : '<button class="edit-task-btn" type="button">Edit</button>'
 
   return (
-    '<div class="task-card" data-id="' + escapeAttribute(task._id) + '">' +
-      '<div class="task-name">' + escapeHtml(String(task.name ?? '')) + '</div>' +
-      content + actions +
-      '<button class="archive-btn" type="button">Archive</button>' +
-    '</div>'
+    '<li class="task-card ledger-row" data-id="' + escapeAttribute(task._id) + '">' +
+      '<div class="ledger-row-summary">' + buildTaskLedgerSummaryHtml(task, today) + '</div>' +
+      editor +
+      '<div class="ledger-row-actions">' + actions +
+        '<button class="archive-btn" type="button">Archive</button>' +
+      '</div>' +
+    '</li>'
   )
 }
 
