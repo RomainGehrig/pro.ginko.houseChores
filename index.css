@@ -350,7 +350,7 @@ button:hover {
   display: flex;
   gap: 16px;
   justify-content: space-between;
-  padding: 8px 0 12px;
+  padding: 8px 56px 12px 0;
   position: sticky;
   top: 0;
   z-index: 1;
