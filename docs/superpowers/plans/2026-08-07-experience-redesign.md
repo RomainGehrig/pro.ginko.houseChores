@@ -16,13 +16,13 @@ Tracking issue: `hc-e92`
 
 ## Stage 1 — Due-first, and it looks like the app
 
-**Delivers.** The chore list stops lying. Eleven overdue chores are grouped under LATE with a mono "+14d" stamp and a "last done 21d ago · every 7" line, ordered by how far behind they actually are — instead of 17 identical grey cards in _date_modified order. The whole app repaints in the enamel palette with the 44px/16px control floor, working dark mode, visible focus, and the reduced-motion block. On a phone at night it is finally usable.
+**Delivers.** The chore list stops lying. The eleven chores whose rhythm has come round are grouped under **READY** with a `--graphite` mark (`21d` since you last did it, or a real date for a `fixed` chore) and a `last done 21d ago · about every 7` line, ordered by ripeness — instead of 17 identical grey cards in _date_modified order. Per AGENTS.md rule 2 there is **no** `+Nd` figure and **no** red overdue mark anywhere. The whole app repaints in the enamel palette with the 44px/16px control floor, working dark mode, visible focus, and the reduced-motion block. On a phone at night it is finally usable.
 
 **Files.** NEW: slip.js, slip.test.js. CHANGED: index.css (full rewrite: the `:root` token block from spec §4 goes at the TOP of this file, then ledger/plate/button/stamp components), tasksView.js (renderActive → grouped ledgers), taskPresentationLogic.js (+taskPresentationLogic.test.js), manifest.json (`files` array only — documentation).
 
 **Do NOT create a separate `tokens.css`.** Adding a file to `css_files` changes page loading and forces an app reinstall. `index.css` is already listed, so putting the tokens there keeps Stage 1 **reinstall-free** — which matters, because it is the stage you want the tightest feedback loop on. Likewise `slip.js` is reached through `tasksView.js`'s import chain, so it goes in the manifest's `files` array (documentation) and **not** in `modules`.
 
-**Testable (node --test).** slip.js: cadenceDays(schedule) for all five schedule shapes including weekdays/N and one_off→null; slip(task, today) saturating curve (0 when on time, 1.0 at exactly one cadence late, 2.0 asymptote); dueGroup(task, today) → LATE|TODAY|THIS WEEK|LATER|SOMEDAY; groupAndSort(tasks, today) proving a 3-day chore 1 day late outranks a 365-day chore 1 day late, and that drafts sort last within their group.
+**Testable (node --test).** slip.js: cadenceDays(schedule) for all five schedule shapes including weekdays/N and one_off→null; slip(task, today) saturating curve (0 when on time, 1.0 at exactly one cadence late, 2.0 asymptote); dueGroup(task, today) → READY|TODAY|THIS WEEK|LATER|SOMEDAY; groupAndSort(tasks, today) proving a 3-day chore one day past its rhythm outranks a 365-day chore one day past its date, and that drafts sort last within their group. **slip is internal ranking only — assert no view helper ever formats it for display.**
 
 ## Stage 2 — Routes, and a round that survives a refresh
 
@@ -52,11 +52,11 @@ Tracking issue: `hc-e92`
 
 ## Stage 5 — Doing, rebuilt around the round
 
-**Delivers.** One screen showing the whole round as a segmented ring plus a ruled watch bill: complete in any order, tap a segment or a row to switch. A countdown against the target instead of an unbounded count-up, with neutral grey overrun. One 64px DONE at thumb height; already done and skip as quiet links; End the round moved to the header. Skip reschedules instead of recording a permanent failure. The timer stops when the tab is hidden and the screen stays awake. Completion lands a fact, not a dialog.
+**Delivers.** One screen showing the whole round as a segmented ring plus a ruled watch bill: complete in any order, tap a segment or a row to switch. The ring is a **plan and progress device, not a timer** — it does not count down and does not change colour when a chore runs long (AGENTS.md rule 2). Timing is owned by `2026-08-07-active-session-resilience.md`: one session count-up timer, no per-task timer. One 64px DONE at thumb height; already done and skip as quiet links; End the round moved to the header. Skip reschedules instead of recording a permanent failure. The timer stops when the tab is hidden and the screen stays awake. Completion lands a fact, not a dialog.
 
 **Files.** NEW: ring.js, ring.test.js, timerLogic.js, timerLogic.test.js. CHANGED: doingView.js (rewrite), taskPresentationLogic.js (buildDoingTaskHtml → watch bill), doingCompletionLogic.js (skip path), completionSaveLogic.js (actualSeconds), executionData.js, scheduleLogic.js (skip advance = one third of cadence), manifest.json (taskExecutions.actualSeconds → reinstall).
 
-**Testable (node --test).** ring.js: segmentGeometry(round, currentId, elapsedSec) → dasharray/offset per segment summing to 100, three correct visual states, current segment draining and clamping at full length on overrun. timerLogic.js: elapsedSeconds(startedAt, now, hiddenSpans) excluding backgrounded time; skipAdvance(task, today) pushing scheduledDate by cadence/3 and writing no execution.
+**Testable (node --test).** ring.js: segmentGeometry(round, currentId) → dasharray/offset per segment summing to 100, sized by each chore's estimate, with three states (done / current / ahead) distinguished by stroke weight rather than hue. skipAdvance(task, today) pushes scheduledDate by cadence/3 and writes no execution. **Timing functions belong to the session-resilience plan — do not add a second elapsed-time implementation here.**
 
 ## Stage 6 — The receipt replaces Review
 
