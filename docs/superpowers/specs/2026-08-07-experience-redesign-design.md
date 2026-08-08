@@ -51,12 +51,12 @@ Three rules, in force everywhere:
    reserved for a genuinely impossible action (no network, nothing selected). If a choice would
    produce a poor result, let it be chosen and *say what happened*, with the fix as a control.
 3. **Over-budget is reported, never punished.** It renders in `--graphite` in the same neutral
-   voice as an overrunning chore in §6.5 — never `--stamp`, never a warning icon, never a
-   confirmation step. Colouring overrun red punishes honesty about how long chores actually take,
-   and that is as true when planning as it is mid-round.
+   voice as a chore that runs past its estimate in §6.5 — never `--stamp`, never a warning icon,
+   never a confirmation step. Marking a chore red for taking longer than a guess punishes honesty
+   about how long chores actually take, and that is as true when planning as it is mid-round.
 
 *This generalises a decision the design had already made in one corner and then failed to apply
-anywhere else.* §6.5 gets it right for a chore overrunning during a round; §5.7, §6.1 and §6.2
+anywhere else.* §6.5 gets it right for a chore that runs long; §5.7, §6.1 and §6.2
 originally got it wrong for the same information at planning time — a disabled budget chip, an
 `+ add` picker that hid anything that did not fit, a `THAT'S RIGHT` disabled until a date was
 supplied, and a `buildRound` invariant that made an over-budget round unrepresentable. All four
@@ -65,6 +65,51 @@ are corrected below, and the corrections are the normative text.
 **The test an implementer should apply:** if a user action is refused, prevented, greyed out or
 gated behind a confirmation, and the reason traces back to an estimated duration or a budget —
 it is wrong. Allow it, show the consequence, offer the undo.
+
+---
+
+## 1b. The rhythm rule — most chores cannot be late
+
+The app already holds two kinds of schedule and they are **not the same kind of thing**. This is
+not a new idea; it is written into `scheduleSummary` in the existing, tested code:
+
+| Type | What the app already calls it | What it is |
+|---|---|---|
+| `periodic` | *"About every 14 days **after completion**"* | a **rhythm**, measured from when you last did it |
+| `fixed` | *"Monthly on day 5"*, *"Every year on November 3"* | a **date**, set by the outside world |
+| `one_off` | *"Once"* | a **wish** |
+
+The app's own copy says **"About"**. A rhythm is approximate by definition, it is relative to your
+own last completion, and nothing whatsoever happens in the world when it passes. **A chore on a
+rhythm cannot be late, because there was never a deadline to miss.** Sheets, laundry, plants,
+decluttering, small fixes — 22 of the 23 live records — are all of these.
+
+A *bill* can be late. Car tires before the first snow can be late. Those are `fixed`, they come
+from outside, and being wrong costs money — which is exactly why §6.2 already refuses to guess
+their dates.
+
+Rendering both classes with the same red `+14d` mark converts an admittedly-approximate rhythm
+into a precise, dated debt, and then charges you interest on it in the left gutter of every row.
+That is the app inventing a failure that did not happen.
+
+**So:**
+
+1. **`periodic` and `one_off` chores are never marked late.** No red, no `+N d` overdue figure, no
+   "overdue" or "late" anywhere in the interface. They become *riper* — more worth doing — and
+   ripeness is expressed by **ordering** and by a plain fact (`last done 21 days ago · about every
+   7`), never by a mark that only exists to say you failed.
+2. **`fixed` chores may carry a date**, because they have one. Past its date, the row says
+   `was due 5 Aug` in `--graphite` — a fact about the world, stated once, not a running tally.
+3. **Red is not a judgement colour.** `--stamp` is for the `DONE` stamp and for the date refusal.
+   It is never applied to a chore for not having been done.
+4. **The ranking stays.** Saturating slip (§6.9) is a good function and it already compresses
+   lateness deliberately so a chore six months past a 3-day rhythm cannot pin the top of the list
+   forever. Keep the maths, drop the accusation. **Sorting is how the app says "this one first".
+   It does not also need to say "and you're bad".**
+
+**The test an implementer should apply:** if a number on screen exists only to quantify how far
+behind the user is, delete it. If a fact would help them decide (when they last did it, how often
+they tend to, what it costs) keep it, in `--graphite`, stated once.
 
 ---
 
@@ -82,7 +127,7 @@ He wants them out of his head with zero ceremony. He types or dictates lines; th
 A lookup. Chore detail answers it with a date, a rhythm drawn to scale, and the actual measured times. Today this requires expanding session accordions one at a time.
 
 **Moment 4 — "Is anything on fire?" / "Is the house actually kept up?"**
-A two-second read. The LATE group with counts on Today; the house line on the receipt and in the Log. Never a streak, never a score.
+A two-second read. The READY group with counts on Today; the house line on the receipt and in the Log. Never a streak, never a score.
 
 ---
 
@@ -120,7 +165,7 @@ The 4,406px Tasks screen was four unrelated jobs sharing one scroll position. It
 Hash routing — no `pushState`, because freezr serves the app under `/apps/<appname>/index` and a history-API route would 404 on refresh. `location.hash` + `hashchange` is CSP-clean and survives reload exactly.
 
 ```
-#/today                default; the round + what's late + capture
+#/today                default; the round + what's ready + capture
 #/inbox                unconfirmed drafts (nav item hidden when count is 0)
 #/chores               the library: search, filter, grouped ledger, year band
 #/chore/:id            one chore: the plate, the record, the occurrence strip
@@ -205,7 +250,8 @@ Enamelware, not cream. The ground is a cool pale green-grey; the accent is a dee
   /* ── signal ──────────────────────────────────────────────── */
   --enamel:   #14554C;  /* structure: header, primary fill, ring, TODAY stamp. 8.1:1 */
   --on-enamel:#FBFCFB;  /* type on --enamel. 8.3:1 */
-  --stamp:    #A8322A;  /* overdue marks, the refusal rule, the DONE stamp. 6.6:1 */
+  --stamp:    #A8322A;  /* the DONE stamp and the date refusal ONLY. 6.6:1.
+                           NEVER applied to a chore for not having been done — see 1b. */
 
   /* ── type ────────────────────────────────────────────────── */
   --face-stamp: "Avenir Next Condensed", "Roboto Condensed", "Segoe UI Semibold",
@@ -336,18 +382,21 @@ States: `.is-saving` — an explicit `SAVING` stamp badge appears in the header 
 Lists are ruled ledgers, not stacks of rounded cards. One `.ledger` per due group.
 
 ```html
-<h2 class="ledger-eyebrow stamp">LATE <span class="fig">11</span></h2>
+<h2 class="ledger-eyebrow stamp">READY <span class="fig">11</span></h2>
 <ul class="ledger">
   <li class="ledger-row" data-id="ID">
-    <span class="row-stamp fig">+14d</span>       <!-- left gutter, 56px -->
+    <span class="row-stamp fig">21d</span>        <!-- left gutter, 56px; graphite -->
     <span class="row-name">Household laundry</span>
     <span class="row-fig fig">45 min</span>
     <span class="row-tag fig">7d</span>
-    <p class="row-note fig">last done 21d ago</p> <!-- LATE rows only -->
+    <p class="row-note fig">last done 21d ago · about every 7</p>
   </li>
 </ul>
 ```
-Rows are 56px minimum, separated by a 1px `--rule` top border (not bordered cards). The whole row is the tap target and routes to `#/chore/:id`. `.row-stamp` renders `+14d` in `--stamp`, or a filled `--enamel` `TODAY` pill, or a `--graphite` date. Swipe-left or the row's `⋯` opens Archive with undo.
+Rows are 56px minimum, separated by a 1px `--rule` top border (not bordered cards). The whole row is the tap target and routes to `#/chore/:id`. `.row-stamp` is **always `--graphite`** and its content depends on the schedule type (§1b): for a
+`periodic` chore, how long since you last did it (`21d`, or `—` if never); for a `fixed` chore, its
+date (`5 Aug`); for today, a filled `--enamel` `TODAY` pill. It never renders `+Nd` and it is never
+`--stamp` — there is no overdue mark in this app. Swipe-left or the row's `⋯` opens Archive with undo.
 
 ### 5.4 `.btn` — the button vocabulary (none exists today)
 
@@ -380,7 +429,7 @@ One inline SVG, ~70 lines, no library. A `<circle>` per chore in the round with 
 - **current** — `--enamel` at 8px, *draining*: the segment's own dash offset shrinks as its minutes are spent
 - **ahead** — 2px `--edge` outline
 
-There is exactly one scale on this object: **session minutes**. The number in the centre is a readout of the current segment, not a second clock. On overrun the current segment stops at its full length and turns `--graphite`, and the centre number counts up with a `+`.
+There is exactly one scale on this object: **session minutes**. The centre shows the session's count-up elapsed time (owned by the session-resilience design). When a chore runs past its estimate the segment simply stops growing at its full length and stays `--enamel` — it does not change colour, and nothing anywhere reports the difference (§1b).
 
 Each segment is hit-testable via a transparent wide-stroke overlay circle, **and** every chore has a real focusable row in the watch bill below with a distinct accessible name (`Switch to Clean the WCs`) — the ring is never the only way to do anything.
 
@@ -433,12 +482,12 @@ Opens with the round **already built**. Budget read from `localStorage` (default
    ── confirm; the total just re-strikes ──
 │      2h 25 of 30 min · 1h 55 over    │   --graphite, never --stamp
 
-  LATE ································· 4
+  READY ································ 4
 ╭──────────────────────────────────────╮
-│ +14d  Household laundry       45 min │
-│       last done 21d ago · every 7    │
-│  +1d  Pay bills               20 min │
-│       last done 31d ago · every 30   │
+│  21d  Household laundry       45 min │
+│       last done 21d ago · about every 7│
+│ 5 Aug Pay bills               20 min │
+│       was due 5 Aug · monthly on day 5│
 ╰──────────────────────────────────────╯
 
   THIS WEEK ···························· 2
@@ -462,21 +511,24 @@ Opens with the round **already built**. Budget read from `localStorage` (default
 - `Make room` on the `TOO LONG` block → sets the budget to that chore's minutes and rebuilds, for when you want the round re-planned around it. It sits **beside** `[Add anyway]`, which just adds the chore and lets the total go over. Two different intents, two controls, neither of them a refusal. **This block is the fix for the app's largest blind spot:** `buildBundle`'s greedy first-fit silently discards everything above the budget — with the live data that is 435 of 615 backlog minutes that can never appear in any proposal.
 - `⌄` → category filter. When a *place* filter is active, the round keeps that place's chores consecutive so you finish a room before you move.
 - START → creates the session, writes `bundleOrder`, routes to `#/doing`.
-- A LATE row → `#/chore/:id`.
+- A READY row → `#/chore/:id`.
 
-**Ordering.** Groups are LATE / TODAY / THIS WEEK / LATER, ordered *within* group by **saturating slip** (§6.9). Drafts carry slip 0 and always sort last within their group, so a machine's guess can never displace a genuinely overdue chore.
+**Ordering.** Groups are READY / TODAY / THIS WEEK / LATER, ordered *within* group by **saturating
+slip** (§6.9). READY holds everything whose rhythm has come round or whose date has passed — it is
+named for what you can do, not for what you failed to do (§1b). Drafts carry slip 0 and always sort
+last within their group, so a machine's guess can never displace a chore that is genuinely ripe.
 
 **Copy.**
 - Heading: the date, in stamp voice. There is no `<h1>Chore Planner</h1>` anywhere — you know what app you opened.
 - Round header: `THE ROUND` · `25 of 30 min · 5 spare`
 - Round header, over budget: `70 of 30 min · 40 over` — a readout in `--graphite`, in the same
-  register as `+02:40` on an overrunning chore. Not `Over budget!`, not `⚠`, not `--stamp`.
+  register as the session's plain elapsed time. Not `Over budget!`, not `⚠`, not `--stamp`.
 - `+ add` picker, below the rule: `these are longer than the time you have` — a label on a
   section you can still pick from, not a refusal.
 - `NEEDS A DATE · 1` — the ledger for chores confirmed while their date was refused.
 - Empty (no chores at all): `Nothing here yet. Write down something you've been meaning to do.` — capture field focused.
 - Empty (nothing fits): `Nothing fits 15 minutes. The shortest chore is Water the plants, 10 min.` with a `[Make it 10]` action. An error that explains itself and fixes itself.
-- Nothing late: `Nothing is late.` — and the LATE ledger is not rendered at all, rather than saying "No late tasks."
+- Nothing ready: `Nothing needs you right now.` — and the READY ledger is not rendered at all, rather than saying "No late tasks."
 - Save error: `Couldn't save that. The chore is unchanged.  [Try again]` — never raw exception text.
 
 ---
@@ -551,7 +603,7 @@ All three tests are derivable from records the app already has, testable, and th
 **A refusal withholds a guess. It never withholds the button** (§1a rule 2). `THAT'S RIGHT` is
 always live. Confirming a plate whose date is refused inks every other field, leaves
 `scheduledDate` null, and files the chore under a `NEEDS A DATE · n` ledger at the top of Today —
-above `LATE`, because it is the one group the app genuinely cannot resolve for you. One tap on the
+above `READY`, because it is the one group the app genuinely cannot resolve for you. One tap on the
 row opens the date picker. The chore is otherwise a normal confirmed chore.
 
 This is the difference between *"I will not guess your insurance renewal"* — which is the
@@ -587,7 +639,7 @@ Ten of seventeen live chores are one half of a duplicate pair ("Change bed sheet
 
 > "Where's that thing about the coffee machine?" / "Show me the state of all of these."
 
-Search (client-side substring — no index needed), filter chips from live categories, and the same grouping and slip ordering as Today, but complete: LATE / TODAY / THIS WEEK / LATER / SOMEDAY.
+Search (client-side substring — no index needed), filter chips from live categories, and the same grouping and slip ordering as Today, but complete: READY / TODAY / THIS WEEK / LATER / SOMEDAY.
 
 Below the ledger sits **THE NEXT YEAR** — a static dimension band: a horizontal `--rule` line with month letters in mono and a tick per chore whose cadence is a year or longer, plus a `▲now` marker. It is not a calendar; it is the cheapest device that makes an annual obligation visible at all. Slip ranking mathematically guarantees a 365-day chore never surfaces until it is nearly due, so winter tires and Christmas planning would otherwise be invisible until they are urgent. One inline SVG.
 
@@ -600,13 +652,13 @@ Below the ledger sits **THE NEXT YEAR** — a static dimension band: a horizonta
 ╰──────────────────────────────────────╯
  [ALL] CLEAN/RESET  ADMIN  FIX  PLAN  ▸
 
-  LATE ································ 11
+  READY ······························· 11
 ╭──────────────────────────────────────╮
-│ +14d  Household laundry    45min  7d │
+│  21d  Household laundry    45min  7d │
 │       last done 21d ago              │
-│ +14d  Vacuum bedroom       15min  7d │
-│       never done                     │
-│  +1d  Round of small fixes  2h   30d │
+│   —   Vacuum bedroom       15min  7d │
+│       not yet done                   │
+│  31d  Round of small fixes  2h   30d │
 ╰──────────────────────────────────────╯
 
   LATER ································ 4
@@ -712,7 +764,19 @@ Full-viewport, thumb-zone layout. **No model is in the loop here at any point.**
         already done        skip          44px, quiet text
 ```
 
-- **The ring** (§5.8) carries the whole round; the centre number is the current segment's remaining time, counting **down**. A countdown frames the chore as bounded and finishable; the current count-*up* frames every chore as open-ended commitment. On overrun the ring segment goes `--graphite` and the number reads `+02:40` — **neutral, never red**, because colouring overrun red punishes honesty about how long chores actually take.
+- **The ring** (§5.8) is a **plan and progress device, not a timer.** Its segments show the shape
+  of the round — what is done, what you are on, what is ahead — sized by each chore's estimate. It
+  does **not** count down. Per §1b, a countdown to zero against a duration *the app guessed* is a
+  deadline the app invented; missing it is a failure that did not happen.
+- **Timing is owned by `2026-08-07-active-session-resilience-design.md`**, which supersedes this
+  document on timers and specifies **one count-up timer for the whole session and no per-task
+  timer**. That is the correct call on §1b and this section defers to it. The centre of the ring
+  shows the session's elapsed time; the per-chore estimate stays a label on the watch-bill row, as
+  information for choosing what to do next, never as a clock running against you.
+- **No time in this app is ever a deadline.** Nothing turns red, nothing buzzes, nothing is
+  "overrun", and the word does not appear in the interface. Going long on a chore is simply how
+  long that chore took — which is the measurement the estimate learns from, so honesty about it is
+  the behaviour the app most wants to encourage.
 - **Any chore, any order.** Tap a ring segment or a watch-bill row to switch. `state.currentBundleIndex` and its forced `index++` conveyor are gone.
 - **One primary action.** `DONE` full-width 64px sticky with `padding-bottom: env(safe-area-inset-bottom)`. `already done` and `skip` are quiet text links on a 44px row below. `End the round` is out of the action stack entirely — top-left of the header, diagonally opposite the thumb, and it opens an inline sheet (`End the round? 2 chores left.` → `[End the round] [Keep going]`), never a native confirm. Today all four actions are 29.3px tall, identical in size, weight and border, with the destructive one 10px from the primary.
 - **`skip` actually skips.** It pushes `scheduledDate` forward by a third of the cadence and writes no execution. Today "Cancel" writes a permanent `cancelled` failure and leaves the chore overdue forever — so the user's only clean options are do it or quit.
@@ -759,9 +823,9 @@ Full-viewport, thumb-zone layout. **No model is in the loop here at any point.**
 
   THE HOUSE
 ╭──────────────────────────────────────╮
-│ Nothing has slipped more than a week.│
-│ Household laundry is the oldest —    │
-│ 21 days, on a 7-day cadence.         │
+│ The house is in good order.          │
+│ Household laundry has waited longest │
+│ — 21 days, on a 7-day rhythm.        │
 ╰──────────────────────────────────────╯
 ╭──────────────────────────────────────╮
 │  Clean the WCs usually takes 9 min   │
@@ -858,7 +922,7 @@ export function slip (task, today) {
 }
 ```
 
-This is why "Water the plants" (every 3 days, 1 day late) outranks "Plan Chrismas vacations" (every 365 days, 1 day late), which today are indistinguishable because both read `8/6/2026` in identical 12px grey.
+This is why "Water the plants" (a 3-day rhythm, one day past) outranks "Plan Chrismas vacations" (a 365-day rhythm, one day past), which today are indistinguishable because both read `8/6/2026` in identical 12px grey. **Slip is an internal ranking number. It is never displayed** (§1b) — it decides order and nothing else.
 
 **The round.** `roundLogic.js` wraps the existing `buildBundle` and adds three things it lacks:
 
@@ -976,7 +1040,7 @@ No adjectives, no exclamation marks, no confetti. A fact you did not previously 
 
 **Live regions declared in static HTML *before* text is written into them.** `<p id="status" role="status"></p>` exists in the markup; the code sets `textContent`. Today `doingView` sets `textContent` and *then* `setAttribute('role','alert')`, so the region is created with content already in it and most screen readers stay silent. The timer is `role="timer"` with an `aria-label`, announced once at target and once at end — not every second.
 
-**Nothing is encoded by colour or opacity alone.** Late-ness is a mono figure (`+14d`) *and* `--stamp` *and* group position. Provenance is a dash pattern *and* the `?` reveal *and* a `˙` marker in the round. Archived and saving use an explicit stamp badge on full-contrast text — today `opacity: .6` pushes archived meta to 2.52:1 and `.task-card.is-saving` does the same to a card mid-save.
+**Nothing is encoded by colour or opacity alone.** Ripeness is carried by **group position and sort order** plus a plain `--graphite` fact (`last done 21d ago · about every 7`) — and by nothing else, because per §1b there is no overdue mark to encode. Provenance is a dash pattern *and* the `?` reveal *and* a `˙` marker in the round. Archived and saving use an explicit stamp badge on full-contrast text — today `opacity: .6` pushes archived meta to 2.52:1 and `.task-card.is-saving` does the same to a card mid-save.
 
 **Contrast, verified.** `--ink`/`--plate` 15:1 · `--graphite`/`--plate` 5.5:1 · `--enamel`/`--plate` 8.1:1 · `--on-enamel`/`--enamel` 8.3:1 · `--stamp`/`--plate` 6.6:1 · dark `--enamel`/`--plate` 5.6:1. `--rule` at 1.6:1 is decorative *only*; every interactive border is `--edge` at ≥3:1, satisfying WCAG 2.2 SC 1.4.11 — a distinction the current CSS does not make, which is why every button in the app has a 1.61:1 edge.
 
@@ -1052,4 +1116,4 @@ No adjectives, no exclamation marks, no confetti. A fact you did not previously 
 
 I am taking it because the alternative is measured, and worse. Two chores currently sit in `proposed` with every field null; eleven of seventeen confirmed chores are already overdue. The bottleneck has never been accuracy — it is triage. **A wrong guess costs one glance at a plate. An untriaged chore costs the chore.**
 
-And the cost is bounded, visible and self-correcting: drafts carry slip 0 and always sort last within their group, so they can never displace a genuinely overdue chore; they are marked on every surface; nothing irreversible happens to them; and the moment you actually do one, the app measures how long it took and inks the duration from the measurement. The guess corrects itself by being used. The app is allowed to be wrong out loud. It is not allowed to be silent, and it is not allowed to make you fill in a form before it will help you.
+And the cost is bounded, visible and self-correcting: drafts carry slip 0 and always sort last within their group, so they can never displace a chore that is genuinely ripe; they are marked on every surface; nothing irreversible happens to them; and the moment you actually do one, the app measures how long it took and inks the duration from the measurement. The guess corrects itself by being used. The app is allowed to be wrong out loud. It is not allowed to be silent, and it is not allowed to make you fill in a form before it will help you.

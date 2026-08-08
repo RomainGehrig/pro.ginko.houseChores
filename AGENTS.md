@@ -1,5 +1,63 @@
 @freezr-context.md
 
+## Design principles
+
+These are product rules, not style preferences. They override any design
+document, including the ones in `docs/superpowers/specs/`. If a spec tells you
+to build something that breaks one of these, the spec is wrong — fix it and say
+so. Full reasoning lives in `docs/superpowers/specs/2026-08-07-experience-redesign-design.md`
+sections 1a and 1b.
+
+**The goal is to get chores done.** Every rule below follows from that. An app
+that makes you feel behind is an app you stop opening, and a chore you never
+capture is a chore you never do.
+
+### Constraints advise, they never block
+
+The app's model of your time is a guess. Your intent is the fact.
+
+- No control is ever disabled, and no action refused, warned about, or gated
+  behind a confirmation, because of a duration, a count, or a fit calculation.
+  Disable only for genuinely impossible actions (offline, nothing selected).
+- What the app proposes for you stays within budget. What the user adds has no
+  budget test at all — it cannot fail and cannot ask.
+- Going over is a readout in a neutral colour, never an error.
+- If a choice leads somewhere poor, let it be chosen, then say what happened and
+  offer the fix as a control.
+
+*Test:* if an action is refused, greyed out, or gated, and the reason traces back
+to an estimate or a budget, it is wrong.
+
+### Most chores cannot be late
+
+`scheduleSummary` in `scheduleLogic.js` already says **"About every 14 days after
+completion"** for a `periodic` chore. That is a rhythm, measured from your own
+last completion, approximate by the app's own admission. Nothing happens in the
+world when it passes.
+
+- `periodic` and `one_off` chores are **never** marked late. No red, no `+N d`
+  overdue figure, no "overdue" or "late" in the interface. They get *riper*.
+- `fixed` chores have real external dates (a bill, snow tires) and may state one
+  as a plain fact — once, not as a running tally.
+- Ripeness is expressed by **sort order** and by a useful fact (`last done 21d
+  ago · about every 7`). Sorting already says "this one first"; it does not also
+  need to say "and you're bad".
+- Red is not a judgement colour. Never apply it to a chore for not being done.
+- No time is a deadline. No countdown against a duration the app guessed, no
+  alarm, nothing turning red for running long. A chore taking longer than its
+  estimate is the measurement the estimate learns from — that honesty is the
+  behaviour to encourage, so never punish it.
+
+*Test:* if a number exists only to quantify how far behind the user is, delete
+it. If it would help them decide, keep it, in the neutral colour, stated once.
+
+### Feedback is factual, not performative
+
+No confetti, no "Great job!", no streaks, no points, no lifetime totals. A streak
+imports loss aversion into a domain where breaking it is guaranteed by one
+holiday. Pay the user in facts they did not have: what it actually took, how it
+compares to usual, when it next comes round.
+
 ## App access and interaction
 
 Use the Chrome MCP to access and interact with the app at
