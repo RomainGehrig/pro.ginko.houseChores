@@ -116,6 +116,30 @@ test('hydrate preserves a task completed after a terminal session execution', as
   assert.deepEqual(aggregate.bundle[0], currentTask)
 })
 
+test('hydrate repairs a task whose completion marker is older than its execution snapshot', async () => {
+  const task = {
+    _id: 'weekly', status: 'active', scheduledDate: '2026-08-08',
+    lastCompletedDate: 500
+  }
+  const snapshot = { lastCompletedDate: 1000, scheduledDate: '2026-08-15' }
+  const updates = []
+  const store = createSessionStore({
+    getSession: async () => activeSession({ taskBundle: ['weekly'] }),
+    listExecutions: async () => [{
+      taskId: 'weekly', sessionId: 's1', endTime: 1000,
+      taskUpdateSnapshot: snapshot
+    }],
+    listTasks: async () => [structuredClone(task)],
+    updateSessionRecord: async () => {},
+    updateTaskRecord: async (id, fields) => updates.push({ id, fields })
+  })
+
+  const aggregate = await store.refresh('s1', 1000)
+
+  assert.deepEqual(updates, [{ id: 'weekly', fields: snapshot }])
+  assert.deepEqual(aggregate.bundle[0], { ...task, ...snapshot })
+})
+
 test('hydrate leaves executions without a task update snapshot unchanged', async () => {
   const task = {
     _id: 'weekly', status: 'active', scheduledDate: '2026-08-08',
