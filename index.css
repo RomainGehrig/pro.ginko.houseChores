@@ -256,10 +256,14 @@ label:has(input[type="radio"]) {
   overscroll-behavior: contain;
   padding: var(--s4) var(--gutter) calc(var(--s4) + env(safe-area-inset-bottom));
   position: fixed;
-  transform: translateX(-50%);
+  transform: translateX(-50%) translateY(100%);
   transition: transform var(--t-sheet) var(--e-sheet);
   width: 100%;
   z-index: 30;
+}
+
+#bottomSheet[data-state="open"] {
+  transform: translateX(-50%) translateY(0);
 }
 
 #bottomSheet h2,

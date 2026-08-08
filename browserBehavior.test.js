@@ -711,6 +711,7 @@ test('bottom sheet traps focus, renders safe text, dismisses, and restores prior
       const shiftTabWrap = document.activeElement.textContent
       const minActionHeights = buttons.map(button => button.getBoundingClientRect().height)
       sheet.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+      sheet.dispatchEvent(new TransitionEvent('transitionend', { propertyName: 'transform', bubbles: true }))
       const firstResult = await firstOpen
       const restoredAfterEscape = document.activeElement.id
 
@@ -718,6 +719,7 @@ test('bottom sheet traps focus, renders safe text, dismisses, and restores prior
       const replacement = openSheet({ title: 'Second', message: 'Second', actions: [{ value: 'two', label: 'Two' }] })
       const replacedResult = await replaced
       document.getElementById('sheetScrim').click()
+      sheet.dispatchEvent(new TransitionEvent('transitionend', { propertyName: 'transform', bubbles: true }))
       const replacementResult = await replacement
 
       const result = {
@@ -747,6 +749,69 @@ test('bottom sheet traps focus, renders safe text, dismisses, and restores prior
     minActionHeights: result.minActionHeights
   })
   assert.ok(result.minActionHeights.every(height => height >= 44.5), JSON.stringify(result))
+})
+
+test('bottom sheet paints a vertical closed state before transitioning open and closed', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 640 },
+    body: '<main id="app"><button id="opener">Open</button></main>' +
+      '<div id="sheetScrim" hidden></div>' +
+      '<section id="bottomSheet" hidden role="dialog" aria-modal="true" aria-labelledby="bottomSheetTitle" aria-describedby="bottomSheetMessage">' +
+        '<h2 id="bottomSheetTitle"></h2><p id="bottomSheetMessage"></p>' +
+        '<div id="bottomSheetActions"></div>' +
+      '</section>',
+    script: `
+      const { initSheet, openSheet } = await import(applicationUrl + 'sheet.js')
+      const sheet = document.getElementById('bottomSheet')
+      document.getElementById('opener').focus()
+      initSheet()
+      const closing = openSheet({
+        title: 'Delete chore permanently?',
+        message: 'Clean attic will be removed permanently.',
+        actions: [{ value: 'keep', label: 'Keep' }]
+      })
+      const verticalOffset = () => new DOMMatrixReadOnly(getComputedStyle(sheet).transform).m42
+      const closedOffset = verticalOffset()
+      const transitionDuration = getComputedStyle(sheet).transitionDuration
+      const stateBeforeFrame = sheet.dataset.state
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      const stateAfterFrame = sheet.dataset.state
+      const openingAnimations = sheet.getAnimations().length
+      sheet.getAnimations().forEach(animation => animation.finish())
+      await Promise.resolve()
+      const openOffset = verticalOffset()
+      sheet.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))
+      const stateWhileClosing = sheet.dataset.state
+      const closingAnimations = sheet.getAnimations().length
+      sheet.dispatchEvent(new TransitionEvent('transitionend', { propertyName: 'transform', bubbles: true }))
+      const closeResult = await closing
+      const result = {
+        closedOffset,
+        openOffset,
+        transitionDuration,
+        stateBeforeFrame,
+        stateAfterFrame,
+        stateWhileClosing,
+        openingAnimations,
+        closingAnimations,
+        hiddenAfterClose: sheet.hidden,
+        closeResult,
+        restoredFocus: document.activeElement.id
+      }
+    `
+  })
+
+  assert.ok(result.closedOffset > 0, JSON.stringify(result))
+  assert.ok(Math.abs(result.openOffset) < 0.5, JSON.stringify(result))
+  assert.notEqual(result.transitionDuration, '0s')
+  assert.equal(result.stateBeforeFrame, 'closed')
+  assert.equal(result.stateAfterFrame, 'open')
+  assert.equal(result.stateWhileClosing, 'closed')
+  assert.ok(result.openingAnimations >= 1, JSON.stringify(result))
+  assert.ok(result.closingAnimations >= 1, JSON.stringify(result))
+  assert.equal(result.hiddenAfterClose, true)
+  assert.equal(result.closeResult, null)
+  assert.equal(result.restoredFocus, 'opener')
 })
 
 test('shared undo toast reads as one action and clears above the phone navigation', async () => {

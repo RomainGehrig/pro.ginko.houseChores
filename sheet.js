@@ -5,20 +5,68 @@ let initialized = false
 let elements = null
 let priorFocus = null
 let resolveOpen = null
+let activeOpen = null
+let openingFrame = null
+let closeTimer = null
+let closingValue = null
 
 function enabledActions () {
   return [...elements.actions.querySelectorAll('button:not([disabled])')]
 }
 
-function closeSheet (value = null) {
+const scheduleFrame = callback => typeof requestAnimationFrame === 'function'
+  ? requestAnimationFrame(callback)
+  : setTimeout(callback, 0)
+
+const cancelScheduledFrame = frame => {
+  if (frame === null) return
+  if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(frame)
+  else clearTimeout(frame)
+}
+
+function transitionTimeMilliseconds () {
+  if (typeof getComputedStyle !== 'function') return 0
+  const style = getComputedStyle(elements.sheet)
+  const milliseconds = value => value.trim().endsWith('ms')
+    ? Number.parseFloat(value)
+    : Number.parseFloat(value) * 1000
+  const durations = style.transitionDuration.split(',').map(milliseconds)
+  const delays = style.transitionDelay.split(',').map(milliseconds)
+  return durations.reduce((maximum, duration, index) =>
+    Math.max(maximum, duration + (delays[index] ?? delays[0] ?? 0)), 0)
+}
+
+function finishClose () {
   if (!resolveOpen) return false
   const resolve = resolveOpen
   resolveOpen = null
+  activeOpen = null
+  cancelScheduledFrame(openingFrame)
+  openingFrame = null
+  clearTimeout(closeTimer)
+  closeTimer = null
   elements.sheet.hidden = true
   elements.scrim.hidden = true
+  elements.sheet.dataset.state = 'closed'
   if (priorFocus?.isConnected) priorFocus.focus()
   priorFocus = null
-  resolve(value)
+  resolve(closingValue)
+  closingValue = null
+  return true
+}
+
+function closeSheet (value = null, { immediate = false } = {}) {
+  if (!resolveOpen) return false
+  closingValue = value
+  const wasOpen = elements.sheet.dataset.state === 'open'
+  activeOpen = null
+  cancelScheduledFrame(openingFrame)
+  openingFrame = null
+  elements.sheet.dataset.state = 'closed'
+  if (immediate || !wasOpen) return finishClose()
+
+  clearTimeout(closeTimer)
+  closeTimer = setTimeout(finishClose, transitionTimeMilliseconds() + 50)
   return true
 }
 
@@ -56,6 +104,9 @@ export function initSheet () {
 
   elements = { scrim, sheet, title, message, actions }
   sheet.addEventListener('keydown', handleKeydown)
+  sheet.addEventListener('transitionend', event => {
+    if (event.propertyName === 'transform' && sheet.dataset.state === 'closed') finishClose()
+  })
   scrim.addEventListener('click', () => closeSheet(null))
   initialized = true
   return true
@@ -63,7 +114,7 @@ export function initSheet () {
 
 export function openSheet ({ title, message, actions = [] }) {
   if (!initSheet()) return Promise.resolve(null)
-  closeSheet(null)
+  closeSheet(null, { immediate: true })
 
   priorFocus = document.activeElement
   elements.title.textContent = String(title ?? '')
@@ -79,9 +130,18 @@ export function openSheet ({ title, message, actions = [] }) {
     elements.actions.appendChild(button)
   }
 
+  const promise = new Promise(resolve => { resolveOpen = resolve })
+  closingValue = null
+  elements.sheet.dataset.state = 'closed'
   elements.scrim.hidden = false
   elements.sheet.hidden = false
-  const promise = new Promise(resolve => { resolveOpen = resolve })
+  elements.sheet.getBoundingClientRect()
+  const open = {}
+  activeOpen = open
+  openingFrame = scheduleFrame(() => {
+    openingFrame = null
+    if (activeOpen === open && resolveOpen) elements.sheet.dataset.state = 'open'
+  })
   enabledActions()[0]?.focus()
   return promise
 }

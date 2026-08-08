@@ -78,7 +78,7 @@ test('route shell declares four primary canonical anchors, eight focus headings,
   assert.match(html, /class="undo-separator">&middot;<\/span>/)
   assert.match(html, /id="undoToastButton"[^>]*>Undo<\/button>/)
   assert.match(html, /id="sheetScrim"[^>]*hidden/)
-  assert.match(html, /id="bottomSheet"[^>]*hidden[^>]*role="dialog"[^>]*aria-modal="true"[^>]*aria-labelledby="bottomSheetTitle"/)
+  assert.match(html, /id="bottomSheet"[^>]*hidden[^>]*role="dialog"[^>]*aria-modal="true"[^>]*aria-labelledby="bottomSheetTitle"[^>]*aria-describedby="bottomSheetMessage"/)
   assert.match(html, /id="bottomSheetMessage"/)
   assert.match(html, /id="bottomSheetActions"/)
   assert.doesNotMatch(html, /data-view=/)
