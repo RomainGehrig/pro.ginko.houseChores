@@ -21,12 +21,45 @@ export function initReviewView() {
 }
 
 export async function startReview() {
-  executionsCache = await listExecutionsBySession(state.currentSession._id)
-  const taskIds = [...new Set(executionsCache.map(e => e.taskId))]
+  executionsCache = []
+  const list = document.getElementById('reviewList')
+  const finish = document.getElementById('finishReviewBtn')
+  finish.disabled = true
+  list.replaceChildren()
+  const loading = document.createElement('p')
+  loading.className = 'inline-status'
+  loading.textContent = 'Loading review…'
+  loading.setAttribute('role', 'status')
+  list.appendChild(loading)
+
+  const executions = await listExecutionsBySession(state.currentSession._id)
+  const taskIds = [...new Set(executions.map(e => e.taskId))]
   const tasks = taskIds.length ? await listTasksByIds(taskIds) : []
   const nameById = new Map(tasks.map(t => [t._id, t.name]))
-  executionsCache.forEach(e => { e.taskName = nameById.get(e.taskId) || 'Unknown task' })
+  executionsCache = executions.map(execution => ({
+    ...execution,
+    taskName: nameById.get(execution.taskId) || 'Unknown task'
+  }))
   renderReviewList()
+  finish.disabled = false
+}
+
+export function renderReviewLoadError(message, retry) {
+  executionsCache = []
+  const list = document.getElementById('reviewList')
+  const finish = document.getElementById('finishReviewBtn')
+  finish.disabled = true
+  list.replaceChildren()
+  const error = document.createElement('p')
+  error.className = 'inline-status'
+  error.textContent = message
+  error.setAttribute('role', 'alert')
+  list.appendChild(error)
+  const button = document.createElement('button')
+  button.id = 'retryReviewLoadBtn'
+  button.textContent = 'Retry review loading'
+  button.addEventListener('click', async () => retry())
+  list.appendChild(button)
 }
 
 function renderReviewList() {

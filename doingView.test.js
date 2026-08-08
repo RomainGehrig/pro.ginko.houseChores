@@ -58,7 +58,18 @@ function createDoingDocument () {
   const content = createControl('doingContent')
   content._dynamicChildren = []
   nodes.set('doingContent', content)
-  nodes.set('reviewList', createControl('reviewList'))
+  const reviewList = createControl('reviewList')
+  reviewList.querySelectorAll = () => []
+  reviewList.onBeforeChildren = () => {
+    for (const child of reviewList.children || []) {
+      if (child.id && nodes.get(child.id) === child) nodes.delete(child.id)
+    }
+  }
+  reviewList.onChildren = children => children.forEach(child => {
+    if (child.id) nodes.set(child.id, child)
+  })
+  nodes.set('reviewList', reviewList)
+  nodes.set('finishReviewBtn', createControl('finishReviewBtn'))
   for (const id of ['proposedCards', 'activeCards', 'archivedCards', 'enrichBtn', 'enrichStatus']) {
     nodes.set(id, createControl(id))
   }
@@ -255,7 +266,8 @@ function createPersistence ({
   loseFirstExecutionResponse = false,
   loseFirstTaskUpdateResponse = false,
   loseQuickAddAttachmentResponse = false,
-  failSessionUpdates = 0
+  failSessionUpdates = 0,
+  failFirstTerminalReviewExecutionRead = false
 }) {
   let session = clone(initialSession)
   const tasks = new Map(initialTasks.map(task => [task._id, clone(task)]))
@@ -270,12 +282,19 @@ function createPersistence ({
   let remainingSessionUpdateFailures = failSessionUpdates
   let shouldLoseTaskUpdateResponse = loseFirstTaskUpdateResponse
   let shouldLoseQuickAddAttachmentResponse = loseQuickAddAttachmentResponse
+  let remainingTerminalReviewExecutionReadFailures = failFirstTerminalReviewExecutionRead ? 1 : 0
 
   const freezr = {
     query: async collection => {
       if (collection === 'sessions') return [clone(session)]
       if (collection === 'tasks') return [...tasks.values()].map(clone)
-      if (collection === 'taskExecutions') return [...executions.values()].map(clone)
+      if (collection === 'taskExecutions') {
+        if (session.status === 'completed' && remainingTerminalReviewExecutionReadFailures > 0) {
+          remainingTerminalReviewExecutionReadFailures--
+          throw new Error('review offline')
+        }
+        return [...executions.values()].map(clone)
+      }
       return []
     },
     create: async (collection, data, options = {}) => {
@@ -352,7 +371,8 @@ async function withDoingEnvironment ({
   loseFirstExecutionResponse,
   loseFirstTaskUpdateResponse,
   loseQuickAddAttachmentResponse,
-  failSessionUpdates
+  failSessionUpdates,
+  failFirstTerminalReviewExecutionRead
 }, run) {
   const originalDocument = globalThis.document
   const originalWindow = globalThis.window
@@ -366,7 +386,8 @@ async function withDoingEnvironment ({
     loseFirstExecutionResponse,
     loseFirstTaskUpdateResponse,
     loseQuickAddAttachmentResponse,
-    failSessionUpdates
+    failSessionUpdates,
+    failFirstTerminalReviewExecutionRead
   })
   const clock = installFakeClock(session.activeStartedAt || 10000)
 
@@ -1410,5 +1431,43 @@ test('conclude stores the unassigned tail and enters Review', async () => {
     assert.equal(persistence.session.status, 'completed')
     assert.equal(persistence.session.unassignedDurationMs, 12000)
     assert.equal(document.control('view-review').style.display, 'block')
+  })
+})
+
+test('terminal Review loading retries without re-entering the active-session refresh path', async () => {
+  const task1 = task('task-1')
+  const session = {
+    _id: 'terminal-review-session', status: 'paused', startTime: 10000,
+    taskBundle: ['task-1'], timeBudgetMinutes: 15,
+    accumulatedActiveMs: 12000, activeStartedAt: null,
+    pausedAt: 22000, checkpointElapsedMs: 12000
+  }
+  const completedExecution = {
+    _id: 'completed-execution', taskId: 'task-1', sessionId: session._id,
+    outcome: 'done', startTime: 10000, endTime: 22000,
+    rawDurationMs: 12000, activeElapsedMs: 12000, actualDuration: 1
+  }
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [task1],
+    bundle: [task1],
+    executions: [completedExecution],
+    failFirstTerminalReviewExecutionRead: true
+  }, async ({ document, persistence, clock }) => {
+    clock.setNow(30000)
+    await document.clickControl('concludeSessionBtn')
+
+    assert.equal(persistence.session.status, 'completed')
+    assert.equal(document.control('view-review').style.display, 'block')
+    assert.ok(document.control('retryReviewLoadBtn'))
+    assert.equal(document.control('finishReviewBtn').disabled, true)
+    assert.equal(document.control('concludeSessionBtn').disabled, false)
+
+    await document.control('retryReviewLoadBtn').dispatch('click')
+
+    assert.match(document.control('reviewList').innerHTML, /task-1/)
+    assert.equal(document.control('finishReviewBtn').disabled, false)
+    assert.equal(persistence.sessionUpdateCalls, 1)
   })
 })

@@ -17,7 +17,7 @@ import { localDateFromDate } from './scheduleLogic.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
 import { getActiveTasks, refreshTasksView } from './tasksView.js'
 import { showView, setNavVisible } from './viewRouter.js'
-import { startReview } from './reviewView.js'
+import { renderReviewLoadError, startReview } from './reviewView.js'
 import { sessionStore } from './sessionStore.js'
 import {
   normalizeContinuationSuggestionEntries,
@@ -111,7 +111,7 @@ async function applyAggregate (aggregate, { allowNavigation = true } = {}) {
     setNavVisible('doing', false)
     setNavVisible('review', true)
     if (allowNavigation) showView('review')
-    await startReview()
+    await loadCurrentReview()
     return
   }
   if (aggregate.session.status === 'interrupted') {
@@ -120,6 +120,19 @@ async function applyAggregate (aggregate, { allowNavigation = true } = {}) {
     return
   }
   renderDoing()
+}
+
+async function loadCurrentReview () {
+  try {
+    await startReview()
+    return true
+  } catch (error) {
+    renderReviewLoadError(
+      'Could not load this session review: ' + String(error?.message || error),
+      loadCurrentReview
+    )
+    return false
+  }
 }
 
 function renderDoing () {
@@ -666,19 +679,15 @@ async function runSessionMutation (operation, failureMessage, retry) {
   clearDoingStatus()
   setSessionMutationControlsDisabled(true)
 
-  let aggregate
   try {
-    aggregate = await operation()
+    const aggregate = await operation()
+    await applyAggregate(aggregate)
   } catch (error) {
+    renderSessionMutationFailure(failureMessage + ': ' + error.message, retry)
+  } finally {
     sessionMutationInFlight = false
     setSessionMutationControlsDisabled(false)
-    renderSessionMutationFailure(failureMessage + ': ' + error.message, retry)
-    return
   }
-
-  await applyAggregate(aggregate)
-  sessionMutationInFlight = false
-  setSessionMutationControlsDisabled(false)
 }
 
 async function runContinuationMutation (operation, failureMessage, retry, wasApplied) {
