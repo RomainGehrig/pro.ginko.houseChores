@@ -395,10 +395,13 @@ test('pending Quick add recovery preserves an existing task after attachment fai
       }
     })
 
-    await assert.rejects(
-      store.quickAdd('s1', 'Replace hallway bulb'),
-      { message: 'attachment write failed' }
-    )
+    let failure
+    try {
+      await store.quickAdd('s1', 'Replace hallway bulb')
+    } catch (error) {
+      failure = error
+    }
+    assert.equal(failure?.message, 'attachment write failed')
     assert.equal(session.pendingAddition.taskId, 'quick-s1-fixed-id')
     records.set('quick-s1-fixed-id', {
       ...records.get('quick-s1-fixed-id'),
@@ -407,7 +410,11 @@ test('pending Quick add recovery preserves an existing task after attachment fai
       status: 'active'
     })
 
-    const recovered = await store.quickAdd('s1', 'Replace hallway bulb')
+    const recovered = await store.quickAdd(
+      's1',
+      'Replace hallway bulb',
+      failure.quickAddIntent
+    )
 
     assert.deepEqual(createCalls.map(call => call.id), ['quick-s1-fixed-id'])
     assert.equal(records.size, 1)
@@ -423,7 +430,7 @@ test('pending Quick add recovery preserves an existing task after attachment fai
   }
 })
 
-test('Quick add retry does not create another ID when attachment commits but the response is lost', async () => {
+test('Quick add retry token does not create another ID when attachment commits but the response is lost', async () => {
   const originalFreezr = globalThis.freezr
   let session = {
     _id: 's1', status: 'paused', startTime: 1000, taskBundle: ['t1'],
@@ -462,14 +469,21 @@ test('Quick add retry does not create another ID when attachment commits but the
       }
     })
 
-    await assert.rejects(
-      store.quickAdd('s1', 'Replace hallway bulb'),
-      { message: 'attachment response lost' }
-    )
+    let failure
+    try {
+      await store.quickAdd('s1', 'Replace hallway bulb')
+    } catch (error) {
+      failure = error
+    }
+    assert.equal(failure?.message, 'attachment response lost')
     assert.equal(session.pendingAddition.stage, 'attached')
     assert.deepEqual(session.taskBundle, ['t1', 'quick-s1-1'])
 
-    const recovered = await store.quickAdd('s1', 'Replace hallway bulb')
+    const recovered = await store.quickAdd(
+      's1',
+      'Replace hallway bulb',
+      failure.quickAddIntent
+    )
 
     assert.deepEqual(createCalls, ['quick-s1-1'])
     assert.equal(createdIds, 1)
@@ -480,6 +494,51 @@ test('Quick add retry does not create another ID when attachment commits but the
     if (originalFreezr === undefined) delete globalThis.freezr
     else globalThis.freezr = originalFreezr
   }
+})
+
+test('a new same-title Quick add survives a stale attached marker', async () => {
+  let session = {
+    _id: 's1', status: 'paused', startTime: 1000,
+    taskBundle: ['t1', 'quick-s1-front'],
+    accumulatedActiveMs: 9000, activeStartedAt: null, checkpointElapsedMs: 9000,
+    pausedAt: 10000,
+    pendingAddition: {
+      taskId: 'quick-s1-front', title: 'Water plants', createdAt: 15000, stage: 'attached'
+    }
+  }
+  let clearFails = true
+  const tasks = new Map([
+    ['t1', { _id: 't1', name: 'Sink' }],
+    ['quick-s1-front', { _id: 'quick-s1-front', name: 'Water plants', status: 'proposed' }]
+  ])
+  const store = createSessionStore({
+    now: () => 20000,
+    createId: () => 'back',
+    getSession: async () => structuredClone(session),
+    listExecutions: async () => [{
+      taskId: 't1', endTime: 10000, rawDurationMs: 9000, activeElapsedMs: 9000
+    }],
+    listTasks: async ids => ids.map(id => tasks.get(id)).filter(Boolean),
+    createTaskRecord: async (title, id) => {
+      tasks.set(id, { _id: id, name: title, status: 'proposed' })
+    },
+    updateSessionRecord: async (id, fields) => {
+      if (fields.pendingAddition === null && clearFails) {
+        clearFails = false
+        throw new Error('stale marker clear failed')
+      }
+      session = { ...session, ...structuredClone(fields) }
+    }
+  })
+
+  const aggregate = await store.quickAdd('s1', 'Water plants')
+
+  assert.deepEqual(aggregate.session.taskBundle, [
+    't1', 'quick-s1-front', 'quick-s1-back'
+  ])
+  assert.equal(tasks.get('quick-s1-front').name, 'Water plants')
+  assert.equal(tasks.get('quick-s1-back').name, 'Water plants')
+  assert.equal(aggregate.session.pendingAddition, null)
 })
 
 test('a refreshed ambiguous Quick add cannot hijack the next genuinely new title', async () => {
@@ -575,7 +634,7 @@ test('a fresh store recovers a persisted Quick add after its attachment response
     ...dependencies,
     createId: () => 'unexpected-new-id'
   })
-  const aggregate = await freshStore.quickAdd('s1', 'Replace hallway bulb')
+  const aggregate = await freshStore.refresh('s1')
 
   assert.deepEqual(createCalls, [
     { title: 'Replace hallway bulb', id: 'quick-s1-pending' }

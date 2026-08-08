@@ -230,7 +230,10 @@ export function createSessionStore ({
           stage: 'creating'
         }
       : null
-    const requestedIntent = recoveringPendingAddition?.title === name
+    const recoveringRetry = Boolean(
+      suppliedIntent?.taskId && suppliedIntent.taskId === recoveringPendingAddition?.taskId
+    )
+    const requestedIntent = recoveringRetry
       ? null
       : suppliedIntent || {
           taskId: 'quick-' + sessionId + '-' + createId(),
@@ -251,7 +254,7 @@ export function createSessionStore ({
       throw failure
     }
     if (aggregate.session.status !== 'paused') return aggregate
-    if (recoveringPendingAddition?.title === name) return aggregate
+    if (recoveringRetry) return aggregate
 
     const pending = requestedIntent
     try {
