@@ -1,0 +1,91 @@
+// ABOUTME: Unit tests for due-group assignment and saturating chore-ripeness ordering.
+// ABOUTME: Run with: node --test slip.test.js
+
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { cadenceDays, dueGroup, groupAndSort, slip } from './slip.js'
+
+test('cadenceDays normalizes every supported recurring schedule shape', () => {
+  const cases = [
+    [{ type: 'periodic', every: 3, unit: 'day' }, 3],
+    [{ type: 'periodic', every: 2, unit: 'week' }, 14],
+    [{ type: 'periodic', every: 2, unit: 'month' }, 60],
+    [{ type: 'periodic', every: 2, unit: 'year' }, 730],
+    [{ type: 'fixed', pattern: { kind: 'weekdays', weekdays: [1, 3, 5] } }, 7 / 3],
+    [{ type: 'fixed', pattern: { kind: 'month_day', day: 15 } }, 30],
+    [{ type: 'fixed', pattern: { kind: 'annual_date', month: 11, day: 3 } }, 365],
+    [{ type: 'one_off' }, null]
+  ]
+
+  for (const [schedule, expected] of cases) {
+    assert.equal(cadenceDays(schedule), expected)
+  }
+})
+
+test('cadenceDays returns null for incomplete or invalid schedule shapes', () => {
+  assert.equal(cadenceDays(null), null)
+  assert.equal(cadenceDays({ type: 'periodic', every: 0, unit: 'day' }), null)
+  assert.equal(cadenceDays({ type: 'fixed', pattern: { kind: 'weekdays' } }), null)
+  assert.equal(cadenceDays({ type: 'fixed', pattern: { kind: 'weekdays', weekdays: [] } }), null)
+  assert.equal(cadenceDays({ type: 'fixed', pattern: { kind: 'weekdays', weekdays: [0, 8] } }), null)
+})
+
+test('slip saturates recurring ripeness without turning long delays into unbounded scores', () => {
+  const task = {
+    scheduledDate: '2026-08-05',
+    schedule: { type: 'periodic', every: 3, unit: 'day' }
+  }
+
+  assert.equal(slip(task, '2026-08-05'), 0)
+  assert.equal(slip(task, '2026-08-08'), 1)
+  assert.equal(slip(task, '2026-08-11'), 1.5)
+  assert.equal(slip(task, '2026-09-30'), 2)
+  assert.equal(slip({ ...task, scheduledDate: null }, '2026-08-08'), 0)
+  assert.equal(slip({ ...task, schedule: { type: 'one_off' } }, '2026-08-08'), 0)
+})
+
+test('dueGroup assigns calendar bands at today and seven-day boundaries', () => {
+  const groupFor = scheduledDate => dueGroup({ scheduledDate }, '2026-08-08')
+
+  assert.equal(groupFor('2026-08-07'), 'READY')
+  assert.equal(groupFor('2026-08-08'), 'TODAY')
+  assert.equal(groupFor('2026-08-09'), 'THIS WEEK')
+  assert.equal(groupFor('2026-08-15'), 'THIS WEEK')
+  assert.equal(groupFor('2026-08-16'), 'LATER')
+  assert.equal(groupFor(null), 'SOMEDAY')
+})
+
+test('groupAndSort orders groups by date band, active ripeness, then drafts', () => {
+  const tasks = [
+    {
+      _id: 'annual', name: 'Annual planning', status: 'active', scheduledDate: '2026-08-07',
+      schedule: { type: 'periodic', every: 1, unit: 'year' }
+    },
+    {
+      _id: 'draft', name: 'Draft guess', status: 'proposed', scheduledDate: '2026-08-07',
+      schedule: { type: 'periodic', every: 1, unit: 'day' }
+    },
+    {
+      _id: 'short', name: 'Water plants', status: 'approved_recurring', scheduledDate: '2026-08-07',
+      schedule: { type: 'periodic', every: 3, unit: 'day' }
+    },
+    { _id: 'today', name: 'Today', status: 'active', scheduledDate: '2026-08-08', schedule: { type: 'one_off' } },
+    { _id: 'week', name: 'This week', status: 'active', scheduledDate: '2026-08-15', schedule: { type: 'one_off' } },
+    { _id: 'later', name: 'Later', status: 'active', scheduledDate: '2026-08-16', schedule: { type: 'one_off' } },
+    { _id: 'someday', name: 'Someday', status: 'active', scheduledDate: null, schedule: { type: 'one_off' } }
+  ]
+
+  assert.deepEqual(
+    groupAndSort(tasks, '2026-08-08').map(group => ({
+      name: group.name,
+      taskIds: group.tasks.map(task => task._id)
+    })),
+    [
+      { name: 'READY', taskIds: ['short', 'annual', 'draft'] },
+      { name: 'TODAY', taskIds: ['today'] },
+      { name: 'THIS WEEK', taskIds: ['week'] },
+      { name: 'LATER', taskIds: ['later'] },
+      { name: 'SOMEDAY', taskIds: ['someday'] }
+    ]
+  )
+})
