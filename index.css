@@ -88,6 +88,7 @@ body {
   font-variant-numeric: tabular-nums;
 }
 
+h1,
 h2,
 h3 {
   color: var(--ink);
@@ -147,10 +148,6 @@ label:has(input[type="radio"]) {
   outline-offset: 2px;
 }
 
-.app-header :focus-visible {
-  outline-color: var(--on-enamel);
-}
-
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -170,26 +167,6 @@ label:has(input[type="radio"]) {
 
 [hidden] {
   display: none !important;
-}
-
-.app-header {
-  background: var(--enamel);
-  color: var(--on-enamel);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--s3) 56px var(--s3) var(--gutter);
-  flex-wrap: wrap;
-  gap: var(--s3);
-  margin: calc(-1 * var(--s4)) calc(-1 * var(--gutter)) var(--s4);
-  box-shadow: var(--lift);
-}
-
-.app-header h1 {
-  margin: 0;
-  font-size: var(--t-title);
-  font-weight: 600;
-  letter-spacing: -.015em;
 }
 
 .nav-btn {

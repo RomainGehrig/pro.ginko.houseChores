@@ -615,28 +615,28 @@ test('enamel foundation gives controls a 44px floor, visible focus, and reduced 
   })
 })
 
-test('header navigation focus stays visible against the enamel surface', async () => {
+test('bottom navigation focus stays visible against its primary surface', async () => {
   const result = await runBrowserScenario({
     mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
-    body: '<main id="app"><header class="app-header">' +
-      '<button id="headerFocus" class="nav-btn">Tasks</button>' +
-      '</header></main>',
+    body: '<main id="app"></main><nav class="bottom-nav" aria-label="Primary">' +
+      '<a id="bottomFocus" data-route="today" href="#/today">Today</a>' +
+      '</nav>',
     script: `
-      const target = document.getElementById('headerFocus')
+      const target = document.getElementById('bottomFocus')
       target.focus()
       const targetStyle = getComputedStyle(target)
-      const headerStyle = getComputedStyle(document.querySelector('.app-header'))
+      const navigationStyle = getComputedStyle(document.querySelector('.bottom-nav'))
       const result = {
         outlineColor: targetStyle.outlineColor,
         outlineStyle: targetStyle.outlineStyle,
-        surfaceColor: headerStyle.backgroundColor
+        surfaceColor: navigationStyle.backgroundColor
       }
     `
   })
 
   assert.notEqual(result.outlineStyle, 'none', JSON.stringify(result))
   assert.notEqual(result.outlineColor, result.surfaceColor, JSON.stringify(result))
-  assert.equal(result.outlineColor, 'rgb(251, 252, 251)')
+  assert.equal(result.outlineColor, 'rgb(20, 85, 76)')
 })
 
 test('bottom primary navigation has phone-sized targets, fixed safe-area placement, and no horizontal overflow', async () => {

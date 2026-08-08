@@ -45,7 +45,8 @@ test('route shell declares four primary canonical anchors, eight focus headings,
   const nav = [...navMarkup.matchAll(/<a[^>]*data-route="([^"]+)"[^>]*href="([^"]+)"[^>]*>/g)]
     .map(match => [match[1], match[2]])
   const screenIds = [...html.matchAll(/<section id="(view-[^"]+)" class="view"/g)].map(match => match[1])
-  const focusHeadings = [...html.matchAll(/<h2 class="route-heading" tabindex="-1">/g)]
+  const routeHeadings = [...html.matchAll(/<h1 class="route-heading" tabindex="-1">/g)]
+  const allH1Headings = [...html.matchAll(/<h1\b[^>]*>/g)]
 
   assert.deepEqual(nav, [
     ['today', '#/today'],
@@ -57,7 +58,9 @@ test('route shell declares four primary canonical anchors, eight focus headings,
     'view-today', 'view-inbox', 'view-chores', 'view-archive',
     'view-setup', 'view-doing', 'view-review', 'view-log'
   ])
-  assert.equal(focusHeadings.length, 8)
+  assert.equal(routeHeadings.length, 8)
+  assert.equal(allH1Headings.length, 8)
+  assert.doesNotMatch(html, /<h1[^>]*>Chore Planner<\/h1>/)
   assert.match(html, /id="sessionStatus"[^>]*role="status"/)
   assert.match(html, /id="choresStatus"[^>]*role="status"/)
   assert.match(html, /id="archiveStatus"[^>]*role="status"/)

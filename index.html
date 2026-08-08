@@ -1,10 +1,6 @@
 <div id="app">
-  <header class="app-header">
-    <h1>Chore Planner</h1>
-  </header>
-
   <section id="view-today" class="view">
-    <h2 class="route-heading" tabindex="-1">Today</h2>
+    <h1 class="route-heading" tabindex="-1">Today</h1>
     <div class="time-options">
       <button class="time-btn" data-minutes="5"><span class="fig">5</span> min</button>
       <button class="time-btn" data-minutes="15"><span class="fig">15</span> min</button>
@@ -25,7 +21,7 @@
   </section>
 
   <section id="view-inbox" class="view" style="display:none">
-    <h2 class="route-heading" tabindex="-1">Inbox</h2>
+    <h1 class="route-heading" tabindex="-1">Inbox</h1>
     <div class="add-task-box">
       <h2>Add Tasks</h2>
       <textarea id="newTaskInput" placeholder="One task per line, e.g.&#10;Clean bathroom&#10;Pay electricity bill"></textarea>
@@ -40,7 +36,7 @@
   </section>
 
   <section id="view-chores" class="view" style="display:none">
-    <h2 class="route-heading" tabindex="-1">Chores</h2>
+    <h1 class="route-heading" tabindex="-1">Chores</h1>
     <div id="choresStatus" role="status"></div>
     <div class="task-section">
       <div class="task-cards" id="activeCards"></div>
@@ -52,7 +48,7 @@
   </section>
 
   <section id="view-archive" class="view" style="display:none">
-    <h2 class="route-heading" tabindex="-1">Archive</h2>
+    <h1 class="route-heading" tabindex="-1">Archive</h1>
     <a class="back-link" href="#/chores">‹ CHORES</a>
     <div id="archiveStatus" role="status"></div>
     <div class="task-section">
@@ -61,7 +57,7 @@
   </section>
 
   <section id="view-setup" class="view" style="display:none">
-    <h2 class="route-heading" tabindex="-1">Setup</h2>
+    <h1 class="route-heading" tabindex="-1">Setup</h1>
     <a class="back-link" href="#/chores">‹ CHORES</a>
     <details id="referenceManager" class="reference-manager">
       <summary>Categories &amp; locations</summary>
@@ -88,18 +84,18 @@
   </section>
 
   <section id="view-doing" class="view" style="display:none" aria-label="Active chore session">
-    <h2 class="route-heading" tabindex="-1">Doing</h2>
+    <h1 class="route-heading" tabindex="-1">Doing</h1>
     <div id="doingContent" class="doing-session"></div>
   </section>
 
   <section id="view-review" class="view" style="display:none">
-    <h2 class="route-heading" tabindex="-1">Session Review</h2>
+    <h1 class="route-heading" tabindex="-1">Session Review</h1>
     <div id="reviewList"></div>
     <button id="finishReviewBtn">Finish</button>
   </section>
 
   <section id="view-log" class="view" style="display:none">
-    <h2 class="route-heading" tabindex="-1">Session History</h2>
+    <h1 class="route-heading" tabindex="-1">Session History</h1>
     <div id="historyList"></div>
   </section>
 </div>
