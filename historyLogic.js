@@ -14,7 +14,7 @@ const hasRawDuration = value => (typeof value === 'number' ||
   (typeof value === 'string' && value.trim() !== '')) && Number.isFinite(Number(value))
 
 const executionMinutes = execution => hasRawDuration(execution.rawDurationMs)
-  ? Math.round(Number(execution.rawDurationMs) / 60000) || 1
+  ? Number(execution.rawDurationMs) / 60000
   : Number(execution.actualDuration || 0)
 
 export function buildHistory (sessions, executions, tasks) {
