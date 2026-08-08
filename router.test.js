@@ -77,6 +77,18 @@ test('router canonicalizes unknown hashes, bridges final routes, and focuses the
   assert.equal(dom.views.get('review').style.display, 'block')
 })
 
+test('every route bridged to Tasks marks Chores as the sole current navigation item', () => {
+  for (const hash of ['#/chores', '#/inbox', '#/chore/kitchen', '#/archive', '#/setup']) {
+    const dom = installRouterDom(hash)
+    initRouter()
+
+    const current = [...dom.nav.entries()]
+      .filter(([, item]) => item.getAttribute('aria-current') === 'page')
+      .map(([name]) => name)
+    assert.deepEqual(current, ['tasks'], hash)
+  }
+})
+
 test('router refreshes history only when dispatching the log route', () => {
   const dom = installRouterDom('#/log')
   let refreshes = 0

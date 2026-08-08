@@ -3,6 +3,7 @@
 const TODAY = { name: 'today', param: null }
 const SIMPLE_ROUTES = new Set(['today', 'inbox', 'chores', 'archive', 'doing', 'log', 'setup'])
 const PARAMETER_ROUTES = new Set(['chore', 'receipt'])
+const TASKS_ROUTES = new Set(['chores', 'inbox', 'chore', 'archive', 'setup'])
 const VIEW_NAMES = ['tasks', 'session', 'doing', 'review', 'history']
 const ROUTE_VIEWS = {
   today: 'session',
@@ -72,6 +73,10 @@ function navRouteName (item) {
   return item.dataset?.route || LEGACY_ROUTES[item.dataset?.view] || null
 }
 
+function activeNavRouteName (routeName) {
+  return TASKS_ROUTES.has(routeName) ? 'chores' : routeName
+}
+
 function renderRoute (route) {
   const viewName = ROUTE_VIEWS[route.name] || ROUTE_VIEWS.today
   if (typeof document === 'undefined') return route
@@ -81,7 +86,7 @@ function renderRoute (route) {
     if (view) view.style.display = name === viewName ? 'block' : 'none'
   }
   for (const item of navigationItems()) {
-    const active = navRouteName(item) === route.name
+    const active = navRouteName(item) === activeNavRouteName(route.name)
     item.classList?.toggle('active', active)
     if (active) item.setAttribute?.('aria-current', 'page')
     else item.removeAttribute?.('aria-current')
