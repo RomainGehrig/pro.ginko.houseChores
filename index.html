@@ -101,8 +101,16 @@
   </section>
 </div>
 
+<div id="sheetScrim" hidden></div>
+<section id="bottomSheet" hidden role="dialog" aria-modal="true" aria-labelledby="bottomSheetTitle">
+  <h2 id="bottomSheetTitle"></h2>
+  <p id="bottomSheetMessage"></p>
+  <div id="bottomSheetActions"></div>
+</section>
+
 <div id="undoToast" hidden role="status" aria-live="polite">
   <span id="undoToastMessage"></span>
+  <span class="undo-separator">&middot;</span>
   <button id="undoToastButton" type="button">Undo</button>
 </div>
 

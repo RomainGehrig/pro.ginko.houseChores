@@ -75,8 +75,28 @@ test('route shell declares four primary canonical anchors, eight focus headings,
   assert.match(html, /id="archiveStatus"[^>]*role="status"/)
   assert.match(html, /id="undoToast"[^>]*hidden[^>]*role="status"[^>]*aria-live="polite"/)
   assert.match(html, /id="undoToastMessage"/)
+  assert.match(html, /class="undo-separator">&middot;<\/span>/)
   assert.match(html, /id="undoToastButton"[^>]*>Undo<\/button>/)
+  assert.match(html, /id="sheetScrim"[^>]*hidden/)
+  assert.match(html, /id="bottomSheet"[^>]*hidden[^>]*role="dialog"[^>]*aria-modal="true"[^>]*aria-labelledby="bottomSheetTitle"/)
+  assert.match(html, /id="bottomSheetMessage"/)
+  assert.match(html, /id="bottomSheetActions"/)
   assert.doesNotMatch(html, /data-view=/)
+})
+
+test('production JavaScript contains no native alert or confirm calls', async () => {
+  const paths = (await readdir(new URL('.', import.meta.url), { recursive: true }))
+    .filter(path => path.endsWith('.js') && !path.endsWith('.test.js') && !path.startsWith('.worktrees/'))
+  const sources = await Promise.all(paths.map(async path => ({
+    path,
+    source: await readFile(new URL('./' + path, import.meta.url), 'utf8')
+  })))
+  const nativeDialogCall = /\b(?:(?:window\.)?alert|(?:window\.)?confirm)\s*\(/
+
+  assert.deepEqual(
+    sources.filter(({ source }) => nativeDialogCall.test(source)).map(({ path }) => path),
+    []
+  )
 })
 
 test('bottom navigation uses the 45px target floor, fixed safe-area placement, content clearance, and reduced motion', async () => {
@@ -88,6 +108,11 @@ test('bottom navigation uses the 45px target floor, fixed safe-area placement, c
   assert.match(css, /\.bottom-nav\s*\{[\s\S]*safe-area-inset-bottom/)
   assert.match(css, /#app\s*\{[\s\S]*padding:[^;]*safe-area-inset-bottom/)
   assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)/)
+  assert.doesNotMatch(css, /\.nav-btn/)
+  assert.match(css, /#bottomSheet\s*\{[\s\S]*max-height:\s*70vh;/)
+  assert.match(css, /#bottomSheet\s*\{[\s\S]*overscroll-behavior:\s*contain;/)
+  assert.match(css, /#bottomSheet\s*\{[\s\S]*var\(--lift-sheet\)/)
+  assert.match(css, /#bottomSheet\s*\{[\s\S]*var\(--t-sheet\)[\s\S]*var\(--e-sheet\)/)
 })
 
 test('all view transitions use the hash router instead of the retired view router', async () => {

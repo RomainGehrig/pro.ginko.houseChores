@@ -4,12 +4,13 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { spawn } from 'node:child_process'
-import { constants, accessSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { constants, accessSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
 
 const repositoryRoot = fileURLToPath(new URL('.', import.meta.url))
+const applicationMarkup = readFileSync(new URL('./index.html', import.meta.url), 'utf8')
 
 function findBrowser () {
   const candidates = [
@@ -746,6 +747,46 @@ test('bottom sheet traps focus, renders safe text, dismisses, and restores prior
     minActionHeights: result.minActionHeights
   })
   assert.ok(result.minActionHeights.every(height => height >= 44.5), JSON.stringify(result))
+})
+
+test('shared undo toast reads as one action and clears above the phone navigation', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 640 },
+    body: applicationMarkup,
+    script: `
+      const { initUndoToast, pendingUndo } = await import(applicationUrl + 'undoToast.js')
+      let reverted = 0
+      initUndoToast()
+      await pendingUndo({
+        key: 'task:toast-layout',
+        label: 'Archived',
+        commit: () => null,
+        revert: () => { reverted++; return { restored: true } }
+      }, 60000)
+      const toast = document.getElementById('undoToast')
+      const nav = document.querySelector('.bottom-nav')
+      const toastRect = toast.getBoundingClientRect()
+      const navRect = nav.getBoundingClientRect()
+      const visibleText = toast.innerText.trim().replace(/\\s+/g, ' ')
+      document.getElementById('undoToastButton').click()
+      await new Promise(resolve => setTimeout(resolve, 0))
+      const result = {
+        accessibleTextMatches: visibleText === 'Archived ' + String.fromCharCode(183) + ' Undo',
+        toastBottom: toastRect.bottom,
+        navTop: navRect.top,
+        hiddenAfterUndo: toast.hidden,
+        reverted,
+        scrollWidth: document.documentElement.scrollWidth,
+        viewportWidth: window.innerWidth
+      }
+    `
+  })
+
+  assert.equal(result.accessibleTextMatches, true)
+  assert.ok(result.toastBottom < result.navTop, JSON.stringify(result))
+  assert.equal(result.hiddenAfterUndo, true)
+  assert.equal(result.reverted, 1)
+  assert.ok(result.scrollWidth <= result.viewportWidth, JSON.stringify(result))
 })
 
 test('archived and saving states keep full contrast and state their status', async () => {

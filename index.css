@@ -169,33 +169,6 @@ label:has(input[type="radio"]) {
   display: none !important;
 }
 
-.nav-btn {
-  padding: var(--s2) var(--s3);
-  min-height: 45px;
-  border: 1px solid color-mix(in srgb, var(--on-enamel) 55%, transparent);
-  background: transparent;
-  color: var(--on-enamel);
-  border-radius: var(--r-chip);
-  cursor: pointer;
-  display: inline-flex;
-  align-items: center;
-  text-decoration: none;
-}
-
-.nav-btn.active {
-  background: var(--on-enamel);
-  color: var(--enamel);
-  border-color: var(--on-enamel);
-}
-
-.nav-btn:hover {
-  background: color-mix(in srgb, var(--on-enamel) 18%, transparent);
-}
-
-.nav-btn.active:hover {
-  background: var(--on-enamel);
-}
-
 .bottom-nav {
   background: var(--plate);
   border-top: 1px solid var(--rule);
@@ -234,6 +207,73 @@ label:has(input[type="radio"]) {
 
 .nav-count {
   margin-left: var(--s1);
+}
+
+#undoToast {
+  align-items: center;
+  background: var(--ink);
+  border-radius: var(--r-plate);
+  bottom: calc(61px + var(--s3) + env(safe-area-inset-bottom));
+  color: var(--ground);
+  display: flex;
+  gap: var(--s2);
+  left: 50%;
+  max-width: calc(var(--col) + (2 * var(--gutter)));
+  padding: var(--s2) var(--s3);
+  position: fixed;
+  transform: translateX(-50%);
+  width: calc(100% - (2 * var(--gutter)));
+  z-index: 15;
+}
+
+#undoToastMessage {
+  flex: 1;
+}
+
+#undoToastButton {
+  background: transparent;
+  border-color: currentColor;
+  color: inherit;
+}
+
+#sheetScrim {
+  background: rgba(18, 38, 46, .38);
+  inset: 0;
+  position: fixed;
+  z-index: 20;
+}
+
+#bottomSheet {
+  background: var(--plate);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-plate) var(--r-plate) 0 0;
+  bottom: 0;
+  box-shadow: var(--lift-sheet);
+  left: 50%;
+  max-height: 70vh;
+  max-width: calc(var(--col) + (2 * var(--gutter)));
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: var(--s4) var(--gutter) calc(var(--s4) + env(safe-area-inset-bottom));
+  position: fixed;
+  transform: translateX(-50%);
+  transition: transform var(--t-sheet) var(--e-sheet);
+  width: 100%;
+  z-index: 30;
+}
+
+#bottomSheet h2,
+#bottomSheet p {
+  margin-top: 0;
+}
+
+#bottomSheetActions {
+  display: grid;
+  gap: var(--s2);
+}
+
+#bottomSheetActions button {
+  width: 100%;
 }
 
 .route-leaf-nav {
@@ -658,6 +698,28 @@ label:has(input[type="radio"]) {
   font-size: var(--t-note);
   font-weight: 600;
   min-height: 1em;
+}
+
+.archive-actions,
+.duration-offer-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  margin-top: var(--s3);
+}
+
+.duration-offer {
+  background: var(--plate);
+  border: 1px solid var(--rule);
+  border-radius: var(--r-plate);
+  box-shadow: var(--lift);
+  margin: var(--s3) 0;
+  padding: var(--s3);
+}
+
+.duration-offer [aria-pressed="true"] {
+  background: var(--sunk);
+  border-color: var(--enamel);
 }
 
 .empty {
