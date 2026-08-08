@@ -680,13 +680,31 @@ async function runSessionMutation (operation, failureMessage, retry) {
   setSessionMutationControlsDisabled(true)
 
   try {
-    const aggregate = await operation()
-    await applyAggregate(aggregate)
-  } catch (error) {
-    renderSessionMutationFailure(failureMessage + ': ' + error.message, retry)
+    let aggregate
+    try {
+      aggregate = await operation()
+    } catch (error) {
+      renderSessionMutationFailure(failureMessage + ': ' + error.message, retry)
+      return
+    }
+    await applyMutationAggregate(aggregate)
   } finally {
     sessionMutationInFlight = false
     setSessionMutationControlsDisabled(false)
+  }
+}
+
+async function applyMutationAggregate (aggregate) {
+  try {
+    await applyAggregate(aggregate)
+  } catch (error) {
+    renderSessionMutationFailure(
+      'Could not display the updated session: ' + error.message,
+      async () => {
+        clearDoingStatus()
+        await applyMutationAggregate(aggregate)
+      }
+    )
   }
 }
 

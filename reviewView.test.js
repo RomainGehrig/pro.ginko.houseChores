@@ -168,13 +168,81 @@ test('starting Review clears the previous session while the current load is pend
   })
 })
 
+test('a stale Review load cannot replace a newer session after it succeeds', async () => {
+  let releaseSessionA
+  const sessionAExecutions = new Promise(resolve => { releaseSessionA = resolve })
+
+  await withReviewDocument(async ({ reviewList, finish }) => {
+    globalThis.freezr = {
+      query: async collection => {
+        if (collection === 'taskExecutions') {
+          return state.currentSession._id === 'session-a'
+            ? sessionAExecutions
+            : [{ _id: 'execution-b', sessionId: 'session-b', taskId: 'task-b', outcome: 'done', actualDuration: 8 }]
+        }
+        return [{ _id: 'task-b', name: 'Session B task' }]
+      }
+    }
+
+    state.currentSession = { _id: 'session-a' }
+    const sessionALoad = reviewView.startReview()
+    state.currentSession = { _id: 'session-b' }
+    await reviewView.startReview()
+
+    assert.match(reviewList.innerHTML, /Session B task/)
+    assert.equal(finish.disabled, false)
+
+    releaseSessionA([{
+      _id: 'execution-a', sessionId: 'session-a', taskId: 'task-a', outcome: 'done', actualDuration: 3
+    }])
+    await sessionALoad
+
+    assert.match(reviewList.innerHTML, /Session B task/)
+    assert.doesNotMatch(reviewList.innerHTML, /execution-a/)
+    assert.equal(finish.disabled, false)
+  })
+})
+
+test('a stale Review load failure leaves the newer session visible', async () => {
+  let rejectSessionA
+  const sessionAExecutions = new Promise((resolve, reject) => { rejectSessionA = reject })
+
+  await withReviewDocument(async ({ reviewList, finish }) => {
+    globalThis.freezr = {
+      query: async collection => {
+        if (collection === 'taskExecutions') {
+          return state.currentSession._id === 'session-a'
+            ? sessionAExecutions
+            : [{ _id: 'execution-b', sessionId: 'session-b', taskId: 'task-b', outcome: 'done', actualDuration: 8 }]
+        }
+        return [{ _id: 'task-b', name: 'Session B task' }]
+      }
+    }
+
+    state.currentSession = { _id: 'session-a' }
+    const sessionALoad = reviewView.startReview()
+    state.currentSession = { _id: 'session-b' }
+    await reviewView.startReview()
+    rejectSessionA(new Error('session A offline'))
+    await sessionALoad
+
+    assert.match(reviewList.innerHTML, /Session B task/)
+    assert.equal(finish.disabled, false)
+  })
+})
+
 test('Review load errors clear stale cards, keep Finish disabled, and retry safely', async () => {
   await withReviewDocument(async ({ document, reviewList, finish }) => {
     reviewList.innerHTML = '<div class="exec-card">stale review</div>'
     finish.disabled = false
     let retried = 0
+    let releaseRetry
+    const retryStarted = new Promise(resolve => { releaseRetry = resolve })
 
-    reviewView.renderReviewLoadError('<img src=x onerror=alert(1)>', async () => { retried++ })
+    reviewView.renderReviewLoadError('<img src=x onerror=alert(1)>', async () => {
+      retried++
+      await retryStarted
+    })
 
     assert.equal(finish.disabled, true)
     assert.equal(reviewList.innerHTML, '')
@@ -182,7 +250,11 @@ test('Review load errors clear stale cards, keep Finish disabled, and retry safe
     assert.equal(reviewList.children[0].innerHTML, '')
     const retry = document.getElementById('retryReviewLoadBtn')
     assert.ok(retry)
+    const firstRetry = retry.dispatch('click')
+    assert.equal(retry.disabled, true)
     await retry.dispatch('click')
+    releaseRetry()
+    await firstRetry
     assert.equal(retried, 1)
   })
 })

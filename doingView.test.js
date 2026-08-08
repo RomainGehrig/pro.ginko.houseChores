@@ -50,11 +50,12 @@ function createControl (id = '') {
   }
 }
 
-function createDoingDocument () {
+function createDoingDocument ({ failFirstReviewDisplay = false } = {}) {
   const nodes = new Map()
   const navControls = new Map()
   const dynamicIds = new Set()
   let controls = []
+  let shouldFailReviewDisplay = failFirstReviewDisplay
   const content = createControl('doingContent')
   content._dynamicChildren = []
   nodes.set('doingContent', content)
@@ -74,7 +75,22 @@ function createDoingDocument () {
     nodes.set(id, createControl(id))
   }
   for (const view of ['tasks', 'session', 'doing', 'review', 'history']) {
-    nodes.set('view-' + view, createControl('view-' + view))
+    const viewControl = createControl('view-' + view)
+    if (view === 'review') {
+      let display = ''
+      Object.defineProperty(viewControl.style, 'display', {
+        configurable: true,
+        get () { return display },
+        set (value) {
+          if (shouldFailReviewDisplay) {
+            shouldFailReviewDisplay = false
+            throw new Error('review display failed')
+          }
+          display = value
+        }
+      })
+    }
+    nodes.set('view-' + view, viewControl)
     navControls.set(view, createControl('nav-' + view))
   }
 
@@ -372,12 +388,13 @@ async function withDoingEnvironment ({
   loseFirstTaskUpdateResponse,
   loseQuickAddAttachmentResponse,
   failSessionUpdates,
-  failFirstTerminalReviewExecutionRead
+  failFirstTerminalReviewExecutionRead,
+  failFirstReviewDisplay
 }, run) {
   const originalDocument = globalThis.document
   const originalWindow = globalThis.window
   const originalFreezr = globalThis.freezr
-  const document = createDoingDocument()
+  const document = createDoingDocument({ failFirstReviewDisplay })
   const window = createDoingWindow()
   const persistence = createPersistence({
     initialSession: session,
@@ -1470,4 +1487,43 @@ test('terminal Review loading retries without re-entering the active-session ref
     assert.equal(document.control('finishReviewBtn').disabled, false)
     assert.equal(persistence.sessionUpdateCalls, 1)
   })
+})
+
+test('display retry reapplies a durable conclusion without repeating persistence', async () => {
+  const task1 = task('task-1')
+  const session = {
+    _id: 'display-retry-session', status: 'paused', startTime: 10000,
+    taskBundle: ['task-1'], timeBudgetMinutes: 15,
+    accumulatedActiveMs: 12000, activeStartedAt: null,
+    pausedAt: 22000, checkpointElapsedMs: 12000
+  }
+  const originalConclude = sessionStore.conclude
+  let concludeCalls = 0
+  sessionStore.conclude = async (...args) => {
+    concludeCalls++
+    return originalConclude(...args)
+  }
+
+  try {
+    await withDoingEnvironment({
+      session,
+      persistedTasks: [task1],
+      bundle: [task1],
+      failFirstReviewDisplay: true
+    }, async ({ document, persistence, clock }) => {
+      clock.setNow(30000)
+      await document.clickControl('concludeSessionBtn')
+
+      assert.equal(persistence.session.status, 'completed')
+      assert.equal(concludeCalls, 1)
+      assert.ok(document.control('retrySessionMutationBtn'))
+
+      await document.clickControl('retrySessionMutationBtn')
+
+      assert.equal(concludeCalls, 1)
+      assert.equal(document.control('view-review').style.display, 'block')
+    })
+  } finally {
+    sessionStore.conclude = originalConclude
+  }
 })
