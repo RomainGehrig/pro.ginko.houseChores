@@ -1,7 +1,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  archivedTaskCardHtml,
+  archiveTaskOptimistically,
   buildActiveTaskScheduleFields,
   buildApprovedTaskFields,
   buildTaskReferenceFields
@@ -60,25 +60,69 @@ test('an unrelated task edit omits a legacy-only category while references are u
   assert.equal(Object.hasOwn(fields, 'categoryId'), false)
 })
 
-test('archived non-editing cards retain location reference state', () => {
-  const task = {
-    _id: 'task-1',
-    name: 'Clean attic',
-    categoryId: 'category-1',
-    locationIds: ['location-1'],
-    estimatedDuration: 10,
-    scheduledDate: '2026-08-16',
-    schedule: { type: 'one_off' }
+test('active archive is optimistic and its queued commit writes only status', async () => {
+  const original = {
+    _id: 'task-archive', name: 'Clean attic', status: 'active',
+    schedule: { type: 'one_off' }, metadata: { keep: true }
   }
-  const snapshot = {
-    categories: [{ _id: 'category-1', name: 'Cleaning', status: 'active' }],
-    locations: [{ _id: 'location-1', name: 'Attic', status: 'archived' }]
-  }
+  const replacements = []
+  const rendered = []
+  const queued = []
+  const updates = []
+  let editingCleared = 0
 
-  const markup = archivedTaskCardHtml({ ...task, status: 'archived' }, snapshot)
-  assert.match(markup, /class="state-badge stamp">Archived</)
-  assert.match(markup, /Attic/)
-  assert.match(markup, /archived-badge">Archived/)
+  const result = archiveTaskOptimistically(original, {
+    replace: task => replacements.push(structuredClone(task)),
+    clearEditing: () => { editingCleared++ },
+    render: () => rendered.push('render'),
+    queue: (action, ttl) => { queued.push({ action, ttl }); return Promise.resolve(action) },
+    update: async (...args) => updates.push(args),
+    showFailure: () => assert.fail('commit should not fail')
+  })
+
+  assert.equal(replacements[0].status, 'archived')
+  assert.equal(editingCleared, 1)
+  assert.deepEqual(rendered, ['render'])
+  assert.equal(queued[0].ttl, 6000)
+  assert.equal(queued[0].action.key, 'task:task-archive')
+  assert.equal(queued[0].action.label, 'Archived')
+  assert.deepEqual(updates, [])
+
+  await queued[0].action.commit()
+  assert.deepEqual(updates, [['task-archive', { status: 'archived' }]])
+  assert.equal(await result.queued, queued[0].action)
+})
+
+test('failed archive commit restores the exact cached record and reports factual status', async () => {
+  const original = {
+    _id: 'task-failure', name: 'Sweep cellar', status: 'approved_recurring',
+    schedule: { type: 'periodic', every: 2, unit: 'week' }, nested: { value: ['kept'] }
+  }
+  const replacements = []
+  const messages = []
+  let queuedAction
+
+  archiveTaskOptimistically(original, {
+    replace: task => replacements.push(task),
+    clearEditing: () => {},
+    render: () => {},
+    queue: action => { queuedAction = action; return Promise.resolve(action) },
+    update: async () => { throw new Error('raw datastore failure') },
+    showFailure: message => messages.push(message)
+  })
+  original.nested.value.push('later mutation')
+
+  await queuedAction.commit()
+
+  assert.deepEqual(replacements.at(-1), {
+    _id: 'task-failure', name: 'Sweep cellar', status: 'approved_recurring',
+    schedule: { type: 'periodic', every: 2, unit: 'week' }, nested: { value: ['kept'] }
+  })
+  assert.deepEqual(messages, ["Couldn't archive that. The chore is unchanged."])
+  assert.deepEqual(await queuedAction.revert(), {
+    taskId: 'task-failure',
+    status: 'approved_recurring'
+  })
 })
 
 test('active task groups render due-first ledger headings and rows', () => {

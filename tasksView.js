@@ -22,6 +22,7 @@ import {
   syncScheduleEditor
 } from './scheduleEditor.js'
 import { activeTaskGroupsHtml, referenceStateSuffix } from './chores/listView.js'
+import { optimisticArchive, pendingUndo } from './undoToast.js'
 
 let tasksCache = []
 let editingTaskId = null
@@ -120,6 +121,42 @@ function restoreTaskEditorDrafts (drafts) {
 
 export function getActiveTasks() {
   return tasksCache.filter(t => t.status === 'active' || t.status === 'approved_recurring')
+}
+
+export function archiveTaskOptimistically (task, {
+  replace,
+  clearEditing,
+  render,
+  queue = pendingUndo,
+  update = updateTask,
+  showFailure
+}) {
+  const transaction = optimisticArchive(task)
+  replace(transaction.archived)
+  clearEditing()
+  render()
+
+  const action = {
+    key: transaction.key,
+    label: 'Archived',
+    commit: async () => {
+      try {
+        return await update(task._id, { status: 'archived' })
+      } catch {
+        replace(transaction.original)
+        render()
+        showFailure("Couldn't archive that. The chore is unchanged.")
+        return null
+      }
+    },
+    revert: async () => {
+      replace(transaction.original)
+      render()
+      return { taskId: task._id, status: transaction.original.status }
+    }
+  }
+
+  return { transaction, queued: queue(action, 6000) }
 }
 
 async function handleAddTasks() {
@@ -344,12 +381,26 @@ async function handleActiveClick(evt) {
   const id = card.dataset.id
 
   if (evt.target.classList.contains('archive-btn')) {
-    await updateTask(id, { status: 'archived' })
-    if (editingTaskId === id) {
-      editingTaskId = null
-      taskEditorError = ''
-    }
-    await refreshTasksView()
+    const task = tasksCache.find(item => item._id === id)
+    if (!task) return
+    archiveTaskOptimistically(task, {
+      replace: replacement => {
+        tasksCache = tasksCache.map(item => item._id === id ? replacement : item)
+      },
+      clearEditing: () => {
+        if (editingTaskId === id) {
+          editingTaskId = null
+          taskEditorError = ''
+        }
+      },
+      render: renderTasks,
+      showFailure: message => {
+        const status = document.getElementById('choresStatus')
+        status.textContent = message
+        status.dataset.state = 'error'
+        status.setAttribute('role', 'alert')
+      }
+    })
     return
   }
 
