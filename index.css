@@ -147,6 +147,10 @@ label:has(input[type="radio"]) {
   outline-offset: 2px;
 }
 
+.app-header :focus-visible {
+  outline-color: var(--on-enamel);
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -337,11 +341,10 @@ label:has(input[type="radio"]) {
 
 .is-archived {
   color: var(--graphite);
-  opacity: 0.72;
 }
 
 .reference-manager.is-busy {
-  opacity: 0.7;
+  background: var(--sunk);
 }
 
 .reference-manager.is-busy button,
@@ -496,10 +499,6 @@ label:has(input[type="radio"]) {
   }
 }
 
-.task-card.archived {
-  opacity: 0.6;
-}
-
 .task-card label {
   display: block;
   font-size: var(--t-note);
@@ -597,15 +596,29 @@ label:has(input[type="radio"]) {
   padding: 2px var(--s2);
 }
 
+.state-badge,
+.task-card.is-saving::before {
+  align-items: center;
+  background: var(--sunk);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-pill);
+  color: var(--graphite);
+  display: inline-flex;
+  font-size: var(--t-stamp);
+  min-height: 24px;
+  padding: 0 var(--s2);
+}
+
+.task-card.is-saving::before {
+  content: "SAVING";
+  margin-bottom: var(--s2);
+}
+
 .task-card-error {
   color: var(--ink);
   font-size: var(--t-note);
   font-weight: 600;
   min-height: 1em;
-}
-
-.task-card.is-saving {
-  opacity: 0.72;
 }
 
 .empty {

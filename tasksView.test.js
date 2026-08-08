@@ -76,6 +76,7 @@ test('archived non-editing cards retain location reference state', () => {
   }
 
   const markup = archivedTaskCardHtml({ ...task, status: 'archived' }, snapshot)
+  assert.match(markup, /class="state-badge stamp">Archived</)
   assert.match(markup, /Attic/)
   assert.match(markup, /archived-badge">Archived/)
 })

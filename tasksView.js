@@ -318,7 +318,8 @@ function renderArchived() {
 
 export function archivedTaskCardHtml (task, snapshot) {
   return '<div class="task-card archived" data-id="' + escapeAttribute(task._id) + '">' +
-    '<div class="task-name">' + escapeHtml(String(task.name ?? '')) + '</div>' +
+    '<div class="task-name">' + escapeHtml(String(task.name ?? '')) +
+      ' <span class="state-badge stamp">Archived</span></div>' +
     buildActiveTaskDetailsHtml(task, snapshot) +
   '</div>'
 }

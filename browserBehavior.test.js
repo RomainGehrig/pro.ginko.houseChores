@@ -615,6 +615,59 @@ test('enamel foundation gives controls a 44px floor, visible focus, and reduced 
   })
 })
 
+test('header navigation focus stays visible against the enamel surface', async () => {
+  const result = await runBrowserScenario({
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
+    body: '<main id="app"><header class="app-header">' +
+      '<button id="headerFocus" class="nav-btn">Tasks</button>' +
+      '</header></main>',
+    script: `
+      const target = document.getElementById('headerFocus')
+      target.focus()
+      const targetStyle = getComputedStyle(target)
+      const headerStyle = getComputedStyle(document.querySelector('.app-header'))
+      const result = {
+        outlineColor: targetStyle.outlineColor,
+        outlineStyle: targetStyle.outlineStyle,
+        surfaceColor: headerStyle.backgroundColor
+      }
+    `
+  })
+
+  assert.notEqual(result.outlineStyle, 'none', JSON.stringify(result))
+  assert.notEqual(result.outlineColor, result.surfaceColor, JSON.stringify(result))
+  assert.equal(result.outlineColor, 'rgb(251, 252, 251)')
+})
+
+test('archived and saving states keep full contrast and state their status', async () => {
+  const result = await runBrowserScenario({
+    body: '<main id="app">' +
+      '<article id="archivedCard" class="task-card archived">Archived</article>' +
+      '<article id="savingCard" class="task-card is-saving">Saving</article>' +
+      '<span id="archivedReference" class="is-archived">Reference</span>' +
+      '<section id="busyManager" class="reference-manager is-busy">Busy</section>' +
+      '</main>',
+    script: `
+      const opacity = id => getComputedStyle(document.getElementById(id)).opacity
+      const result = {
+        archivedCard: opacity('archivedCard'),
+        savingCard: opacity('savingCard'),
+        archivedReference: opacity('archivedReference'),
+        busyManager: opacity('busyManager'),
+        savingLabel: getComputedStyle(document.getElementById('savingCard'), '::before').content
+      }
+    `
+  })
+
+  assert.deepEqual(result, {
+    archivedCard: '1',
+    savingCard: '1',
+    archivedReference: '1',
+    busyManager: '1',
+    savingLabel: '"SAVING"'
+  })
+})
+
 test('dark enamel tokens apply at a 390px phone viewport', async () => {
   const result = await runBrowserScenario({
     viewport: { width: 390, height: 640 },
