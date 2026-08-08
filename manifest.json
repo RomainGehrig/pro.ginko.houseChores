@@ -15,6 +15,8 @@
   "files": [
     { "path": "index.js", "Description": "Entry point that initializes category/location data, restores unfinished session work, and wires the app views." },
     { "path": "viewRouter.js", "Description": "Shows/hides the four top-level views and toggles nav button visibility/highlighting." },
+    { "path": "router.js", "Description": "Parses final hash routes independently from the DOM and app data." },
+    { "path": "router.test.js", "Description": "Node tests covering final hash-route parsing and fallback behavior." },
     { "path": "state.js", "Description": "Shared mutable state for the in-progress session and task bundle." },
     { "path": "helpers.js", "Description": "Formatting utilities for dates, durations, timer text, and HTML escaping." },
     { "path": "taskPresentationLogic.js", "Description": "Pure task presentation helpers for neutral ledger facts, schedule summaries, stable reference labels, and safe stored-value markup." },
