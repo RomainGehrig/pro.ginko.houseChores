@@ -9,6 +9,7 @@ import {
   renderArchiveView,
   runArchiveAction
 } from './archiveView.js'
+import { archiveTaskOptimistically } from './tasksView.js'
 
 const archivedTask = {
   _id: 'task-1',
@@ -136,6 +137,43 @@ test('Keep dismisses permanent deletion without a write', async () => {
 
   assert.deepEqual(calls, [])
   assert.deepEqual(result, { ok: true, deleted: false })
+})
+
+test('a caught pending archive commit failure restores cache and aborts permanent deletion', async () => {
+  const original = {
+    ...archivedTask,
+    status: 'active',
+    nested: { value: ['preserved'] }
+  }
+  let cached = original
+  let queuedAction
+  let deleteCalls = 0
+  let refreshCalls = 0
+  archiveTaskOptimistically(original, {
+    replace: replacement => { cached = replacement },
+    clearEditing: () => {},
+    render: () => {},
+    queue: action => { queuedAction = action; return Promise.resolve(action) },
+    update: async () => { throw new Error('archive write failed') },
+    showFailure: () => {}
+  })
+
+  const result = await runArchiveAction({
+    action: 'delete',
+    task: cached,
+    confirmDelete: async () => 'delete',
+    commit: async key => ({ action: queuedAction, result: await queuedAction.commit(key) }),
+    remove: async () => { deleteCalls++ },
+    refresh: async () => { refreshCalls++ }
+  })
+
+  assert.deepEqual(cached, original)
+  assert.equal(deleteCalls, 0)
+  assert.equal(refreshCalls, 0)
+  assert.deepEqual(result, {
+    ok: false,
+    message: "Couldn't archive that. The chore is unchanged."
+  })
 })
 
 test('archive action failures return factual inline messages without raw exceptions', async () => {

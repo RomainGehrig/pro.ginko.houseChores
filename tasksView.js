@@ -140,12 +140,14 @@ export function archiveTaskOptimistically (task, {
     label: 'Archived',
     commit: async () => {
       try {
-        return await update(task._id, { status: 'archived' })
+        const value = await update(task._id, { status: 'archived' })
+        return { ok: true, value }
       } catch {
         replace(transaction.original)
         render()
-        showFailure("Couldn't archive that. The chore is unchanged.")
-        return null
+        const message = "Couldn't archive that. The chore is unchanged."
+        showFailure(message)
+        return { ok: false, message }
       }
     },
     revert: async () => {

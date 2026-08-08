@@ -72,7 +72,10 @@ export async function runArchiveAction ({
         ]
       })
       if (choice !== 'delete') return { ok: true, deleted: false }
-      await commit(`task:${task._id}`)
+      const settlement = await commit(`task:${task._id}`)
+      if (settlement?.result?.ok === false) {
+        return { ok: false, message: settlement.result.message }
+      }
       await remove(task._id)
       await refresh()
       return { ok: true, deleted: true }

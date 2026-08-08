@@ -112,13 +112,17 @@ test('failed archive commit restores the exact cached record and reports factual
   })
   original.nested.value.push('later mutation')
 
-  await queuedAction.commit()
+  const commitResult = await queuedAction.commit()
 
   assert.deepEqual(replacements.at(-1), {
     _id: 'task-failure', name: 'Sweep cellar', status: 'approved_recurring',
     schedule: { type: 'periodic', every: 2, unit: 'week' }, nested: { value: ['kept'] }
   })
   assert.deepEqual(messages, ["Couldn't archive that. The chore is unchanged."])
+  assert.deepEqual(commitResult, {
+    ok: false,
+    message: "Couldn't archive that. The chore is unchanged."
+  })
   assert.deepEqual(await queuedAction.revert(), {
     taskId: 'task-failure',
     status: 'approved_recurring'
