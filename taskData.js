@@ -30,6 +30,7 @@ export const createTaskWithId = (name, id) => freezr.create(
   { data_object_id: id, upsert: true }
 )
 export const updateTask = (id, fields) => freezr.updateFields('tasks', id, fields)
+export const deleteTask = id => freezr.delete('tasks', id)
 
 export const listTasksByIds = async ids => {
   const all = await listAllTasks()
