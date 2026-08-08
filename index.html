@@ -1,17 +1,68 @@
 <div id="app">
   <header class="app-header">
     <h1>Chore Planner</h1>
-    <nav class="view-nav">
-      <a class="nav-btn" data-view="tasks" href="#/chores">Tasks</a>
-      <a class="nav-btn" data-view="session" href="#/today">Start Session</a>
-      <a class="nav-btn" data-view="history" href="#/log">History</a>
-      <a class="nav-btn" data-view="doing" href="#/doing" style="display:none">Doing</a>
-      <a class="nav-btn" data-view="review" href="#/receipt/session" style="display:none">Review</a>
-    </nav>
   </header>
 
-  <section id="view-tasks" class="view">
+  <section id="view-today" class="view">
+    <h2 class="route-heading" tabindex="-1">Today</h2>
+    <div class="time-options">
+      <button class="time-btn" data-minutes="5"><span class="fig">5</span> min</button>
+      <button class="time-btn" data-minutes="15"><span class="fig">15</span> min</button>
+      <button class="time-btn" data-minutes="30"><span class="fig">30</span> min</button>
+      <label>Custom: <input id="customMinutes" type="number" min="1" placeholder="minutes"></label>
+    </div>
+    <div class="category-filter">
+      <label>Category filter:
+        <select id="categoryFilter">
+          <option value="">All</option>
+        </select>
+      </label>
+    </div>
+    <button id="proposeBundleBtn">Propose Bundle</button>
+    <div id="sessionStatus" role="status"></div>
+    <div id="bundlePreview"></div>
+    <button id="startSessionBtn" style="display:none">Start Doing</button>
+  </section>
+
+  <section id="view-inbox" class="view" style="display:none">
+    <h2 class="route-heading" tabindex="-1">Inbox</h2>
+    <div class="add-task-box">
+      <h2>Add Tasks</h2>
+      <textarea id="newTaskInput" placeholder="One task per line, e.g.&#10;Clean bathroom&#10;Pay electricity bill"></textarea>
+      <button id="addTasksBtn">Add</button>
+      <button id="enrichBtn">Enrich with AI</button>
+      <span id="enrichStatus"></span>
+    </div>
+    <div class="task-section">
+      <h2>Needs Review</h2>
+      <div class="task-cards" id="proposedCards"></div>
+    </div>
+  </section>
+
+  <section id="view-chores" class="view" style="display:none">
     <h2 class="route-heading" tabindex="-1">Chores</h2>
+    <div id="choresStatus" role="status"></div>
+    <div class="task-section">
+      <div class="task-cards" id="activeCards"></div>
+    </div>
+    <nav class="route-leaf-nav" aria-label="Chore options">
+      <a id="archiveNav" href="#/archive">Archived · <span id="archiveNavCount" class="fig">0</span></a>
+      <a href="#/setup">Setup · categories and locations</a>
+    </nav>
+  </section>
+
+  <section id="view-archive" class="view" style="display:none">
+    <h2 class="route-heading" tabindex="-1">Archive</h2>
+    <a class="back-link" href="#/chores">‹ CHORES</a>
+    <div id="archiveStatus" role="status"></div>
+    <div class="task-section">
+      <div class="task-cards" id="archivedCards"></div>
+    </div>
+  </section>
+
+  <section id="view-setup" class="view" style="display:none">
+    <h2 class="route-heading" tabindex="-1">Setup</h2>
+    <a class="back-link" href="#/chores">‹ CHORES</a>
     <details id="referenceManager" class="reference-manager">
       <summary>Categories &amp; locations</summary>
       <div id="referenceManagerStatus" class="inline-status" role="status"></div>
@@ -34,50 +85,6 @@
         </section>
       </div>
     </details>
-
-    <div class="add-task-box">
-      <h2>Add Tasks</h2>
-      <textarea id="newTaskInput" placeholder="One task per line, e.g.&#10;Clean bathroom&#10;Pay electricity bill"></textarea>
-      <button id="addTasksBtn">Add</button>
-      <button id="enrichBtn">Enrich with AI</button>
-      <span id="enrichStatus"></span>
-    </div>
-
-    <div class="task-section">
-      <h2>Needs Review</h2>
-      <div class="task-cards" id="proposedCards"></div>
-    </div>
-
-    <div class="task-section">
-      <h2>Active Tasks</h2>
-      <div class="task-cards" id="activeCards"></div>
-    </div>
-
-    <div class="task-section">
-      <h2>Archived</h2>
-      <div class="task-cards" id="archivedCards"></div>
-    </div>
-  </section>
-
-  <section id="view-session" class="view" style="display:none">
-    <h2 class="route-heading" tabindex="-1">Start a Session</h2>
-    <div class="time-options">
-      <button class="time-btn" data-minutes="5"><span class="fig">5</span> min</button>
-      <button class="time-btn" data-minutes="15"><span class="fig">15</span> min</button>
-      <button class="time-btn" data-minutes="30"><span class="fig">30</span> min</button>
-      <label>Custom: <input id="customMinutes" type="number" min="1" placeholder="minutes"></label>
-    </div>
-    <div class="category-filter">
-      <label>Category filter:
-        <select id="categoryFilter">
-          <option value="">All</option>
-        </select>
-      </label>
-    </div>
-    <button id="proposeBundleBtn">Propose Bundle</button>
-
-    <div id="bundlePreview"></div>
-    <button id="startSessionBtn" style="display:none">Start Doing</button>
   </section>
 
   <section id="view-doing" class="view" style="display:none" aria-label="Active chore session">
@@ -91,8 +98,20 @@
     <button id="finishReviewBtn">Finish</button>
   </section>
 
-  <section id="view-history" class="view" style="display:none">
+  <section id="view-log" class="view" style="display:none">
     <h2 class="route-heading" tabindex="-1">Session History</h2>
     <div id="historyList"></div>
   </section>
 </div>
+
+<div id="undoToast" hidden role="status" aria-live="polite">
+  <span id="undoToastMessage"></span>
+  <button id="undoToastButton" type="button">Undo</button>
+</div>
+
+<nav class="bottom-nav" aria-label="Primary">
+  <a data-route="today" href="#/today">TODAY</a>
+  <a id="inboxNav" data-route="inbox" href="#/inbox" hidden aria-label="Inbox, 0 to confirm">INBOX <span class="nav-count fig">0</span></a>
+  <a data-route="chores" href="#/chores">CHORES</a>
+  <a data-route="log" href="#/log">LOG</a>
+</nav>

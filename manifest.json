@@ -52,6 +52,7 @@
     { "path": "aiEnrich.test.js", "Description": "Node tests covering dynamic AI enrichment prompt construction." },
     { "path": "tasksView.js", "Description": "Renders due-first active ledgers and wires task intake, schedule review, reference assignments, AI enrichment, approval, and editing." },
     { "path": "tasksView.test.js", "Description": "Node tests covering due-first ledger markup, scheduling editor integration, approved payloads, and edit preservation." },
+    { "path": "chores/listView.js", "Description": "Pure active due-first chore ledger and inline-editor markup renderer." },
     { "path": "sessionView.js", "Description": "Renders the time budget and active-category picker, builds filtered bundles, and starts durable sessions." },
     { "path": "sessionView.test.js", "Description": "Node tests covering restored-session start notices when a proposed bundle cannot replace unfinished work." },
     { "path": "doingView.js", "Description": "Renders all session tasks, persists exact outcome checkpoints, and supports pause, continuation, and conclusion." },

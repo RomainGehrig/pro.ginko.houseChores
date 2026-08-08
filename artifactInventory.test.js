@@ -5,10 +5,10 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { readFile, readdir } from 'node:fs/promises'
 
-test('manifest inventories every top-level JavaScript artifact', async () => {
+test('manifest inventories every JavaScript artifact including nested route renderers', async () => {
   const manifest = JSON.parse(await readFile(new URL('./manifest.json', import.meta.url), 'utf8'))
-  const actual = (await readdir(new URL('.', import.meta.url)))
-    .filter(path => path.endsWith('.js'))
+  const actual = (await readdir(new URL('.', import.meta.url), { recursive: true }))
+    .filter(path => path.endsWith('.js') && !path.startsWith('.worktrees/'))
     .sort()
   const declared = manifest.files
     .map(file => file.path)
@@ -39,27 +39,43 @@ test('static budget choices mark only their figures as instrument text', async (
   ])
 })
 
-test('header navigation uses canonical hash anchors and every current screen has a route focus heading', async () => {
+test('route shell declares four primary canonical anchors, eight focus headings, and static live regions', async () => {
   const html = await readFile(new URL('./index.html', import.meta.url), 'utf8')
-  const nav = [...html.matchAll(/<a class="nav-btn" data-view="([^"]+)" href="([^"]+)"/g)]
+  const navMarkup = html.match(/<nav class="bottom-nav" aria-label="Primary">([\s\S]*?)<\/nav>/)?.[1] || ''
+  const nav = [...navMarkup.matchAll(/<a[^>]*data-route="([^"]+)"[^>]*href="([^"]+)"[^>]*>/g)]
     .map(match => [match[1], match[2]])
+  const screenIds = [...html.matchAll(/<section id="(view-[^"]+)" class="view"/g)].map(match => match[1])
   const focusHeadings = [...html.matchAll(/<h2 class="route-heading" tabindex="-1">/g)]
 
   assert.deepEqual(nav, [
-    ['tasks', '#/chores'],
-    ['session', '#/today'],
-    ['history', '#/log'],
-    ['doing', '#/doing'],
-    ['review', '#/receipt/session']
+    ['today', '#/today'],
+    ['inbox', '#/inbox'],
+    ['chores', '#/chores'],
+    ['log', '#/log']
   ])
-  assert.equal(focusHeadings.length, 5)
+  assert.deepEqual(screenIds, [
+    'view-today', 'view-inbox', 'view-chores', 'view-archive',
+    'view-setup', 'view-doing', 'view-review', 'view-log'
+  ])
+  assert.equal(focusHeadings.length, 8)
+  assert.match(html, /id="sessionStatus"[^>]*role="status"/)
+  assert.match(html, /id="choresStatus"[^>]*role="status"/)
+  assert.match(html, /id="archiveStatus"[^>]*role="status"/)
+  assert.match(html, /id="undoToast"[^>]*hidden[^>]*role="status"[^>]*aria-live="polite"/)
+  assert.match(html, /id="undoToastMessage"/)
+  assert.match(html, /id="undoToastButton"[^>]*>Undo<\/button>/)
+  assert.doesNotMatch(html, /data-view=/)
 })
 
-test('navigation anchors use the project 45px control floor', async () => {
+test('bottom navigation uses the 45px target floor, fixed safe-area placement, content clearance, and reduced motion', async () => {
   const css = await readFile(new URL('./index.css', import.meta.url), 'utf8')
-  const navRules = css.match(/\.nav-btn\s*\{([\s\S]*?)\n\}/)?.[1] || ''
+  const navRules = css.match(/\.bottom-nav\s+a\s*\{([\s\S]*?)\n\}/)?.[1] || ''
 
   assert.match(navRules, /min-height:\s*45px;/)
+  assert.match(css, /\.bottom-nav\s*\{[\s\S]*position:\s*fixed;/)
+  assert.match(css, /\.bottom-nav\s*\{[\s\S]*safe-area-inset-bottom/)
+  assert.match(css, /#app\s*\{[\s\S]*padding:[^;]*safe-area-inset-bottom/)
+  assert.match(css, /@media\s*\(prefers-reduced-motion:\s*reduce\)/)
 })
 
 test('all view transitions use the hash router instead of the retired view router', async () => {

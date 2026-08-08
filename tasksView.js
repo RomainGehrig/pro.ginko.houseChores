@@ -169,6 +169,13 @@ function renderProposed() {
   const container = document.getElementById('proposedCards')
   const snapshot = categoryLocationStore.getSnapshot()
   const proposed = tasksCache.filter(t => t.status === 'proposed')
+  const inboxNav = document.getElementById('inboxNav')
+  if (inboxNav) {
+    inboxNav.hidden = proposed.length === 0
+    inboxNav.setAttribute('aria-label', 'Inbox, ' + proposed.length + ' to confirm')
+    const count = inboxNav.querySelector('.nav-count')
+    if (count) count.textContent = proposed.length
+  }
   container.innerHTML = proposed.length
     ? proposed.map(task => proposedCardHtml(task, snapshot)).join('')
     : '<p class="empty">No tasks awaiting review.</p>'
@@ -236,6 +243,8 @@ function renderArchived() {
   const container = document.getElementById('archivedCards')
   const archived = tasksCache.filter(t => t.status === 'archived')
   const snapshot = categoryLocationStore.getSnapshot()
+  const archiveCount = document.getElementById('archiveNavCount')
+  if (archiveCount) archiveCount.textContent = archived.length
   container.innerHTML = archived.length
     ? archived.map(task => archivedTaskCardHtml(task, snapshot)).join('')
     : '<p class="empty">No archived tasks.</p>'

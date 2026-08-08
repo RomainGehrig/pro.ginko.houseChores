@@ -3,18 +3,26 @@
 const TODAY = { name: 'today', param: null }
 const SIMPLE_ROUTES = new Set(['today', 'inbox', 'chores', 'archive', 'doing', 'log', 'setup'])
 const PARAMETER_ROUTES = new Set(['chore', 'receipt'])
-const TASKS_ROUTES = new Set(['chores', 'inbox', 'chore', 'archive', 'setup'])
-const VIEW_NAMES = ['tasks', 'session', 'doing', 'review', 'history']
-const ROUTE_VIEWS = {
-  today: 'session',
-  chores: 'tasks',
-  inbox: 'tasks',
-  chore: 'tasks',
-  archive: 'tasks',
-  setup: 'tasks',
+const SCREEN_NAMES = ['today', 'inbox', 'chores', 'archive', 'setup', 'doing', 'review', 'log']
+const ROUTE_SCREENS = {
+  today: 'today',
+  inbox: 'inbox',
+  chores: 'chores',
+  chore: 'chores',
+  archive: 'archive',
+  setup: 'setup',
   doing: 'doing',
   receipt: 'review',
-  log: 'history'
+  log: 'log'
+}
+const PRIMARY_ROUTE_BY_ROUTE = {
+  today: 'today',
+  inbox: 'inbox',
+  chores: 'chores',
+  chore: 'chores',
+  archive: 'chores',
+  setup: 'chores',
+  log: 'log'
 }
 const LEGACY_ROUTES = {
   session: 'today',
@@ -65,37 +73,36 @@ function routeForView (name, param) {
 
 function navigationItems () {
   if (typeof document === 'undefined') return []
-  if (typeof document.querySelectorAll === 'function') return [...document.querySelectorAll('.nav-btn')]
-  return VIEW_NAMES.map(name => document.querySelector?.('.nav-btn[data-view="' + name + '"]')).filter(Boolean)
+  if (typeof document.querySelectorAll === 'function') return [...document.querySelectorAll('.bottom-nav [data-route]')]
+  return ['today', 'inbox', 'chores', 'log']
+    .map(name => document.querySelector?.('.bottom-nav [data-route="' + name + '"]'))
+    .filter(Boolean)
 }
 
 function navRouteName (item) {
-  return item.dataset?.route || LEGACY_ROUTES[item.dataset?.view] || null
+  return item.dataset?.route || null
 }
 
 function activeNavRouteName (routeName) {
-  return TASKS_ROUTES.has(routeName) ? 'chores' : routeName
+  return PRIMARY_ROUTE_BY_ROUTE[routeName] || null
 }
 
 function renderRoute (route) {
-  const viewName = ROUTE_VIEWS[route.name] || ROUTE_VIEWS.today
+  const screenName = ROUTE_SCREENS[route.name] || ROUTE_SCREENS.today
   if (typeof document === 'undefined') return route
 
-  for (const name of VIEW_NAMES) {
+  for (const name of SCREEN_NAMES) {
     const view = document.getElementById?.('view-' + name)
-    if (view) view.style.display = name === viewName ? 'block' : 'none'
+    if (view) view.style.display = name === screenName ? 'block' : 'none'
   }
   for (const item of navigationItems()) {
     const active = navRouteName(item) === activeNavRouteName(route.name)
     item.classList?.toggle('active', active)
     if (active) item.setAttribute?.('aria-current', 'page')
     else item.removeAttribute?.('aria-current')
-    if (route.name === 'receipt' && item.dataset?.view === 'review') {
-      item.setAttribute?.('href', hashForRoute(route))
-    }
   }
 
-  const heading = document.getElementById?.('view-' + viewName)
+  const heading = document.getElementById?.('view-' + screenName)
     ?.querySelector?.('.route-heading[tabindex="-1"]')
   heading?.focus?.()
   if (route.name === 'log') refreshHistory?.()
@@ -141,6 +148,6 @@ export function showView (name, param) {
 
 export function setNavVisible (name, visible) {
   if (typeof document === 'undefined') return
-  const item = document.querySelector?.('.nav-btn[data-view="' + name + '"]')
+  const item = document.querySelector?.('.bottom-nav [data-route="' + name + '"]')
   if (item) item.style.display = visible ? 'inline-block' : 'none'
 }

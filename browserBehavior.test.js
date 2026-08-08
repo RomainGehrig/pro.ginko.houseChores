@@ -639,6 +639,43 @@ test('header navigation focus stays visible against the enamel surface', async (
   assert.equal(result.outlineColor, 'rgb(251, 252, 251)')
 })
 
+test('bottom primary navigation has phone-sized targets, fixed safe-area placement, and no horizontal overflow', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 640 },
+    mediaFeatures: [
+      { name: 'prefers-color-scheme', value: 'light' },
+      { name: 'prefers-reduced-motion', value: 'reduce' }
+    ],
+    body: '<main id="app"><section id="content">Chores</section></main>' +
+      '<nav class="bottom-nav" aria-label="Primary">' +
+        '<a data-route="today" href="#/today">TODAY</a>' +
+        '<a data-route="inbox" href="#/inbox">INBOX</a>' +
+        '<a data-route="chores" href="#/chores">CHORES</a>' +
+        '<a data-route="log" href="#/log">LOG</a>' +
+      '</nav>',
+    script: `
+      const nav = document.querySelector('.bottom-nav')
+      const links = [...nav.querySelectorAll('a')]
+      const result = {
+        navPosition: getComputedStyle(nav).position,
+        navBottom: getComputedStyle(nav).bottom,
+        targetHeights: links.map(link => link.getBoundingClientRect().height),
+        scrollWidth: document.documentElement.scrollWidth,
+        viewportWidth: window.innerWidth,
+        contentBottomPadding: getComputedStyle(document.getElementById('app')).paddingBottom,
+        transitionDuration: getComputedStyle(links[0]).transitionDuration
+      }
+    `
+  })
+
+  assert.equal(result.navPosition, 'fixed', JSON.stringify(result))
+  assert.equal(result.navBottom, '0px', JSON.stringify(result))
+  assert.ok(result.targetHeights.every(height => height >= 44.5), JSON.stringify(result))
+  assert.ok(result.scrollWidth <= result.viewportWidth, JSON.stringify(result))
+  assert.ok(Number.parseFloat(result.contentBottomPadding) >= 45, JSON.stringify(result))
+  assert.ok(Number.parseFloat(result.transitionDuration) <= 0.001, JSON.stringify(result))
+})
+
 test('archived and saving states keep full contrast and state their status', async () => {
   const result = await runBrowserScenario({
     body: '<main id="app">' +

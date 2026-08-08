@@ -3,18 +3,21 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { initRouter, parseRoute, showView } from './router.js'
+import { initRouter, parseRoute, setNavVisible, showView } from './router.js'
+
+const screenNames = ['today', 'inbox', 'chores', 'archive', 'setup', 'doing', 'review', 'log']
+const primaryRoutes = ['today', 'inbox', 'chores', 'log']
 
 function installRouterDom (hash = '') {
-  const views = new Map(['tasks', 'session', 'doing', 'review', 'history'].map(name => {
+  const views = new Map(screenNames.map(name => {
     const heading = { focusCalls: 0, focus () { this.focusCalls++ } }
     return [name, { style: {}, querySelector: () => heading, heading }]
   }))
-  const nav = new Map(['tasks', 'session', 'doing', 'review', 'history'].map(name => {
+  const nav = new Map(primaryRoutes.map(route => {
     const attributes = new Map()
-    return [name, {
+    return [route, {
       style: {},
-      dataset: { view: name },
+      dataset: { route },
       classList: { toggle () {} },
       setAttribute: (key, value) => attributes.set(key, value),
       removeAttribute: key => attributes.delete(key),
@@ -24,8 +27,8 @@ function installRouterDom (hash = '') {
   const listeners = new Map()
   globalThis.document = {
     getElementById: id => views.get(id.slice('view-'.length)) || null,
-    querySelectorAll: selector => selector === '.nav-btn' ? [...nav.values()] : [],
-    querySelector: selector => nav.get(selector.match(/data-view="([^"]+)"/)?.[1]) || null
+    querySelectorAll: selector => selector === '.bottom-nav [data-route]' ? [...nav.values()] : [],
+    querySelector: selector => nav.get(selector.match(/data-route="([^"]+)"/)?.[1]) || null
   }
   globalThis.window = {
     location: { hash },
@@ -62,30 +65,43 @@ test('parseRoute falls back to today for malformed, missing, unknown, and extra 
   }
 })
 
-test('router canonicalizes unknown hashes, bridges final routes, and focuses the current heading', () => {
-  const dom = installRouterDom('#/not-a-route')
-  initRouter()
+test('each final route shows its Stage 3 screen, focuses its heading, and canonicalizes fallback', () => {
+  const expectedScreens = {
+    today: 'today', inbox: 'inbox', chores: 'chores', chore: 'chores', archive: 'archive',
+    setup: 'setup', doing: 'doing', receipt: 'review', log: 'log'
+  }
 
-  assert.equal(window.location.hash, '#/today')
-  assert.equal(dom.views.get('session').style.display, 'block')
-  assert.equal(dom.views.get('session').heading.focusCalls, 1)
-  assert.equal(dom.nav.get('session').getAttribute('aria-current'), 'page')
-  assert.equal(dom.nav.get('tasks').getAttribute('aria-current'), null)
-
-  showView('review', 'session/42')
-  assert.equal(window.location.hash, '#/receipt/session%2F42')
-  assert.equal(dom.views.get('review').style.display, 'block')
-})
-
-test('every route bridged to Tasks marks Chores as the sole current navigation item', () => {
-  for (const hash of ['#/chores', '#/inbox', '#/chore/kitchen', '#/archive', '#/setup']) {
+  for (const [route, screen] of Object.entries(expectedScreens)) {
+    const hash = route === 'chore' ? '#/chore/kitchen' : route === 'receipt'
+      ? '#/receipt/session' : '#/' + route
     const dom = installRouterDom(hash)
     initRouter()
+    assert.equal(dom.views.get(screen).style.display, 'block', hash)
+    assert.equal(dom.views.get(screen).heading.focusCalls, 1, hash)
+  }
 
+  const fallback = installRouterDom('#/not-a-route')
+  initRouter()
+  assert.equal(window.location.hash, '#/today')
+  assert.equal(fallback.views.get('today').style.display, 'block')
+  assert.equal(fallback.views.get('today').heading.focusCalls, 1)
+})
+
+test('primary navigation maps routes to the sole factual current destination', () => {
+  const expectedPrimary = {
+    today: 'today', inbox: 'inbox', chores: 'chores', chore: 'chores', archive: 'chores',
+    setup: 'chores', log: 'log', doing: null, receipt: null
+  }
+
+  for (const [route, primary] of Object.entries(expectedPrimary)) {
+    const hash = route === 'chore' ? '#/chore/kitchen' : route === 'receipt'
+      ? '#/receipt/session' : '#/' + route
+    const dom = installRouterDom(hash)
+    initRouter()
     const current = [...dom.nav.entries()]
       .filter(([, item]) => item.getAttribute('aria-current') === 'page')
       .map(([name]) => name)
-    assert.deepEqual(current, ['tasks'], hash)
+    assert.deepEqual(current, primary ? [primary] : [], hash)
   }
 })
 
@@ -95,8 +111,26 @@ test('router refreshes history only when dispatching the log route', () => {
 
   initRouter({ onLogRoute: () => { refreshes++ } })
 
-  assert.equal(dom.views.get('history').style.display, 'block')
+  assert.equal(dom.views.get('log').style.display, 'block')
   assert.equal(refreshes, 1)
   showView('tasks')
   assert.equal(refreshes, 1)
+})
+
+test('legacy showView callers bridge to their final screen routes and absent primary controls safely no-op', () => {
+  const cases = [
+    ['session', '#/today', 'today'], ['tasks', '#/chores', 'chores'], ['doing', '#/doing', 'doing'],
+    ['review', '#/receipt/session%2F42', 'review'], ['history', '#/log', 'log']
+  ]
+
+  for (const [caller, hash, screen] of cases) {
+    const dom = installRouterDom('#/today')
+    initRouter()
+    showView(caller, caller === 'review' ? 'session/42' : undefined)
+    assert.equal(window.location.hash, hash, caller)
+    assert.equal(dom.views.get(screen).style.display, 'block', caller)
+  }
+
+  assert.doesNotThrow(() => setNavVisible('doing', true))
+  assert.doesNotThrow(() => setNavVisible('review', false))
 })

@@ -165,7 +165,7 @@ label:has(input[type="radio"]) {
 #app {
   max-width: calc(var(--col) + (2 * var(--gutter)));
   margin: 0 auto;
-  padding: var(--s4) var(--gutter) var(--s6);
+  padding: var(--s4) var(--gutter) calc(var(--s6) + 61px + env(safe-area-inset-bottom));
 }
 
 [hidden] {
@@ -190,12 +190,6 @@ label:has(input[type="radio"]) {
   font-size: var(--t-title);
   font-weight: 600;
   letter-spacing: -.015em;
-}
-
-.view-nav {
-  display: flex;
-  gap: var(--s3);
-  flex-wrap: wrap;
 }
 
 .nav-btn {
@@ -223,6 +217,70 @@ label:has(input[type="radio"]) {
 
 .nav-btn.active:hover {
   background: var(--on-enamel);
+}
+
+.bottom-nav {
+  background: var(--plate);
+  border-top: 1px solid var(--rule);
+  bottom: 0;
+  display: grid;
+  gap: var(--s2);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  left: 0;
+  padding: var(--s2) var(--gutter) calc(var(--s2) + env(safe-area-inset-bottom));
+  position: fixed;
+  right: 0;
+  z-index: 10;
+}
+
+.bottom-nav a {
+  align-items: center;
+  color: var(--graphite);
+  display: flex;
+  font-family: var(--face-stamp);
+  font-size: var(--t-stamp);
+  justify-content: center;
+  letter-spacing: .04em;
+  min-height: 45px;
+  min-width: 0;
+  padding: var(--s1);
+  text-align: center;
+  text-decoration: none;
+}
+
+.bottom-nav a.active,
+.bottom-nav a[aria-current="page"] {
+  color: var(--enamel);
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.nav-count {
+  margin-left: var(--s1);
+}
+
+.route-leaf-nav {
+  border-top: 1px solid var(--rule);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s3);
+  margin-top: var(--s4);
+  padding-top: var(--s3);
+}
+
+.route-leaf-nav a,
+.back-link {
+  align-items: center;
+  color: var(--enamel);
+  display: inline-flex;
+  min-height: 45px;
+}
+
+.back-link {
+  font-family: var(--face-stamp);
+  font-size: var(--t-stamp);
+  letter-spacing: .04em;
+  text-decoration: none;
 }
 
 .plate {
