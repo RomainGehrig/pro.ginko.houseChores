@@ -21,17 +21,30 @@ export function showSessionStartNotice (startResult, status) {
   return true
 }
 
+export function updateBudgetStatus (status, valid) {
+  if (!status) return Boolean(valid)
+  status.textContent = valid ? '' : 'Choose or enter a time budget first.'
+  status.setAttribute('role', 'status')
+  if (valid) status.removeAttribute?.('data-state')
+  else status.setAttribute('data-state', 'info')
+  return Boolean(valid)
+}
+
 export function initSessionView() {
   document.querySelectorAll('.time-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       selectedMinutes = Number(btn.dataset.minutes)
       document.getElementById('customMinutes').value = ''
       highlightTimeBtn(btn)
+      updateBudgetStatus(document.getElementById('sessionStatus'), selectedMinutes > 0)
     })
   })
   document.getElementById('customMinutes').addEventListener('input', (e) => {
     selectedMinutes = Number(e.target.value) || null
     highlightTimeBtn(null)
+    if (selectedMinutes > 0) {
+      updateBudgetStatus(document.getElementById('sessionStatus'), true)
+    }
   })
   document.getElementById('categoryFilter').addEventListener('change', (e) => {
     selectedCategoryId = e.target.value
@@ -66,9 +79,10 @@ function highlightTimeBtn(activeBtn) {
 
 function handlePropose() {
   if (!selectedMinutes || selectedMinutes <= 0) {
-    alert('Choose or enter a time budget first.')
+    updateBudgetStatus(document.getElementById('sessionStatus'), false)
     return
   }
+  updateBudgetStatus(document.getElementById('sessionStatus'), true)
   currentProposal = buildBundleProposal(
     getActiveTasks(),
     selectedMinutes,
