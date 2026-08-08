@@ -18,7 +18,9 @@ Tracking issue: `hc-e92`
 
 **Delivers.** The chore list stops lying. Eleven overdue chores are grouped under LATE with a mono "+14d" stamp and a "last done 21d ago · every 7" line, ordered by how far behind they actually are — instead of 17 identical grey cards in _date_modified order. The whole app repaints in the enamel palette with the 44px/16px control floor, working dark mode, visible focus, and the reduced-motion block. On a phone at night it is finally usable.
 
-**Files.** NEW: slip.js, slip.test.js, tokens.css. CHANGED: index.css (full rewrite to tokens + ledger/plate/button/stamp components), tasksView.js (renderActive → grouped ledgers), taskPresentationLogic.js (+taskPresentationLogic.test.js), manifest.json (css_files, files).
+**Files.** NEW: slip.js, slip.test.js. CHANGED: index.css (full rewrite: the `:root` token block from spec §4 goes at the TOP of this file, then ledger/plate/button/stamp components), tasksView.js (renderActive → grouped ledgers), taskPresentationLogic.js (+taskPresentationLogic.test.js), manifest.json (`files` array only — documentation).
+
+**Do NOT create a separate `tokens.css`.** Adding a file to `css_files` changes page loading and forces an app reinstall. `index.css` is already listed, so putting the tokens there keeps Stage 1 **reinstall-free** — which matters, because it is the stage you want the tightest feedback loop on. Likewise `slip.js` is reached through `tasksView.js`'s import chain, so it goes in the manifest's `files` array (documentation) and **not** in `modules`.
 
 **Testable (node --test).** slip.js: cadenceDays(schedule) for all five schedule shapes including weekdays/N and one_off→null; slip(task, today) saturating curve (0 when on time, 1.0 at exactly one cadence late, 2.0 asymptote); dueGroup(task, today) → LATE|TODAY|THIS WEEK|LATER|SOMEDAY; groupAndSort(tasks, today) proving a 3-day chore 1 day late outranks a 365-day chore 1 day late, and that drafts sort last within their group.
 
