@@ -1,12 +1,12 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  activeTaskGroupsHtml,
   archivedTaskCardHtml,
   buildActiveTaskScheduleFields,
   buildApprovedTaskFields,
   buildTaskReferenceFields
 } from './tasksView.js'
+import { activeTaskGroupsHtml } from './chores/listView.js'
 import { LEGACY_CATEGORY_SELECTION } from './categoryLocationLogic.js'
 
 test('approval writes the reviewed schedule and clears AI suggestions', () => {
@@ -107,4 +107,21 @@ test('active task group renderer has a factual empty state', () => {
     activeTaskGroupsHtml([], { categories: [], locations: [] }, '2026-08-08'),
     '<p class="empty">No active tasks.</p>'
   )
+})
+
+test('active task renderer receives editing state without global coordinator state', () => {
+  const task = {
+    _id: 'task-editing', name: 'Clean kitchen', status: 'active', estimatedDuration: 10,
+    scheduledDate: '2026-08-08', schedule: { type: 'one_off' }
+  }
+
+  const markup = activeTaskGroupsHtml([task], { categories: [], locations: [] }, '2026-08-08', {
+    editingTaskId: 'task-editing',
+    taskEditorError: 'Choose a schedule'
+  })
+
+  assert.match(markup, /class="task-edit-form"/)
+  assert.match(markup, /Choose a schedule/)
+  assert.match(markup, /class="save-task-edit-btn"/)
+  assert.match(markup, /class="cancel-task-edit-btn"/)
 })
