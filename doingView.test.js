@@ -431,6 +431,29 @@ test('resolves tasks in any order from persisted time without interval ticks', a
   })
 })
 
+test('cancelled completion persists no task update snapshot or task write', async () => {
+  const cancelled = task('cancelled')
+  const nextTask = task('next-task')
+  const session = {
+    _id: 'session-1', status: 'active', startTime: 10000,
+    taskBundle: ['cancelled', 'next-task'], timeBudgetMinutes: 15,
+    accumulatedActiveMs: 0, activeStartedAt: 10000, checkpointElapsedMs: 0
+  }
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [cancelled, nextTask],
+    bundle: [cancelled, nextTask]
+  }, async ({ document, persistence, clock }) => {
+    clock.setNow(70000)
+    await document.clickOutcome('cancelled', 'cancelled')
+
+    const execution = persistence.executions.get(completionAttemptIdFor('session-1', 'cancelled'))
+    assert.equal(execution.taskUpdateSnapshot, null)
+    assert.equal(persistence.taskUpdates.length, 0)
+  })
+})
+
 test('stale outcome applies a completed authoritative aggregate without writes', async () => {
   const task1 = task('task-1')
   const session = {
