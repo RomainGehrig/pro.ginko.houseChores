@@ -58,6 +58,7 @@ async function withReviewDocument (run) {
   const nodes = new Map()
   const reviewList = createReviewControl('reviewList')
   const finish = createReviewControl('finishReviewBtn')
+  const durationOffers = createReviewControl('durationOffers')
   const appendReviewChild = reviewList.appendChild
   reviewList.appendChild = child => {
     appendReviewChild.call(reviewList, child)
@@ -65,6 +66,7 @@ async function withReviewDocument (run) {
   }
   nodes.set(reviewList.id, reviewList)
   nodes.set(finish.id, finish)
+  nodes.set(durationOffers.id, durationOffers)
   const document = {
     getElementById: id => nodes.get(id) || null,
     createElement: tagName => {
@@ -80,7 +82,7 @@ async function withReviewDocument (run) {
   }
   globalThis.document = document
   try {
-    await run({ document, reviewList, finish })
+    await run({ document, reviewList, finish, durationOffers })
   } finally {
     if (originalDocument === undefined) delete globalThis.document
     else globalThis.document = originalDocument
@@ -142,6 +144,66 @@ test('review persistence mirrors an explicit duration correction into exact fiel
       notes: ''
     }
   }])
+})
+
+test('duration offers safely name the chore and show current to suggested figures with Keep as default', () => {
+  const offer = reviewView.createDurationOffer({
+    _id: 'task-7',
+    name: '<img src=x onerror=alert(1)>',
+    estimatedDuration: 12
+  }, 18)
+  const markup = reviewView.durationOfferHtml(offer)
+
+  assert.equal(offer.decision, 'keep')
+  assert.doesNotMatch(markup, /<img/)
+  assert.match(markup, /&lt;img src=x onerror=alert\(<span class="fig">1<\/span>\)&gt;/)
+  assert.match(markup, /<span class="fig">12<\/span> min/)
+  assert.match(markup, /<span class="fig">18<\/span> min/)
+  assert.match(markup, /data-offer-action="update"[^>]*aria-pressed="false"/)
+  assert.match(markup, /data-offer-action="keep"[^>]*aria-pressed="true"/)
+})
+
+test('only explicit Update duration decisions produce task writes', async () => {
+  const offers = [
+    reviewView.createDurationOffer({ _id: 'task-update', name: 'Update', estimatedDuration: 10 }, 14),
+    reviewView.createDurationOffer({ _id: 'task-keep', name: 'Keep', estimatedDuration: 20 }, 22)
+  ]
+  const decided = reviewView.setDurationOfferDecision(offers, 'task-update', 'update')
+  const calls = []
+
+  await reviewView.applyDurationOfferUpdates(decided, async (...args) => calls.push(args))
+
+  assert.deepEqual(calls, [['task-update', { estimatedDuration: 14 }]])
+  assert.equal(decided.find(offer => offer.taskId === 'task-keep').decision, 'keep')
+})
+
+test('stale duration suggestion work is discarded and cancelled executions are excluded', async () => {
+  let current = true
+  let releaseHistory
+  const history = new Promise(resolve => { releaseHistory = resolve })
+  const loading = reviewView.buildDurationOffers({
+    executions: [
+      { taskId: 'task-current', outcome: 'done' },
+      { taskId: 'task-cancelled', outcome: 'cancelled' }
+    ],
+    tasks: [
+      { _id: 'task-current', name: 'Current', estimatedDuration: 10 },
+      { _id: 'task-cancelled', name: 'Cancelled', estimatedDuration: 8 }
+    ],
+    loadHistory: async taskId => {
+      assert.equal(taskId, 'task-current')
+      return history
+    },
+    suggest: async () => 15,
+    isCurrent: () => current
+  })
+
+  current = false
+  releaseHistory([
+    { actualDuration: 12 }, { actualDuration: 15 }, { actualDuration: 18 }
+  ])
+
+  assert.equal(await loading, null)
 })
 
 test('starting Review clears the previous session while the current load is pending', async () => {

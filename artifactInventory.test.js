@@ -39,6 +39,15 @@ test('static budget choices mark only their figures as instrument text', async (
   ])
 })
 
+test('Review provides a named static duration-offer region before Finish', async () => {
+  const html = await readFile(new URL('./index.html', import.meta.url), 'utf8')
+  const offersAt = html.indexOf('id="durationOffers"')
+  const finishAt = html.indexOf('id="finishReviewBtn"')
+
+  assert.ok(offersAt >= 0)
+  assert.ok(offersAt < finishAt)
+})
+
 test('route shell declares four primary canonical anchors, eight focus headings, and static live regions', async () => {
   const html = await readFile(new URL('./index.html', import.meta.url), 'utf8')
   const navMarkup = html.match(/<nav class="bottom-nav" aria-label="Primary">([\s\S]*?)<\/nav>/)?.[1] || ''
