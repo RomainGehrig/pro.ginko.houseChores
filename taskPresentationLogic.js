@@ -1,7 +1,7 @@
 // ABOUTME: Pure task-presentation helpers for stable reference labels and safe markup.
 // ABOUTME: Keeps stored task and category values escaped before they enter HTML contexts.
 
-import { escapeHtml, formatDuration, formatTimer } from './helpers.js'
+import { escapeHtml, formatDuration, formatFactHtml, formatTimer } from './helpers.js'
 import { normalizeReferenceName, resolveReference } from './categoryLocationLogic.js'
 import { formatScheduledDate, parseLocalDate, scheduleSummary } from './scheduleLogic.js'
 import { cadenceDays } from './slip.js'
@@ -52,10 +52,7 @@ function compactCadence (value) {
 }
 
 function scheduleFactHtml (schedule) {
-  return escapeHtml(scheduleSummary(schedule)).replace(
-    /\d+(?:\.\d+)?/g,
-    value => '<span class="fig">' + value + '</span>'
-  )
+  return formatFactHtml(scheduleSummary(schedule))
 }
 
 export function buildTaskLedgerSummaryHtml (task, today) {
@@ -66,20 +63,20 @@ export function buildTaskLedgerSummaryHtml (task, today) {
   const periodic = task?.schedule?.type === 'periodic'
   const stamp = isToday
     ? '<span class="row-stamp stamp is-today">TODAY</span>'
-    : '<span class="row-stamp fig">' + escapeHtml(periodic
+    : '<span class="row-stamp">' + formatFactHtml(periodic
         ? completedDaysAgo === null ? '—' : completedDaysAgo + 'd'
         : compactScheduledDate(task?.scheduledDate)) + '</span>'
   const note = periodic
-    ? (completedDaysAgo === null
+    ? formatFactHtml((completedDaysAgo === null
         ? 'not yet done'
-        : 'last done <span class="fig">' + completedDaysAgo + 'd</span> ago') +
-      (cadenceText ? ' · about every <span class="fig">' + cadenceText + '</span>' : '')
+        : 'last done ' + completedDaysAgo + 'd ago') +
+      (cadenceText ? ' · about every ' + cadenceText : ''))
     : scheduleFactHtml(task?.schedule)
 
   return stamp +
-    '<span class="row-name">' + escapeHtml(String(task?.name ?? '')) + '</span>' +
-    '<span class="row-fig fig">' + escapeHtml(formatDuration(task?.estimatedDuration)) + '</span>' +
-    '<span class="row-tag fig">' + escapeHtml(cadenceText ? cadenceText + 'd' : '') + '</span>' +
+    '<span class="row-name">' + formatFactHtml(String(task?.name ?? '')) + '</span>' +
+    '<span class="row-fig">' + formatFactHtml(formatDuration(task?.estimatedDuration)) + '</span>' +
+    '<span class="row-tag">' + formatFactHtml(cadenceText ? cadenceText + 'd' : '') + '</span>' +
     '<p class="row-note">' + note + '</p>'
 }
 
@@ -120,16 +117,16 @@ export function buildDoingSessionHtml (session, bundle, executions, categories =
     const execution = executionByTaskId.get(task._id)
     const categoryName = resolveTaskCategoryName(task, categories)
     const resultHtml = execution
-      ? '<div class="doing-task-result">' + escapeHtml(outcomeLabel(execution.outcome)) +
-        ' \u00b7 ' + formatTimer(executionSeconds(execution)) + '</div>'
+      ? '<div class="doing-task-result">' + formatFactHtml(outcomeLabel(execution.outcome)) +
+        ' \u00b7 ' + formatFactHtml(formatTimer(executionSeconds(execution))) + '</div>'
       : active
         ? '<div class="doing-task-actions">' + outcomeActionsHtml(task) + '</div>'
         : ''
     return '<article class="doing-task' + (execution ? ' is-resolved' : '') +
       '" data-task-id="' + escapeHtml(task._id) + '">' +
-        '<div class="task-name">' + escapeHtml(String(task?.name ?? '')) + '</div>' +
-        '<div class="task-meta">' + escapeHtml(categoryName) + ' \u00b7 target ' +
-          escapeHtml(formatDuration(task?.estimatedDuration)) + '</div>' +
+        '<div class="task-name">' + formatFactHtml(String(task?.name ?? '')) + '</div>' +
+        '<div class="task-meta">' + formatFactHtml(categoryName) + ' \u00b7 target ' +
+          formatFactHtml(formatDuration(task?.estimatedDuration)) + '</div>' +
         resultHtml +
       '</article>'
   }).join('')
@@ -139,7 +136,7 @@ export function buildDoingSessionHtml (session, bundle, executions, categories =
       '<div>' +
         '<div class="doing-progress">Session time</div>' +
         '<div class="timer" id="sessionTimerDisplay">00:00</div>' +
-        '<div class="task-meta">Budget ' + escapeHtml(formatDuration(session?.timeBudgetMinutes)) + '</div>' +
+        '<div class="task-meta">Budget ' + formatFactHtml(formatDuration(session?.timeBudgetMinutes)) + '</div>' +
       '</div>' +
       '<button id="pauseSessionBtn"' + (paused ? ' hidden' : '') + '>Pause</button>' +
     '</div>' +
@@ -158,8 +155,8 @@ export function buildContinuationSuggestionsHtml (tasks) {
   return tasks.map(task =>
     '<label class="continue-option">' +
       '<input type="checkbox" data-continuation-suggestion-id="' + escapeHtml(task._id) + '"> ' +
-      '<span>' + escapeHtml(String(task?.name ?? '')) + '</span>' +
-      '<span class="task-meta">' + escapeHtml(formatDuration(task?.estimatedDuration)) + '</span>' +
+      '<span>' + formatFactHtml(String(task?.name ?? '')) + '</span>' +
+      '<span class="task-meta">' + formatFactHtml(formatDuration(task?.estimatedDuration)) + '</span>' +
     '</label>'
   ).join('')
 }
@@ -167,10 +164,15 @@ export function buildContinuationSuggestionsHtml (tasks) {
 export function buildContinuationSearchResultsHtml (tasks) {
   return tasks.map(task =>
     '<button type="button" data-continuation-search-id="' + escapeHtml(task._id) + '">' +
-      'Add ' + escapeHtml(String(task?.name ?? '')) + ' · ' +
-      escapeHtml(formatDuration(task?.estimatedDuration)) +
+      'Add ' + formatFactHtml(String(task?.name ?? '')) + ' · ' +
+      formatFactHtml(formatDuration(task?.estimatedDuration)) +
     '</button>'
   ).join('')
+}
+
+export function buildContinuationRemainingHtml (minutes) {
+  return formatFactHtml(formatDuration(minutes)) +
+    ' remain in the original session budget for suggestions.'
 }
 
 function referenceSnapshot (snapshotOrCategories) {
@@ -202,7 +204,7 @@ function referencePresentationHtml (reference) {
     : reference.unresolved
       ? ' <span class="archived-badge">Unavailable</span>'
       : ''
-  return escapeHtml(String(reference.name)) + badge
+  return formatFactHtml(String(reference.name)) + badge
 }
 
 export function buildActiveTaskDetailsHtml (task, snapshotOrCategories = []) {
@@ -215,17 +217,18 @@ export function buildActiveTaskDetailsHtml (task, snapshotOrCategories = []) {
     : 'No locations'
 
   return '<div class="task-meta">Category: ' + referencePresentationHtml(category) + ' \u00b7 ' +
-    formatDuration(task?.estimatedDuration) +
-    ' \u00b7 ' + escapeHtml(scheduleSummary(task?.schedule)) + '</div>' +
+    formatFactHtml(formatDuration(task?.estimatedDuration)) +
+    ' \u00b7 ' + formatFactHtml(scheduleSummary(task?.schedule)) + '</div>' +
     '<div class="task-meta">Locations: ' + locationMarkup + '</div>' +
-    '<div class="task-meta">Scheduled: ' + escapeHtml(formatScheduledDate(task?.scheduledDate)) + '</div>'
+    '<div class="task-meta">Scheduled: ' + formatFactHtml(formatScheduledDate(task?.scheduledDate)) + '</div>'
 }
 
 export function buildBundlePreviewHtml (bundle) {
   const total = bundle.reduce((sum, task) => sum + task.estimatedDuration, 0)
-  return '<h3>Proposed bundle (' + formatDuration(total) + ')</h3><ul>' +
-    bundle.map(task => '<li>' + escapeHtml(String(task?.name ?? '')) + ' - ' + formatDuration(task.estimatedDuration) +
-      ' <span class="task-meta">(scheduled ' + escapeHtml(formatScheduledDate(task?.scheduledDate)) +
-      ' \u00b7 ' + escapeHtml(scheduleSummary(task?.schedule)) + ')</span></li>').join('') +
+  return '<h3>Proposed bundle (' + formatFactHtml(formatDuration(total)) + ')</h3><ul>' +
+    bundle.map(task => '<li>' + formatFactHtml(String(task?.name ?? '')) + ' - ' +
+      formatFactHtml(formatDuration(task.estimatedDuration)) +
+      ' <span class="task-meta">(scheduled ' + formatFactHtml(formatScheduledDate(task?.scheduledDate)) +
+      ' \u00b7 ' + formatFactHtml(scheduleSummary(task?.schedule)) + ')</span></li>').join('') +
     '</ul>'
 }

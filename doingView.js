@@ -5,8 +5,9 @@ import { state, setCurrentSessionAggregate } from './state.js'
 import { completionAttemptIdFor, createExecution } from './executionData.js'
 import { listTasksByIds, updateTask } from './taskData.js'
 import { updateSession } from './sessionData.js'
-import { formatDuration, formatTimer } from './helpers.js'
+import { formatTimer } from './helpers.js'
 import {
+  buildContinuationRemainingHtml,
   buildContinuationSearchResultsHtml,
   buildContinuationSuggestionsHtml,
   buildDoingSessionHtml
@@ -300,8 +301,7 @@ async function openContinuePicker () {
 
   const remaining = document.getElementById('continueRemaining')
   if (remaining) {
-    remaining.textContent = formatDuration(Math.floor(remainingMs / 60000)) +
-      ' remain in the original session budget for suggestions.'
+    remaining.innerHTML = buildContinuationRemainingHtml(Math.floor(remainingMs / 60000))
   }
   const suggestionsContainer = document.getElementById('continueSuggestions')
   if (suggestionsContainer) {

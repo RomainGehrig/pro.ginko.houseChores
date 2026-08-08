@@ -26,3 +26,15 @@ test('static category filter contains only the empty dynamic-list fallback', asy
 
   assert.deepEqual(optionValues, [''])
 })
+
+test('static budget choices mark only their figures as instrument text', async () => {
+  const html = await readFile(new URL('./index.html', import.meta.url), 'utf8')
+  const budgetMarkup = [...html.matchAll(/<button class="time-btn"[^>]*>(.*?)<\/button>/g)]
+    .map(match => match[1])
+
+  assert.deepEqual(budgetMarkup, [
+    '<span class="fig">5</span> min',
+    '<span class="fig">15</span> min',
+    '<span class="fig">30</span> min'
+  ])
+})

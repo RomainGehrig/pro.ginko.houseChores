@@ -2,7 +2,7 @@
 // ABOUTME: Keeps schedule form state separate from task view wiring and persistence.
 
 import { escapeAttribute } from './categoryLocationView.js'
-import { escapeHtml } from './helpers.js'
+import { formatFactHtml } from './helpers.js'
 import {
   localDateFromDate,
   normalizeSchedule,
@@ -131,7 +131,7 @@ export function scheduleEditorHtml (model = {}) {
         '<label>Day <input type="number" name="scheduleAnnualDay" min="1" max="31" step="1" aria-label="Annual day" data-schedule-field="annual-day" value="' + escapeAttribute(annualDay) + '"></label>' +
       '</div>' +
     '</div>' +
-    '<div class="schedule-summary">' + escapeHtml(scheduleSummary(schedule)) + '</div>' +
+    '<div class="schedule-summary">' + formatFactHtml(scheduleSummary(schedule)) + '</div>' +
   '</section>'
 }
 
@@ -177,5 +177,5 @@ export function syncScheduleEditor (root, options = {}) {
   if (dateHint) dateHint.hidden = schedule?.type !== 'fixed'
 
   const summary = root.querySelector('.schedule-summary')
-  if (summary) summary.textContent = scheduleSummary(schedule)
+  if (summary) summary.innerHTML = formatFactHtml(scheduleSummary(schedule))
 }

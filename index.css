@@ -944,7 +944,6 @@ textarea {
 }
 
 .history-entry-time {
-  font-family: var(--face-inst);
   font-size: var(--t-fig);
   color: var(--graphite);
   min-width: 52px;

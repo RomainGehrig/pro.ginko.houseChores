@@ -80,6 +80,15 @@ test('renders progressive controls and a human summary', () => {
   assert.match(markup, /data-schedule-date-owner="user"/)
   assert.match(markup, /class="schedule-date-hint"/)
   assert.match(markup, /Suggested from the calendar; choose any date\./)
+
+  const periodicMarkup = scheduleEditorHtml({
+    scheduledDate: '2026-08-16',
+    schedule: { type: 'periodic', every: 2, unit: 'week' }
+  })
+  assert.match(
+    periodicMarkup,
+    /About every <span class="fig">2<\/span> weeks after completion/
+  )
 })
 
 test('names every schedule form control for browser form semantics', () => {
@@ -188,7 +197,7 @@ function scheduleRoot (values) {
     ['[data-schedule-fixed-group="month_day"]', { hidden: false }],
     ['[data-schedule-fixed-group="annual_date"]', { hidden: false }],
     ['.schedule-date-hint', { hidden: false }],
-    ['.schedule-summary', { textContent: '' }]
+    ['.schedule-summary', { textContent: '', innerHTML: '' }]
   ])
   const weekdays = values.weekdays.map(value => ({ value }))
   return {
@@ -238,7 +247,10 @@ test('syncs visible schedule groups and summary without changing values', () => 
   assert.equal(root.node('[data-schedule-group="periodic"]').hidden, false)
   assert.equal(root.node('[data-schedule-group="fixed"]').hidden, true)
   assert.equal(root.node('[data-schedule-fixed-group="weekdays"]').hidden, true)
-  assert.equal(root.node('.schedule-summary').textContent, 'About every 2 weeks after completion')
+  assert.equal(
+    root.node('.schedule-summary').innerHTML,
+    'About every <span class="fig">2</span> weeks after completion'
+  )
   assert.equal(root.node('[data-schedule-field="every"]').value, '2')
   assert.equal(root.node('[data-schedule-field="date"]').value, '')
 })

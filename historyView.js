@@ -5,7 +5,7 @@ import { listAllSessions } from './sessionData.js'
 import { listAllExecutions } from './executionData.js'
 import { listAllTasks } from './taskData.js'
 import { buildHistory, describeOutcomes } from './historyLogic.js'
-import { formatDateTime, formatDuration, escapeHtml } from './helpers.js'
+import { formatDateTime, formatDuration, escapeHtml, formatFactHtml } from './helpers.js'
 
 const OUTCOME_TEXT = { done: 'done', already_done: 'already done', cancelled: 'cancelled' }
 
@@ -33,7 +33,7 @@ function render(history, container) {
     container.innerHTML = '<p class="empty">No sessions yet.</p>'
     return
   }
-  container.innerHTML = history.map(rowHtml).join('')
+  container.innerHTML = history.map(historyRowHtml).join('')
   container.querySelectorAll('.history-head').forEach(head => {
     head.addEventListener('click', () => {
       const row = head.closest('.history-row')
@@ -43,7 +43,7 @@ function render(history, container) {
   })
 }
 
-function rowHtml(session) {
+export function historyRowHtml(session) {
   const budget = formatDuration(session.timeBudgetMinutes)
   const filter = session.categoryFilter || 'All'
   const summary = session.taskCount
@@ -57,30 +57,30 @@ function rowHtml(session) {
       '<div class="history-head">' +
         '<div class="history-title">' +
           '<span class="history-caret">▸</span>' +
-          '<span class="history-when">' + escapeHtml(formatDateTime(session.startTime)) + '</span>' +
-          '<span class="task-meta">' + escapeHtml(budget + ' · ' + filter) + '</span>' +
+          '<span class="history-when">' + formatFactHtml(formatDateTime(session.startTime)) + '</span>' +
+          '<span class="task-meta">' + formatFactHtml(budget + ' · ' + filter) + '</span>' +
           (session.statusLabel !== null
-            ? '<span class="history-tag">' + escapeHtml(session.statusLabel) + '</span>'
+            ? '<span class="history-tag">' + formatFactHtml(session.statusLabel) + '</span>'
             : '') +
         '</div>' +
-        '<div class="task-meta history-summary">' + escapeHtml(summary) + '</div>' +
+        '<div class="task-meta history-summary">' + formatFactHtml(summary) + '</div>' +
       '</div>' +
-      '<div class="history-detail">' + session.entries.map(entryHtml).join('') + '</div>' +
+      '<div class="history-detail">' + session.entries.map(historyEntryHtml).join('') + '</div>' +
     '</div>'
   )
 }
 
-function entryHtml(entry) {
+export function historyEntryHtml(entry) {
   const extras = []
   if (entry.difficultyRating) extras.push(stars(entry.difficultyRating))
-  if (entry.notes) extras.push('“' + escapeHtml(entry.notes) + '”')
+  if (entry.notes) extras.push('“' + formatFactHtml(entry.notes) + '”')
 
   return (
     '<div class="history-entry">' +
       '<div class="history-entry-line">' +
-        '<span class="history-entry-name">' + escapeHtml(entry.taskName) + '</span>' +
-        '<span class="history-entry-outcome">' + escapeHtml(OUTCOME_TEXT[entry.outcome] || entry.outcome) + '</span>' +
-        '<span class="history-entry-time">' + escapeHtml(formatDuration(entry.actualDuration)) + '</span>' +
+        '<span class="history-entry-name">' + formatFactHtml(entry.taskName) + '</span>' +
+        '<span class="history-entry-outcome">' + formatFactHtml(OUTCOME_TEXT[entry.outcome] || entry.outcome) + '</span>' +
+        '<span class="history-entry-time">' + formatFactHtml(formatDuration(entry.actualDuration)) + '</span>' +
       '</div>' +
       (extras.length ? '<div class="task-meta">' + extras.join('&nbsp;&nbsp;') + '</div>' : '') +
     '</div>'

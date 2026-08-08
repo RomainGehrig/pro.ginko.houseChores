@@ -6,6 +6,23 @@ import assert from 'node:assert/strict'
 import * as reviewView from './reviewView.js'
 import { state } from './state.js'
 
+test('review cards isolate displayed figures from their labels and task names', () => {
+  const markup = reviewView.reviewExecutionCardHtml({
+    _id: 'execution-2',
+    taskName: 'Floor 2 sink',
+    outcome: 'done',
+    actualDuration: 12,
+    difficultyRating: 3,
+    notes: ''
+  })
+
+  assert.match(markup, /Floor <span class="fig">2<\/span> sink/)
+  assert.match(
+    markup,
+    /Difficulty \(<span class="fig">1<\/span>-<span class="fig">5<\/span>\)/
+  )
+})
+
 function createReviewControl (id = '') {
   const listeners = new Map()
   return {

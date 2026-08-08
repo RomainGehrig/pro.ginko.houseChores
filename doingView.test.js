@@ -1515,7 +1515,10 @@ test('terminal Review loading retries without re-entering the active-session ref
 
     await document.control('retryReviewLoadBtn').dispatch('click')
 
-    assert.match(document.control('reviewList').innerHTML, /task-1/)
+    assert.match(
+      document.control('reviewList').innerHTML,
+      /task-<span class="fig">1<\/span>/
+    )
     assert.equal(document.control('finishReviewBtn').disabled, false)
     assert.equal(persistence.sessionUpdateCalls, 1)
   })

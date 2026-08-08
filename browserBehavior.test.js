@@ -668,6 +668,26 @@ test('archived and saving states keep full contrast and state their status', asy
   })
 })
 
+test('mixed measurements use instrument figures without changing their words', async () => {
+  const result = await runBrowserScenario({
+    body: '<main id="app">' +
+      '<button class="time-btn" id="budget"><span class="fig">15</span> min</button>' +
+      '<label>Custom <input id="numberInput" type="number" value="20"></label>' +
+      '</main>',
+    script: `
+      const family = selector => getComputedStyle(document.querySelector(selector)).fontFamily
+      const result = {
+        wordFamily: family('#budget'),
+        figureFamily: family('#budget .fig'),
+        inputFamily: family('#numberInput')
+      }
+    `
+  })
+
+  assert.notEqual(result.wordFamily, result.figureFamily, JSON.stringify(result))
+  assert.equal(result.inputFamily, result.figureFamily, JSON.stringify(result))
+})
+
 test('dark enamel tokens apply at a 390px phone viewport', async () => {
   const result = await runBrowserScenario({
     viewport: { width: 390, height: 640 },

@@ -2,7 +2,7 @@ import { state } from './state.js'
 import { listExecutionsBySession, updateExecution, listExecutionsByTask } from './executionData.js'
 import { updateTask, listTasksByIds } from './taskData.js'
 import { suggestDuration } from './aiEnrich.js'
-import { formatDuration, escapeHtml } from './helpers.js'
+import { formatDuration, escapeHtml, formatFactHtml } from './helpers.js'
 import { showView, setNavVisible } from './viewRouter.js'
 import { refreshTasksView } from './tasksView.js'
 
@@ -94,7 +94,7 @@ function renderReviewList() {
     container.innerHTML = '<p class="empty">No tasks were completed this session.</p>'
     return
   }
-  container.innerHTML = executionsCache.map(execCardHtml).join('')
+  container.innerHTML = executionsCache.map(reviewExecutionCardHtml).join('')
   container.querySelectorAll('.exec-card').forEach(card => {
     const id = card.dataset.id
     card.querySelector('.f-actual').addEventListener('change', (e) => {
@@ -112,14 +112,16 @@ function renderReviewList() {
   })
 }
 
-function execCardHtml(exec) {
+export function reviewExecutionCardHtml(exec) {
   const outcomeLabel = { done: 'Done', cancelled: 'Cancelled', already_done: 'Already done' }[exec.outcome] || exec.outcome
   return (
     '<div class="exec-card" data-id="' + exec._id + '">' +
-      '<div class="task-name">' + escapeHtml(exec.taskName) + '</div>' +
-      '<div class="task-meta">' + escapeHtml(outcomeLabel) + '</div>' +
+      '<div class="task-name">' + formatFactHtml(exec.taskName) + '</div>' +
+      '<div class="task-meta">' + formatFactHtml(outcomeLabel) + '</div>' +
       '<label>Actual duration (min) <input class="f-actual" type="number" min="1" value="' + exec.actualDuration + '"></label>' +
-      '<label>Difficulty (1-5) <input class="f-difficulty" type="number" min="1" max="5" value="' + (exec.difficultyRating || '') + '"></label>' +
+      '<label>Difficulty (<span class="fig">1</span>-<span class="fig">5</span>) ' +
+        '<input class="f-difficulty" type="number" min="1" max="5" value="' +
+        (exec.difficultyRating || '') + '"></label>' +
       '<label>Notes <input class="f-notes" type="text" value="' + escapeHtml(exec.notes || '') + '"></label>' +
     '</div>'
   )
