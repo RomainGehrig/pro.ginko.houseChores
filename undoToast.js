@@ -1,5 +1,5 @@
-// ABOUTME: Provides the DOM-free optimistic archive transaction and one-action undo queue.
-// ABOUTME: The singleton exports are intentionally thin wrappers for later toast rendering.
+// ABOUTME: Provides optimistic archive transactions, a one-action undo queue, and its status bar.
+// ABOUTME: Pure queue exports remain safe to import when no document is available.
 
 const clone = value => {
   if (typeof structuredClone === 'function') return structuredClone(value)
@@ -90,3 +90,31 @@ export const undoPending = (...args) => singletonQueue.undo(...args)
 export const commitPending = (...args) => singletonQueue.commit(...args)
 export const currentUndo = () => singletonQueue.current()
 export const subscribeUndo = listener => singletonQueue.subscribe(listener)
+
+let undoToastInitialized = false
+
+export function initUndoToast () {
+  if (undoToastInitialized) return true
+  if (typeof document === 'undefined') return false
+
+  const toast = document.getElementById('undoToast')
+  const message = document.getElementById('undoToastMessage')
+  const button = document.getElementById('undoToastButton')
+  if (!toast || !message || !button) return false
+
+  let renderedKey = null
+  const render = action => {
+    renderedKey = action?.key || null
+    message.textContent = action?.label || ''
+    toast.hidden = !action
+  }
+
+  button.addEventListener('click', async () => {
+    const key = renderedKey
+    if (key) await undoPending(key)
+  })
+  subscribeUndo(render)
+  render(currentUndo())
+  undoToastInitialized = true
+  return true
+}

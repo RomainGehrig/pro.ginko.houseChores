@@ -8,7 +8,8 @@ import {
   undoPending,
   commitPending,
   currentUndo,
-  subscribeUndo
+  subscribeUndo,
+  initUndoToast
 } from './undoToast.js'
 
 function schedulerHarness() {
@@ -213,4 +214,59 @@ test('singleton wrappers expose current state and subscriptions without requirin
   await pendingUndo(action, 60_000)
   await commitPending('task:singleton')
   assert.deepEqual(seen, ['task:singleton', null])
+})
+
+test('undo toast initialization is DOM-safe', () => {
+  const originalDocument = globalThis.document
+  try {
+    delete globalThis.document
+    assert.equal(initUndoToast(), false)
+  } finally {
+    if (originalDocument !== undefined) globalThis.document = originalDocument
+  }
+})
+
+test('undo toast renders the pending label and key-scoped Undo action once', async () => {
+  const originalDocument = globalThis.document
+  const listeners = []
+  const toast = { hidden: true }
+  const message = { textContent: '' }
+  const button = {
+    textContent: 'Undo',
+    addEventListener: (type, listener) => listeners.push({ type, listener })
+  }
+  globalThis.document = {
+    getElementById: id => ({ undoToast: toast, undoToastMessage: message, undoToastButton: button })[id]
+  }
+
+  try {
+    assert.equal(initUndoToast(), true)
+    assert.equal(initUndoToast(), true)
+    assert.deepEqual(listeners.map(item => item.type), ['click'])
+
+    let firstReverts = 0
+    let secondReverts = 0
+    await pendingUndo({
+      key: 'task:first-toast', label: 'Archived', commit: () => null,
+      revert: () => { firstReverts++; return 'first restored' }
+    }, 60_000)
+    assert.equal(toast.hidden, false)
+    assert.equal(message.textContent, 'Archived')
+
+    await pendingUndo({
+      key: 'task:second-toast', label: 'Second archived', commit: () => null,
+      revert: () => { secondReverts++; return 'second restored' }
+    }, 60_000)
+    await listeners[0].listener()
+
+    assert.equal(firstReverts, 0)
+    assert.equal(secondReverts, 1)
+    assert.equal(toast.hidden, true)
+    assert.equal(message.textContent, '')
+    assert.equal(currentUndo(), null)
+  } finally {
+    if (currentUndo()) await commitPending(currentUndo().key)
+    if (originalDocument === undefined) delete globalThis.document
+    else globalThis.document = originalDocument
+  }
 })
