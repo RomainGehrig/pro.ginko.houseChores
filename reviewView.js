@@ -3,7 +3,7 @@ import { listExecutionsBySession, updateExecution, listExecutionsByTask } from '
 import { updateTask, listTasksByIds } from './taskData.js'
 import { suggestDuration } from './aiEnrich.js'
 import { formatDuration, escapeHtml, formatFactHtml } from './helpers.js'
-import { showView, setNavVisible } from './viewRouter.js'
+import { showView, setNavVisible } from './router.js'
 import { refreshTasksView } from './tasksView.js'
 
 let executionsCache = []

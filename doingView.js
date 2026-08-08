@@ -17,7 +17,7 @@ import { prepareCompletionAttempt, retryCompletionForStage } from './doingComple
 import { localDateFromDate } from './scheduleLogic.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
 import { getActiveTasks, refreshTasksView } from './tasksView.js'
-import { showView, setNavVisible } from './viewRouter.js'
+import { showView, setNavVisible } from './router.js'
 import { renderReviewLoadError, startReview } from './reviewView.js'
 import { sessionStore } from './sessionStore.js'
 import {
@@ -111,7 +111,7 @@ async function applyAggregate (aggregate, { allowNavigation = true } = {}) {
     clearInterval(timerInterval)
     setNavVisible('doing', false)
     setNavVisible('review', true)
-    if (allowNavigation) showView('review')
+    if (allowNavigation) showView('review', aggregate.session._id)
     await loadCurrentReview()
     return
   }

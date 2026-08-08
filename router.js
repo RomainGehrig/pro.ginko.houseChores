@@ -85,6 +85,9 @@ function renderRoute (route) {
     item.classList?.toggle('active', active)
     if (active) item.setAttribute?.('aria-current', 'page')
     else item.removeAttribute?.('aria-current')
+    if (route.name === 'receipt' && item.dataset?.view === 'review') {
+      item.setAttribute?.('href', hashForRoute(route))
+    }
   }
 
   const heading = document.getElementById?.('view-' + viewName)

@@ -76,3 +76,15 @@ test('router canonicalizes unknown hashes, bridges final routes, and focuses the
   assert.equal(window.location.hash, '#/receipt/session%2F42')
   assert.equal(dom.views.get('review').style.display, 'block')
 })
+
+test('router refreshes history only when dispatching the log route', () => {
+  const dom = installRouterDom('#/log')
+  let refreshes = 0
+
+  initRouter({ onLogRoute: () => { refreshes++ } })
+
+  assert.equal(dom.views.get('history').style.display, 'block')
+  assert.equal(refreshes, 1)
+  showView('tasks')
+  assert.equal(refreshes, 1)
+})

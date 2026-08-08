@@ -54,3 +54,11 @@ test('header navigation uses canonical hash anchors and every current screen has
   ])
   assert.equal(focusHeadings.length, 5)
 })
+
+test('all view transitions use the hash router instead of the retired view router', async () => {
+  const sources = await Promise.all([
+    'index.js', 'sessionView.js', 'doingView.js', 'reviewView.js'
+  ].map(path => readFile(new URL('./' + path, import.meta.url), 'utf8')))
+
+  for (const source of sources) assert.doesNotMatch(source, /viewRouter\.js/)
+})
