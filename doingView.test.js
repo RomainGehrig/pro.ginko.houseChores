@@ -4,6 +4,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import { completionAttemptIdFor } from './executionData.js'
+import { startReview } from './reviewView.js'
 import { sessionStore } from './sessionStore.js'
 import { state, setCurrentSessionAggregate } from './state.js'
 import { initDoingView, refreshDoing, startDoing } from './doingView.js'
@@ -1525,5 +1526,78 @@ test('display retry reapplies a durable conclusion without repeating persistence
     })
   } finally {
     sessionStore.conclude = originalConclude
+  }
+})
+
+test('terminal Review errors cannot invalidate a newer queued Review load', async () => {
+  const originalDocument = globalThis.document
+  const originalWindow = globalThis.window
+  const originalFreezr = globalThis.freezr
+  const document = createDoingDocument()
+  const window = createDoingWindow()
+  let sessionAIdReads = 0
+  const sessionA = { status: 'completed', taskBundle: ['task-a'] }
+  const sessionB = { _id: 'terminal-b', status: 'completed', taskBundle: ['task-b'] }
+  let rejectSessionA
+  let releaseSessionB
+  let sessionBLoad
+  const sessionARead = new Promise((resolve, reject) => { rejectSessionA = reject })
+  const sessionBRead = new Promise(resolve => { releaseSessionB = resolve })
+  const aggregateA = { session: sessionA, bundle: [], executions: [] }
+  const aggregateB = { session: sessionB, bundle: [], executions: [] }
+
+  Object.defineProperty(sessionA, '_id', {
+    enumerable: true,
+    get () {
+      sessionAIdReads++
+      if (sessionAIdReads === 2) {
+        queueMicrotask(() => {
+          setCurrentSessionAggregate(aggregateB)
+          sessionBLoad = startReview()
+        })
+      }
+      return 'terminal-a'
+    }
+  })
+  globalThis.document = document
+  globalThis.window = window
+  globalThis.freezr = {
+    query: async collection => {
+      if (collection === 'taskExecutions') {
+        return state.currentSession === sessionA ? sessionARead : sessionBRead
+      }
+      if (collection === 'tasks') return [{ _id: 'task-b', name: 'Session B task' }]
+      return []
+    }
+  }
+
+  try {
+    const sessionALoad = startDoing(aggregateA)
+    rejectSessionA(new Error('Session A review offline'))
+    await sessionALoad
+
+    assert.ok(sessionBLoad)
+    assert.equal(document.control('reviewList').children[0].textContent, 'Loading review…')
+    assert.equal(document.control('retryReviewLoadBtn'), null)
+    assert.equal(document.control('finishReviewBtn').disabled, true)
+
+    releaseSessionB([{
+      _id: 'execution-b', sessionId: sessionB._id, taskId: 'task-b', outcome: 'done', actualDuration: 5
+    }])
+    await sessionBLoad
+
+    assert.match(document.control('reviewList').innerHTML, /Session B task/)
+    assert.doesNotMatch(document.control('reviewList').innerHTML, /Session A review offline/)
+    assert.equal(document.control('finishReviewBtn').disabled, false)
+  } finally {
+    if (originalDocument === undefined) delete globalThis.document
+    else globalThis.document = originalDocument
+    if (originalWindow === undefined) delete globalThis.window
+    else globalThis.window = originalWindow
+    if (originalFreezr === undefined) delete globalThis.freezr
+    else globalThis.freezr = originalFreezr
+    state.currentSession = null
+    state.currentBundle = []
+    state.currentExecutions = []
   }
 })

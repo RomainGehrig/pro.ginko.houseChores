@@ -25,7 +25,7 @@ export function initReviewView() {
   document.getElementById('finishReviewBtn').addEventListener('click', handleFinish)
 }
 
-export async function startReview() {
+export async function startReview({ onCurrentError } = {}) {
   const sessionId = state.currentSession._id
   const generation = ++reviewLoadGeneration
   executionsCache = []
@@ -57,6 +57,10 @@ export async function startReview() {
     return true
   } catch (error) {
     if (!reviewLoadIsCurrent(generation, sessionId)) return false
+    if (onCurrentError) {
+      onCurrentError(error)
+      return false
+    }
     throw error
   }
 }

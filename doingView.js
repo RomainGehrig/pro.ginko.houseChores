@@ -123,16 +123,12 @@ async function applyAggregate (aggregate, { allowNavigation = true } = {}) {
 }
 
 async function loadCurrentReview () {
-  try {
-    await startReview()
-    return true
-  } catch (error) {
-    renderReviewLoadError(
+  return startReview({
+    onCurrentError: error => renderReviewLoadError(
       'Could not load this session review: ' + String(error?.message || error),
       loadCurrentReview
     )
-    return false
-  }
+  })
 }
 
 function renderDoing () {
