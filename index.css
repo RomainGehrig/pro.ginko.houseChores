@@ -5,6 +5,10 @@
   padding: 20px;
 }
 
+[hidden] {
+  display: none !important;
+}
+
 .app-header {
   display: flex;
   align-items: center;
@@ -340,17 +344,125 @@ button:hover {
   margin: 20px 0;
 }
 
+.doing-session-head {
+  align-items: center;
+  background: #fff;
+  display: flex;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 8px 56px 12px 0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.doing-session-head .timer {
+  margin: 4px 0;
+  text-align: left;
+}
+
+.doing-session button {
+  min-height: 44px;
+}
+
 .doing-progress {
   color: #666;
   font-size: 12px;
   margin-bottom: 4px;
 }
 
-.doing-actions {
+#doingTaskList {
+  display: grid;
+  gap: 12px;
+  margin: 16px 0;
+}
+
+.doing-task {
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.doing-task.is-resolved {
+  background: #f7f7f7;
+  color: #555;
+}
+
+.doing-task-actions,
+#doingDecisionPanel {
   display: flex;
   gap: 10px;
   flex-wrap: wrap;
-  justify-content: center;
+}
+
+.doing-task-actions {
+  margin-top: 10px;
+}
+
+#doingDecisionPanel {
+  align-items: center;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+#doingDecisionPanel p {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+#doingContinuePanel {
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  display: grid;
+  gap: 12px;
+  margin-top: 12px;
+  padding: 12px;
+}
+
+#doingContinuePanel h2,
+#doingContinuePanel p {
+  margin: 0;
+}
+
+#doingContinuePanel > label {
+  display: grid;
+  gap: 6px;
+}
+
+#doingContinuePanel input[type="search"],
+#doingContinuePanel input:not([type]) {
+  box-sizing: border-box;
+  min-height: 44px;
+  padding: 6px 8px;
+  width: 100%;
+}
+
+#continueSuggestions,
+#continueSearchResults {
+  display: grid;
+  gap: 8px;
+}
+
+.continue-option {
+  align-items: center;
+  border: 1px solid #eee;
+  border-radius: 6px;
+  display: grid;
+  gap: 8px;
+  grid-template-columns: auto 1fr auto;
+  padding: 8px;
+}
+
+.continue-option input {
+  height: 20px;
+  margin: 0;
+  width: 20px;
+}
+
+#continueSearchResults button {
+  text-align: left;
+  width: 100%;
 }
 
 .exec-card {

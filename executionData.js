@@ -21,3 +21,11 @@ export const listExecutionsByTask = async (taskId) => {
 }
 
 export const listAllExecutions = () => freezr.query('taskExecutions', {}, { sort: { _date_modified: -1 } })
+
+export const completionAttemptIdFor = (sessionId, taskId) =>
+  'session-task-' + encodeURIComponent(String(sessionId)) + '-' +
+  encodeURIComponent(String(taskId))
+
+export const findExecutionForTask = async (sessionId, taskId) =>
+  (await listExecutionsBySession(sessionId))
+    .find(execution => execution.taskId === taskId) || null

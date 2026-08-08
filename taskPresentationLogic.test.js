@@ -6,7 +6,9 @@ import assert from 'node:assert/strict'
 import {
   buildActiveTaskDetailsHtml,
   buildBundlePreviewHtml,
-  buildDoingTaskHtml,
+  buildContinuationSearchResultsHtml,
+  buildContinuationSuggestionsHtml,
+  buildDoingSessionHtml,
   buildEnrichmentAvailability
 } from './taskPresentationLogic.js'
 
@@ -21,52 +23,95 @@ test('uses neutral no-category copy for unavailable AI enrichment', () => {
   })
 })
 
-test('doing markup resolves a renamed category by stable id and escapes stored names', () => {
-  const markup = buildDoingTaskHtml({
-    _id: 'task-1',
+test('doing markup renders all unresolved task actions and escapes names', () => {
+  const markup = buildDoingSessionHtml({
+    status: 'active', timeBudgetMinutes: 15
+  }, [
+    { _id: 't1', name: '<img src=x onerror=alert(1)>', estimatedDuration: 5 },
+    { _id: 't2', name: 'Clean sink', estimatedDuration: 10 }
+  ], [], [])
+  assert.match(markup, /id="sessionTimerDisplay"/)
+  assert.match(markup, /data-task-id="t1"/)
+  assert.match(markup, /data-task-id="t2"/)
+  assert.equal((markup.match(/data-outcome="done"/g) || []).length, 2)
+  assert.equal((markup.match(/data-outcome="already_done"/g) || []).length, 2)
+  assert.equal((markup.match(/data-outcome="cancelled"/g) || []).length, 2)
+  assert.match(markup, /&lt;img src=x onerror=alert\(1\)&gt;/)
+  assert.doesNotMatch(markup, /<img/)
+})
+
+test('active unavailable cards are Cancel-only while proposed Quick-add cards stay actionable', () => {
+  const markup = buildDoingSessionHtml({
+    status: 'active', timeBudgetMinutes: 15
+  }, [{
+    _id: 'archived', name: 'Old task', status: 'archived', unavailable: true
+  }, {
+    _id: 'quick', name: 'Quick task', status: 'proposed'
+  }], [], [])
+  const archivedCard = markup.match(/<article[^>]*data-task-id="archived"[\s\S]*?<\/article>/)[0]
+  const quickCard = markup.match(/<article[^>]*data-task-id="quick"[\s\S]*?<\/article>/)[0]
+
+  assert.match(archivedCard, /data-outcome="cancelled"/)
+  assert.doesNotMatch(archivedCard, /data-outcome="done"|data-outcome="already_done"/)
+  assert.match(quickCard, /data-outcome="done"/)
+  assert.match(quickCard, /data-outcome="already_done"/)
+  assert.match(quickCard, /data-outcome="cancelled"/)
+})
+
+test('resolved timing falls back for null or empty raw values while preserving numeric zero', () => {
+  const markup = buildDoingSessionHtml({
+    status: 'paused', timeBudgetMinutes: 15
+  }, [{
+    _id: 'null-raw', name: 'Null raw', estimatedDuration: 1
+  }, {
+    _id: 'empty-raw', name: 'Empty raw', estimatedDuration: 1
+  }, {
+    _id: 'zero-raw', name: 'Zero raw', estimatedDuration: 1
+  }], [{
+    taskId: 'null-raw', outcome: 'done', rawDurationMs: null, actualDuration: 2
+  }, {
+    taskId: 'empty-raw', outcome: 'done', rawDurationMs: '', actualDuration: 0.5
+  }, {
+    taskId: 'zero-raw', outcome: 'done', rawDurationMs: 0, actualDuration: 99
+  }], [])
+
+  assert.match(markup, /data-task-id="null-raw"[\s\S]*?Done · 02:00/)
+  assert.match(markup, /data-task-id="empty-raw"[\s\S]*?Done · 00:30/)
+  assert.match(markup, /data-task-id="zero-raw"[\s\S]*?Done · 00:00/)
+})
+
+test('resolved and unavailable cards remain visible without outcome controls while paused', () => {
+  const markup = buildDoingSessionHtml({
+    status: 'paused', timeBudgetMinutes: 15
+  }, [
+    { _id: 't1', name: 'Clean sink', estimatedDuration: 5 },
+    { _id: 'missing', name: 'Unavailable task', unavailable: true }
+  ], [{ taskId: 't1', outcome: 'done', rawDurationMs: 5000 }], [])
+  assert.match(markup, /data-task-id="t1"[\s\S]*Done · 00:05/)
+  assert.match(markup, /data-task-id="missing"[\s\S]*Unavailable task/)
+  assert.doesNotMatch(markup, /data-outcome=/)
+  assert.match(markup, /id="doingDecisionPanel"/)
+  assert.match(markup, />Conclude</)
+  assert.match(markup, />Continue</)
+})
+
+test('picker markup escapes every stored suggestion and search-result title', () => {
+  const markup = buildContinuationSuggestionsHtml([{
+    _id: 'suggested-5m',
     name: '<img src=x onerror=alert(1)>',
-    categoryId: 'category-1',
-    category: 'Stale category snapshot',
-    estimatedDuration: 15
-  }, 0, 1, [{
-    _id: 'category-1',
-    name: '<svg onload=alert(2)>Renamed category',
-    status: 'active'
+    estimatedDuration: 5
+  }]) + buildContinuationSearchResultsHtml([{
+    _id: 'searched-30m',
+    name: '</button><script>globalThis.compromised = true</script><button>',
+    estimatedDuration: 30
   }])
 
   assert.match(markup, /&lt;img src=x onerror=alert\(1\)&gt;/)
-  assert.match(markup, /&lt;svg onload=alert\(2\)&gt;Renamed category/)
-  assert.doesNotMatch(markup, /<img|<svg|Stale category snapshot/)
-
-  const activeMarkup = buildActiveTaskDetailsHtml({
-    categoryId: 'category-1',
-    category: 'Stale category snapshot',
-    estimatedDuration: 15,
-    scheduledDate: '2026-08-16',
-    schedule: { type: 'one_off' }
-  }, [{
-    _id: 'category-1',
-    name: '<svg onload=alert(2)>Renamed category',
-    status: 'active'
-  }])
-  assert.match(activeMarkup, /&lt;svg onload=alert\(2\)&gt;Renamed category/)
-  assert.doesNotMatch(activeMarkup, /<svg|Stale category snapshot/)
-})
-
-test('doing markup keeps completion recovery status and actions safely rendered', () => {
-  const markup = buildDoingTaskHtml({
-    name: '<button id="retryCompletionBtn">Fake retry</button>',
-    category: 'Home',
-    estimatedDuration: 10
-  }, 0, 1)
-
-  assert.match(markup, /<div id="doingStatus"><\/div>/)
-  assert.match(markup, /<button id="doneBtn">Done<\/button>/)
-  assert.match(markup, /<button id="alreadyDoneBtn">Already Done<\/button>/)
-  assert.match(markup, /<button id="cancelBtn">Cancel<\/button>/)
-  assert.match(markup, /<button id="endSessionBtn">End Session<\/button>/)
-  assert.doesNotMatch(markup, /<h2><button/)
-  assert.equal((markup.match(/id="retryCompletionBtn"/g) || []).length, 0)
+  assert.match(
+    markup,
+    /&lt;\/button&gt;&lt;script&gt;globalThis\.compromised = true&lt;\/script&gt;&lt;button&gt;/
+  )
+  assert.doesNotMatch(markup, /<img|<script>/)
 })
 
 test('bundle preview escapes stored task names', () => {

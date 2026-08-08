@@ -1,16 +1,25 @@
 import { getActiveTasks } from './tasksView.js'
-import { buildBundleProposal, buildSessionDraft } from './bundleLogic.js'
-import { createSession } from './sessionData.js'
+import { buildBundleProposal } from './bundleLogic.js'
 import { buildBundlePreviewHtml } from './taskPresentationLogic.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
 import { selectableReferences } from './categoryLocationLogic.js'
-import { state } from './state.js'
+import { setCurrentSessionAggregate } from './state.js'
 import { showView, setNavVisible } from './viewRouter.js'
 import { startDoing } from './doingView.js'
+import { sessionStore } from './sessionStore.js'
+import { escapeHtml } from './helpers.js'
 
 let selectedMinutes = null
 let selectedCategoryId = ''
 let currentProposal = null
+
+export function showSessionStartNotice (startResult, status) {
+  if (!startResult?.restored || !status) return false
+  status.textContent = 'Resuming your unfinished session — the new bundle was not started.'
+  status.setAttribute('role', 'status')
+  status.setAttribute('data-state', 'info')
+  return true
+}
 
 export function initSessionView() {
   document.querySelectorAll('.time-btn').forEach(btn => {
@@ -84,17 +93,17 @@ function renderBundlePreview() {
 
 async function handleStart() {
   if (!currentProposal?.tasks.length) return
-  const sessionDraft = buildSessionDraft(currentProposal, Date.now())
-  const session = await createSession(sessionDraft)
-  state.currentSession = {
-    _id: session._id,
-    timeBudgetMinutes: currentProposal.timeBudgetMinutes,
-    categoryFilterId: currentProposal.categoryFilterId,
-    categoryFilter: currentProposal.categoryFilter
+  try {
+    const startResult = await sessionStore.start(currentProposal, Date.now())
+    const { aggregate } = startResult
+    setCurrentSessionAggregate(aggregate)
+    setNavVisible('doing', true)
+    showView('doing')
+    await startDoing(aggregate)
+    showSessionStartNotice(startResult, document.getElementById('doingStatus'))
+  } catch (error) {
+    document.getElementById('bundlePreview').innerHTML =
+      '<p class="inline-status" data-state="error" role="alert">' +
+      escapeHtml('Could not start or recover the session: ' + error.message) + '</p>'
   }
-  state.currentBundle = [...currentProposal.tasks]
-  state.currentBundleIndex = 0
-  setNavVisible('doing', true)
-  showView('doing')
-  startDoing()
 }

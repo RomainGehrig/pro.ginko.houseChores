@@ -59,7 +59,9 @@ function rowHtml(session) {
           '<span class="history-caret">▸</span>' +
           '<span class="history-when">' + escapeHtml(formatDateTime(session.startTime)) + '</span>' +
           '<span class="task-meta">' + escapeHtml(budget + ' · ' + filter) + '</span>' +
-          (session.abandoned ? '<span class="history-tag">abandoned</span>' : '') +
+          (session.statusLabel !== null
+            ? '<span class="history-tag">' + escapeHtml(session.statusLabel) + '</span>'
+            : '') +
         '</div>' +
         '<div class="task-meta history-summary">' + escapeHtml(summary) + '</div>' +
       '</div>' +

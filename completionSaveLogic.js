@@ -22,6 +22,13 @@ const taskFailure = error => ({
   canRetry: true
 })
 
+const sessionFailure = error => ({
+  ok: false,
+  stage: 'session_update',
+  message: 'Outcome recorded, session checkpoint not updated: ' + error.message,
+  canRetry: true
+})
+
 function defaultAttemptId () {
   if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID()
   return 'completion-' + Date.now() + '-' + Math.random().toString(36).slice(2)
@@ -30,21 +37,34 @@ function defaultAttemptId () {
 export function createCompletionCoordinator ({
   createExecution,
   updateTask,
+  updateSession = async () => {},
   createAttemptId = defaultAttemptId
 }) {
   let pendingExecution = null
   let pendingTaskUpdate = null
+  let pendingSessionUpdate = null
 
-  async function retryTaskUpdate () {
-    if (!pendingTaskUpdate) return success()
-
+  async function retrySessionUpdate () {
+    if (!pendingSessionUpdate) return success()
     try {
-      await updateTask(pendingTaskUpdate.taskId, pendingTaskUpdate.fields)
-      pendingTaskUpdate = null
+      await updateSession(pendingSessionUpdate.sessionId, pendingSessionUpdate.fields)
+      pendingSessionUpdate = null
       return success()
     } catch (error) {
-      return taskFailure(error)
+      return sessionFailure(error)
     }
+  }
+
+  async function retryTaskUpdate () {
+    if (pendingTaskUpdate) {
+      try {
+        await updateTask(pendingTaskUpdate.taskId, pendingTaskUpdate.fields)
+        pendingTaskUpdate = null
+      } catch (error) {
+        return taskFailure(error)
+      }
+    }
+    return retrySessionUpdate()
   }
 
   async function persistExecution (attempt) {
@@ -55,12 +75,17 @@ export function createCompletionCoordinator ({
     }
 
     pendingExecution = null
-    if (!attempt.taskUpdate) return success()
-    pendingTaskUpdate = { taskId: attempt.taskId, fields: attempt.taskUpdate }
+    pendingTaskUpdate = attempt.taskUpdate
+      ? { taskId: attempt.taskId, fields: attempt.taskUpdate }
+      : null
+    pendingSessionUpdate = attempt.sessionUpdate
+      ? { sessionId: attempt.sessionId, fields: attempt.sessionUpdate }
+      : null
     return retryTaskUpdate()
   }
 
-  async function complete ({ execution, taskId, taskUpdate }) {
+  async function complete ({ execution, taskId, taskUpdate, sessionId, sessionUpdate }) {
+    if (pendingSessionUpdate) return sessionFailure(new Error('session update already pending'))
     if (pendingTaskUpdate) return taskFailure(new Error('task update already pending'))
     if (pendingExecution) return executionFailure(new Error('execution retry already pending'))
 
@@ -71,7 +96,9 @@ export function createCompletionCoordinator ({
           completionAttemptId: execution.completionAttemptId || createAttemptId()
         },
         taskId,
-        taskUpdate
+        taskUpdate,
+        sessionId,
+        sessionUpdate
       }
     } catch (error) {
       return executionFailure(error)
@@ -79,13 +106,24 @@ export function createCompletionCoordinator ({
     return persistExecution(pendingExecution)
   }
 
+  async function continueAfterPersistedExecution ({ taskId, taskUpdate }) {
+    pendingExecution = null
+    pendingTaskUpdate = taskUpdate ? { taskId, fields: taskUpdate } : null
+    pendingSessionUpdate = null
+    return retryTaskUpdate()
+  }
+
   return {
     complete,
+    continueAfterPersistedExecution,
     retryExecution: () => pendingExecution ? persistExecution(pendingExecution) : success(),
     retryTaskUpdate,
+    retrySessionUpdate,
     hasPendingExecution: () => pendingExecution !== null,
     hasPendingTaskUpdate: () => pendingTaskUpdate !== null,
+    hasPendingSessionUpdate: () => pendingSessionUpdate !== null,
     discardPendingExecution: () => { pendingExecution = null },
-    discardPendingTaskUpdate: () => { pendingTaskUpdate = null }
+    discardPendingTaskUpdate: () => { pendingTaskUpdate = null },
+    discardPendingSessionUpdate: () => { pendingSessionUpdate = null }
   }
 }

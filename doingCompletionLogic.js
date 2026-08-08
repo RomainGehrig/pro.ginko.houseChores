@@ -40,11 +40,14 @@ export function retryCompletionForStage (stage, {
   actionsBlocked = () => false,
   retryPreparation,
   retryExecution,
-  retryTaskUpdate
+  retryTaskUpdate,
+  retrySessionUpdate
 }) {
   if (actionsBlocked()) return null
   if (stage === 'task_read') return retryPreparation()
-  return stage === 'execution' ? retryExecution() : retryTaskUpdate()
+  if (stage === 'execution') return retryExecution()
+  if (stage === 'task_update') return retryTaskUpdate()
+  return retrySessionUpdate()
 }
 
 export async function endDoingSession ({

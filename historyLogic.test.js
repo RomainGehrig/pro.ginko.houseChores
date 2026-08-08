@@ -33,14 +33,39 @@ test('counts outcomes and totals actual minutes including cancelled', () => {
   assert.equal(summary.totalActualMinutes, 14)
 })
 
-test('flags a session that never completed as abandoned', () => {
-  const sessions = [
-    { _id: 's1', startTime: 1000, status: 'active' },
-    { _id: 's2', startTime: 900, status: 'completed' }
-  ]
-  const result = buildHistory(sessions, [], tasks)
-  assert.equal(result.find(s => s.id === 's1').abandoned, true)
-  assert.equal(result.find(s => s.id === 's2').abandoned, false)
+test('history distinguishes resumable, completed, and interrupted sessions', () => {
+  const result = buildHistory([
+    { _id: 'active', startTime: 4000, status: 'active' },
+    { _id: 'paused', startTime: 3000, status: 'paused' },
+    { _id: 'interrupted', startTime: 2000, status: 'interrupted' },
+    { _id: 'completed', startTime: 1000, status: 'completed' }
+  ], [], tasks)
+  assert.deepEqual(result.map(row => [row.id, row.statusLabel]), [
+    ['active', 'in progress'],
+    ['paused', 'paused'],
+    ['interrupted', 'interrupted'],
+    ['completed', null]
+  ])
+})
+
+test('history preserves raw millisecond precision and falls back to legacy minutes', () => {
+  const [summary] = buildHistory([{ _id: 's1', status: 'completed' }], [
+    { sessionId: 's1', taskId: 't1', rawDurationMs: 90000, actualDuration: 99, outcome: 'done' },
+    { sessionId: 's1', taskId: 't2', actualDuration: 2, outcome: 'cancelled' },
+    { sessionId: 's1', taskId: 't1', rawDurationMs: 0, actualDuration: 99, outcome: 'done' }
+  ], tasks)
+  assert.deepEqual(summary.entries.map(entry => entry.actualDuration), [1.5, 2, 0])
+  assert.equal(summary.totalActualMinutes, 3.5)
+})
+
+test('history treats blank raw milliseconds as missing legacy data', () => {
+  const [summary] = buildHistory([{ _id: 's1', status: 'completed' }], [
+    { sessionId: 's1', taskId: 't1', rawDurationMs: null, actualDuration: 12, outcome: 'done' },
+    { sessionId: 's1', taskId: 't2', rawDurationMs: '', actualDuration: 7, outcome: 'cancelled' }
+  ], tasks)
+
+  assert.deepEqual(summary.entries.map(entry => entry.actualDuration), [12, 7])
+  assert.equal(summary.totalActualMinutes, 19)
 })
 
 test('a session with no executions has zero tasks and no entries', () => {

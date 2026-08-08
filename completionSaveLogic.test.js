@@ -167,3 +167,94 @@ test('reuses one completion-attempt id when the execution commits before its res
   assert.equal(taskWrites, 1)
   assert.equal(coordinator.hasPendingExecution(), false)
 })
+
+test('writes execution then task then session checkpoint', async () => {
+  const calls = []
+  const coordinator = createCompletionCoordinator({
+    createExecution: async execution => calls.push(['execution', execution.completionAttemptId]),
+    updateTask: async (id, fields) => calls.push(['task', id, fields]),
+    updateSession: async (id, fields) => calls.push(['session', id, fields])
+  })
+  const result = await coordinator.complete({
+    execution: { taskId: 't1', sessionId: 's1', completionAttemptId: 'session-task-s1-t1' },
+    taskId: 't1', taskUpdate: { scheduledDate: '2026-08-21' },
+    sessionId: 's1', sessionUpdate: { checkpointElapsedMs: 12000 }
+  })
+  assert.equal(result.ok, true)
+  assert.deepEqual(calls, [
+    ['execution', 'session-task-s1-t1'],
+    ['task', 't1', { scheduledDate: '2026-08-21' }],
+    ['session', 's1', { checkpointElapsedMs: 12000 }]
+  ])
+})
+
+test('retries only session checkpoint after earlier stages succeeded', async () => {
+  let executionWrites = 0
+  let taskWrites = 0
+  let sessionWrites = 0
+  const coordinator = createCompletionCoordinator({
+    createExecution: async () => { executionWrites++ },
+    updateTask: async () => { taskWrites++ },
+    updateSession: async () => {
+      sessionWrites++
+      if (sessionWrites === 1) throw new Error('session offline')
+    }
+  })
+  const first = await coordinator.complete({
+    execution: { taskId: 't1', sessionId: 's1' },
+    taskId: 't1', taskUpdate: { status: 'archived' },
+    sessionId: 's1', sessionUpdate: { checkpointElapsedMs: 8000 }
+  })
+  assert.equal(first.stage, 'session_update')
+  assert.equal((await coordinator.retrySessionUpdate()).ok, true)
+  assert.deepEqual({ executionWrites, taskWrites, sessionWrites }, {
+    executionWrites: 1, taskWrites: 1, sessionWrites: 2
+  })
+})
+
+test('cancelled skips task update but advances the checkpoint', async () => {
+  const calls = []
+  const coordinator = createCompletionCoordinator({
+    createExecution: async () => calls.push('execution'),
+    updateTask: async () => calls.push('task'),
+    updateSession: async () => calls.push('session')
+  })
+  const result = await coordinator.complete({
+    execution: { taskId: 't1', sessionId: 's1', outcome: 'cancelled' },
+    taskId: 't1', taskUpdate: null,
+    sessionId: 's1', sessionUpdate: { checkpointElapsedMs: 3000 }
+  })
+  assert.equal(result.ok, true)
+  assert.deepEqual(calls, ['execution', 'session'])
+})
+
+test('continues from a discovered execution without replaying cached execution or session writes', async () => {
+  const calls = []
+  const coordinator = createCompletionCoordinator({
+    createExecution: async () => {
+      calls.push('execution')
+      throw new Error('response lost')
+    },
+    updateTask: async (id, fields) => calls.push(['task', id, fields]),
+    updateSession: async () => calls.push('session')
+  })
+
+  const first = await coordinator.complete({
+    execution: { taskId: 't1', sessionId: 's1' },
+    taskId: 't1', taskUpdate: { scheduledDate: 'stale' },
+    sessionId: 's1', sessionUpdate: { status: 'paused', activeStartedAt: null }
+  })
+  const recovered = await coordinator.continueAfterPersistedExecution({
+    taskId: 't1', taskUpdate: { scheduledDate: 'fresh' }
+  })
+
+  assert.equal(first.stage, 'execution')
+  assert.equal(recovered.ok, true)
+  assert.deepEqual(calls, [
+    'execution',
+    ['task', 't1', { scheduledDate: 'fresh' }]
+  ])
+  assert.equal(coordinator.hasPendingExecution(), false)
+  assert.equal(coordinator.hasPendingTaskUpdate(), false)
+  assert.equal(coordinator.hasPendingSessionUpdate(), false)
+})

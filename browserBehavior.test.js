@@ -112,7 +112,9 @@ async function runBrowserScenario (scenario) {
   assert.ok(browser, 'Chromium is required for browser-backed DOM regressions')
 
   const applicationUrl = pathToFileURL(repositoryRoot).href
-  const page = '<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="' +
+  const page = '<!doctype html><html><head><meta charset="utf-8">' +
+    '<meta name="viewport" content="width=device-width, initial-scale=1">' +
+    '<link rel="stylesheet" href="' +
     applicationUrl + 'index.css"></head><body>' +
     scenario.body +
     '<script>const applicationUrl = ' + JSON.stringify(applicationUrl) + ';' +
@@ -144,6 +146,14 @@ async function runBrowserScenario (scenario) {
     const devtools = createDevToolsClient(child, child.stdio[4], child.stdio[3], () => stderr)
     const { targetId } = await devtools.send('Target.createTarget', { url: 'about:blank' })
     const { sessionId } = await devtools.send('Target.attachToTarget', { targetId, flatten: true })
+    if (scenario.viewport) {
+      await devtools.send('Emulation.setDeviceMetricsOverride', {
+        width: scenario.viewport.width,
+        height: scenario.viewport.height,
+        deviceScaleFactor: 1,
+        mobile: true
+      }, sessionId)
+    }
     await devtools.send('Page.enable', {}, sessionId)
     const loaded = devtools.waitFor('Page.loadEventFired', sessionId)
     await devtools.send('Page.navigate', { url: pathToFileURL(pagePath).href }, sessionId)
@@ -518,4 +528,36 @@ test('computed styles hide inactive fixed groups across transitions without clea
       annualDay: '25'
     }
   })
+})
+
+test('phone Doing header keeps Pause clear of the injected freezr button', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 640 },
+    body: '<button id="freezer_img_button" aria-label="freezr"></button>' +
+      '<main id="app"><section class="doing-session">' +
+        '<div class="doing-session-head">' +
+          '<div><div>Session time</div><div class="timer">12:34</div></div>' +
+          '<button id="pauseSessionBtn">Pause</button>' +
+        '</div><div style="height: 1200px"></div>' +
+      '</section></main>',
+    script: `
+      const injected = document.getElementById('freezer_img_button')
+      Object.assign(injected.style, {
+        position: 'fixed', top: '8px', right: '8px', width: '32px', height: '32px', zIndex: '10000'
+      })
+      window.scrollTo(0, 200)
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)))
+      const freezrRect = injected.getBoundingClientRect()
+      const pauseRect = document.getElementById('pauseSessionBtn').getBoundingClientRect()
+      const result = {
+        overlaps: freezrRect.left < pauseRect.right && freezrRect.right > pauseRect.left &&
+          freezrRect.top < pauseRect.bottom && freezrRect.bottom > pauseRect.top,
+        pauseRight: pauseRect.right,
+        freezrLeft: freezrRect.left
+      }
+    `
+  })
+
+  assert.equal(result.overlaps, false, JSON.stringify(result))
+  assert.ok(result.pauseRight <= result.freezrLeft, JSON.stringify(result))
 })

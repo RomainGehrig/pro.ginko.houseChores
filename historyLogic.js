@@ -3,6 +3,19 @@
 
 const OUTCOME_KEYS = ['done', 'already_done', 'cancelled']
 const OUTCOME_LABELS = { done: 'done', already_done: 'already done', cancelled: 'cancelled' }
+const STATUS_LABELS = {
+  active: 'in progress',
+  paused: 'paused',
+  interrupted: 'interrupted',
+  completed: null
+}
+
+const hasRawDuration = value => (typeof value === 'number' ||
+  (typeof value === 'string' && value.trim() !== '')) && Number.isFinite(Number(value))
+
+const executionMinutes = execution => hasRawDuration(execution.rawDurationMs)
+  ? Number(execution.rawDurationMs) / 60000
+  : Number(execution.actualDuration || 0)
 
 export function buildHistory (sessions, executions, tasks) {
   const taskNameById = new Map(tasks.map(t => [t._id, t.name]))
@@ -30,7 +43,7 @@ function summariseSession (session, executions, taskNameById) {
     .map(e => ({
       taskName: taskNameById.get(e.taskId) || 'Unknown task',
       outcome: e.outcome,
-      actualDuration: e.actualDuration,
+      actualDuration: executionMinutes(e),
       difficultyRating: e.difficultyRating || null,
       notes: e.notes || ''
     }))
@@ -46,7 +59,8 @@ function summariseSession (session, executions, taskNameById) {
     endTime: session.endTime || null,
     timeBudgetMinutes: session.timeBudgetMinutes,
     categoryFilter: session.categoryFilter || null,
-    abandoned: session.status !== 'completed',
+    status: session.status,
+    statusLabel: STATUS_LABELS[session.status] ?? null,
     taskCount: entries.length,
     outcomeCounts,
     totalActualMinutes: entries.reduce((sum, e) => sum + (e.actualDuration || 0), 0),

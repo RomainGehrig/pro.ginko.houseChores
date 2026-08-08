@@ -44,6 +44,13 @@ test('session draft keeps the parameters captured with its proposed bundle', () 
     taskBundle: ['t1'],
     startTime: 1234,
     endTime: null,
-    status: 'active'
+    status: 'active',
+    accumulatedActiveMs: 0,
+    activeStartedAt: 1234,
+    checkpointElapsedMs: 0,
+    pausedAt: null,
+    unassignedDurationMs: 0,
+    pendingAddition: null,
+    continuationSuggestionEntries: []
   })
 })

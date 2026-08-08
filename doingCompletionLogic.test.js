@@ -31,6 +31,7 @@ test('dispatches retries only to the failed persistence stage', async () => {
   const calls = []
   const executionResult = { ok: false, stage: 'execution' }
   const taskResult = { ok: true, stage: null }
+  const sessionResult = { ok: true, stage: null }
   const retries = {
     retryExecution: async () => {
       calls.push('execution')
@@ -39,12 +40,17 @@ test('dispatches retries only to the failed persistence stage', async () => {
     retryTaskUpdate: async () => {
       calls.push('task_update')
       return taskResult
+    },
+    retrySessionUpdate: async () => {
+      calls.push('session_update')
+      return sessionResult
     }
   }
 
   assert.equal(await retryCompletionForStage('execution', retries), executionResult)
   assert.equal(await retryCompletionForStage('task_update', retries), taskResult)
-  assert.deepEqual(calls, ['execution', 'task_update'])
+  assert.equal(await retryCompletionForStage('session_update', retries), sessionResult)
+  assert.deepEqual(calls, ['execution', 'task_update', 'session_update'])
 })
 
 test('retries a failed task refresh before any persistence stage', async () => {
