@@ -91,6 +91,31 @@ test('fresh store does not repeat a task update whose response was lost', async 
   assert.equal(tasks.get('weekly').lastCompletedDate, 1723111200000)
 })
 
+test('hydrate preserves a task completed after a terminal session execution', async () => {
+  const currentTask = {
+    _id: 'weekly', status: 'active', scheduledDate: '2026-08-22',
+    lastCompletedDate: 2000
+  }
+  let taskUpdates = 0
+  const store = createSessionStore({
+    getSession: async () => ({
+      ...activeSession({ taskBundle: ['weekly'] }), status: 'completed', endTime: 1000
+    }),
+    listExecutions: async () => [{
+      taskId: 'weekly', sessionId: 's1', endTime: 1000,
+      taskUpdateSnapshot: { lastCompletedDate: 1000, scheduledDate: '2026-08-15' }
+    }],
+    listTasks: async () => [structuredClone(currentTask)],
+    updateSessionRecord: async () => {},
+    updateTaskRecord: async () => { taskUpdates++ }
+  })
+
+  const aggregate = await store.refresh('s1', 2000)
+
+  assert.equal(taskUpdates, 0)
+  assert.deepEqual(aggregate.bundle[0], currentTask)
+})
+
 test('hydrate leaves executions without a task update snapshot unchanged', async () => {
   const task = {
     _id: 'weekly', status: 'active', scheduledDate: '2026-08-08',

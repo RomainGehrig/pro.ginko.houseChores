@@ -98,9 +98,9 @@ export function createSessionStore ({
     for (const execution of executions) {
       const snapshot = validTaskUpdateSnapshot(execution)
       const task = taskById.get(execution.taskId)
-      const completedAt = finiteNumericMarker(task?.lastCompletedDate)
+      const taskCompletedAt = finiteNumericMarker(task?.lastCompletedDate)
       if (!snapshot || !task ||
-        (completedAt !== null && completedAt === snapshot.lastCompletedDate)) continue
+        (taskCompletedAt !== null && taskCompletedAt >= snapshot.lastCompletedDate)) continue
       await updateTaskRecord(execution.taskId, snapshot)
       taskById.set(execution.taskId, { ...task, ...snapshot })
     }
