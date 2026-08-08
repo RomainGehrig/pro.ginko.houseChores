@@ -154,6 +154,11 @@ async function runBrowserScenario (scenario) {
         mobile: true
       }, sessionId)
     }
+    if (scenario.mediaFeatures) {
+      await devtools.send('Emulation.setEmulatedMedia', {
+        features: scenario.mediaFeatures
+      }, sessionId)
+    }
     await devtools.send('Page.enable', {}, sessionId)
     const loaded = devtools.waitFor('Page.loadEventFired', sessionId)
     await devtools.send('Page.navigate', { url: pathToFileURL(pagePath).href }, sessionId)
@@ -560,4 +565,135 @@ test('phone Doing header keeps Pause clear of the injected freezr button', async
 
   assert.equal(result.overlaps, false, JSON.stringify(result))
   assert.ok(result.pauseRight <= result.freezrLeft, JSON.stringify(result))
+})
+
+test('enamel foundation gives controls a 44px floor, visible focus, and reduced motion', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 640 },
+    mediaFeatures: [
+      { name: 'prefers-color-scheme', value: 'light' },
+      { name: 'prefers-reduced-motion', value: 'reduce' }
+    ],
+    body: '<main id="app">' +
+      '<button id="focusTarget" class="motion-probe">Button</button>' +
+      '<input aria-label="Text"><select aria-label="Choice"><option>One</option></select>' +
+      '<textarea aria-label="Notes"></textarea>' +
+      '<details><summary>Summary</summary><p>Details</p></details>' +
+      '<label id="checkTarget"><input type="checkbox"> Check</label>' +
+      '</main>',
+    script: `
+      const controls = [...document.querySelectorAll('button, input:not([type="checkbox"]), select, textarea, summary')]
+      const focusTarget = document.getElementById('focusTarget')
+      focusTarget.focus()
+      const focusStyle = getComputedStyle(focusTarget)
+      const rootStyle = getComputedStyle(document.documentElement)
+      const result = {
+        controlHeights: controls.map(control => control.getBoundingClientRect().height),
+        controlFontSizes: controls.map(control => getComputedStyle(control).fontSize),
+        checkboxTargetHeight: document.getElementById('checkTarget').getBoundingClientRect().height,
+        focusOutlineStyle: focusStyle.outlineStyle,
+        focusOutlineWidth: focusStyle.outlineWidth,
+        transitionDuration: focusStyle.transitionDuration,
+        tokens: {
+          ground: rootStyle.getPropertyValue('--ground').trim(),
+          plate: rootStyle.getPropertyValue('--plate').trim(),
+          ink: rootStyle.getPropertyValue('--ink').trim(),
+          enamel: rootStyle.getPropertyValue('--enamel').trim()
+        }
+      }
+    `
+  })
+
+  assert.ok(result.controlHeights.every(height => height >= 44), JSON.stringify(result))
+  assert.ok(result.controlFontSizes.every(size => size === '16px'), JSON.stringify(result))
+  assert.ok(result.checkboxTargetHeight >= 44, JSON.stringify(result))
+  assert.notEqual(result.focusOutlineStyle, 'none', JSON.stringify(result))
+  assert.ok(Number.parseFloat(result.focusOutlineWidth) >= 2, JSON.stringify(result))
+  assert.ok(Number.parseFloat(result.transitionDuration) <= 0.001, JSON.stringify(result))
+  assert.deepEqual(result.tokens, {
+    ground: '#E7ECE8', plate: '#FBFCFB', ink: '#12262E', enamel: '#14554C'
+  })
+})
+
+test('dark enamel tokens apply at a 390px phone viewport', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 640 },
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'dark' }],
+    body: '<main id="app"><div class="plate">Dark plate</div><button>Control</button></main>',
+    script: `
+      const rootStyle = getComputedStyle(document.documentElement)
+      const result = {
+        ground: rootStyle.getPropertyValue('--ground').trim(),
+        plate: rootStyle.getPropertyValue('--plate').trim(),
+        ink: rootStyle.getPropertyValue('--ink').trim(),
+        enamel: rootStyle.getPropertyValue('--enamel').trim(),
+        bodyBackground: getComputedStyle(document.body).backgroundColor,
+        bodyColor: getComputedStyle(document.body).color
+      }
+    `
+  })
+
+  assert.deepEqual(result, {
+    ground: '#0F1614',
+    plate: '#16211F',
+    ink: '#E4EBE7',
+    enamel: '#4FA898',
+    bodyBackground: 'rgb(15, 22, 20)',
+    bodyColor: 'rgb(228, 235, 231)'
+  })
+})
+
+test('active chores render as ruled ledger rows instead of bordered cards', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 640 },
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
+    body: '<main id="app"><section class="ledger-group">' +
+      '<h3 class="ledger-eyebrow stamp"><span>READY</span><span class="ledger-count fig">1</span></h3>' +
+      '<ul class="ledger"><li class="task-card ledger-row"><div class="ledger-row-summary">' +
+        '<span class="row-stamp fig">21d</span><span class="row-name">Laundry</span>' +
+        '<span class="row-fig fig">45 min</span><span class="row-tag fig">7d</span>' +
+        '<p class="row-note">last done <span class="fig">21d</span> ago</p>' +
+      '</div><div class="ledger-row-actions"><button>Edit</button><button>Archive</button></div></li></ul>' +
+      '<span class="row-stamp stamp is-today" id="todayStamp">TODAY</span>' +
+      '</section></main>',
+    script: `
+      const ledger = document.querySelector('.ledger')
+      const row = document.querySelector('.ledger-row')
+      const summary = document.querySelector('.ledger-row-summary')
+      const stamp = document.querySelector('.row-stamp.fig')
+      const todayStamp = document.getElementById('todayStamp')
+      const ledgerStyle = getComputedStyle(ledger)
+      const rowStyle = getComputedStyle(row)
+      const summaryStyle = getComputedStyle(summary)
+      const result = {
+        ledgerListStyle: ledgerStyle.listStyleType,
+        ledgerPaddingLeft: ledgerStyle.paddingLeft,
+        rowHeight: row.getBoundingClientRect().height,
+        rowBorderTop: rowStyle.borderTopWidth,
+        rowBorderLeft: rowStyle.borderLeftWidth,
+        rowBorderRight: rowStyle.borderRightWidth,
+        rowBorderBottom: rowStyle.borderBottomWidth,
+        rowRadius: rowStyle.borderRadius,
+        summaryDisplay: summaryStyle.display,
+        summaryColumns: summaryStyle.gridTemplateColumns,
+        stampColor: getComputedStyle(stamp).color,
+        todayBackground: getComputedStyle(todayStamp).backgroundColor,
+        todayColor: getComputedStyle(todayStamp).color
+      }
+    `
+  })
+
+  assert.equal(result.ledgerListStyle, 'none')
+  assert.equal(result.ledgerPaddingLeft, '0px')
+  assert.ok(result.rowHeight >= 56, JSON.stringify(result))
+  assert.equal(result.rowBorderTop, '1px')
+  assert.equal(result.rowBorderLeft, '0px')
+  assert.equal(result.rowBorderRight, '0px')
+  assert.equal(result.rowBorderBottom, '0px')
+  assert.equal(result.rowRadius, '0px')
+  assert.equal(result.summaryDisplay, 'grid')
+  assert.match(result.summaryColumns, /^56px /)
+  assert.equal(result.stampColor, 'rgb(95, 106, 108)')
+  assert.equal(result.todayBackground, 'rgb(20, 85, 76)')
+  assert.equal(result.todayColor, 'rgb(251, 252, 251)')
 })
