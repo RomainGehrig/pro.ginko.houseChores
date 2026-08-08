@@ -40,11 +40,13 @@ Tracking issue: `hc-e92`
 
 ## Stage 4 — The round is already built
 
-**Delivers.** Today opens with a round for the budget you used last time — no chips to press, no Propose button, no blank screen. The round is editable in place: drop a chore and the gap refills, add one that fits the spare minutes, reorder. It fills to ~85% and says so. Chores too long for the budget get their own labelled block with [Make room], surfacing 435 of the 615 live backlog minutes for the first time. The 14-day load strip shows the 20 August spike. Start Session is deleted.
+**Delivers.** Today opens with a round for the budget you used last time — no chips to press, no Propose button, no blank screen. The round is editable in place: drop a chore and the gap refills, add **any** chore whether or not it fits, reorder. It fills to ~85% and says so. Chores too long for the budget get their own labelled block with `[Add anyway]` and `[Make room]`, surfacing 435 of the 615 live backlog minutes for the first time. The 14-day load strip shows the 20 August spike. Start Session is deleted.
 
 **Files.** NEW: roundLogic.js, roundLogic.test.js, loadStrip.js, loadStrip.test.js, todayView.js. CHANGED: bundleLogic.js (reused unchanged, wrapped), sessionView.js (deleted), index.html, index.css, manifest.json.
 
-**Testable (node --test).** roundLogic.js: buildRound fills to the 85% target and never exceeds budget; returns tooLong for every task above budget; drop-and-refill produces a round whose total never grows past budget; place-filtered rounds keep one place's chores consecutive; a budget that yields nothing returns the shortest available chore as the reason. loadStrip.js: buildLoadStrip(tasks, today, 14) sums minutes per local date and emits correct weekday letters across a month boundary.
+**Testable (node --test).** roundLogic.js: `buildRound` fills to the 85% target and never exceeds budget **when the machine builds it**; returns `tooLong` for every task above budget; drop-and-refill keeps the machine-built total under budget; place-filtered rounds keep one place's chores consecutive; a budget that yields nothing returns the shortest available chore as the reason. `addToRound` — the **user** path — has no budget test at all: adding a 120-minute chore to a 30-minute round succeeds, returns `overBy: 90`, and never returns an error, a warning or a refusal. loadStrip.js: buildLoadStrip(tasks, today, 14) sums minutes per local date and emits correct weekday letters across a month boundary.
+
+**Fluency check (§1a).** No budget chip is disabled; the `+ add` picker lists every eligible chore with the non-fitting ones below a rule; over-budget renders `70 of 30 min · 40 over` in `--graphite`; `START` behaves identically over budget.
 
 ## Stage 5 — Doing, rebuilt around the round
 
@@ -68,7 +70,9 @@ Tracking issue: `hc-e92`
 
 **Files.** NEW: inboxView.js, provenance.js, provenance.test.js, localGuess.js, localGuess.test.js, dedupe.js, dedupe.test.js, dateGuessPolicy.js, dateGuessPolicy.test.js, pencil.js. CHANGED: taskData.js (buildNewTaskRecord → draft with defaults), aiEnrich.js (prompt asks for date + place; drop the 'do not suggest a scheduledDate' line), tasksView.js (proposed rendering deleted), manifest.json (tasks.status 'draft', tasks.provenance, suggested* retained on approve → reinstall).
 
-**Testable (node --test).** localGuess.js: nearest-name match wins over keyword table wins over the 15-min monthly fallback; category median duration computed from the user's own records. dedupe.js: token-overlap similarity scoring above 0.6 for every one of the five live duplicate pairs and below it for genuinely distinct names. dateGuessPolicy.js: mayGuessDate refuses one_off, refuses cadence ≥ 365, refuses a category flagged datesAreYours, permits everything else. provenance.js: fieldState(task, field) → owned|guessed|refused, and that confirming a field flips exactly that field to owned.
+**Testable (node --test).** localGuess.js: nearest-name match wins over keyword table wins over the 15-min monthly fallback; category median duration computed from the user's own records. dedupe.js: token-overlap similarity scoring above 0.6 for every one of the five live duplicate pairs and below it for genuinely distinct names. dateGuessPolicy.js: mayGuessDate refuses one_off, refuses cadence ≥ 365, refuses a category flagged datesAreYours, permits everything else. provenance.js: fieldState(task, field) → owned|guessed|refused; confirming a field flips exactly that field to owned; and **confirming a plate whose date is refused succeeds**, inking every other field, leaving scheduledDate null and marking the chore for the NEEDS A DATE ledger.
+
+**Fluency check (§1a).** `THAT'S RIGHT` is never disabled. A refusal withholds the app's guess, never the user's button.
 
 ## Stage 8 — Chore detail and the Log
 

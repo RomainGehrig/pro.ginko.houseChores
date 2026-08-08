@@ -34,6 +34,40 @@ What changes about how it feels:
 
 ---
 
+## 1a. The fluency rule — constraints advise, they never block
+
+**The app's own model of your time is a suggestion. Your intent is the fact.**
+
+Every number this app holds about duration is a guess it made or an average it measured. A
+30-minute budget is a rough intention, not a contract. So no constraint derived from those
+numbers may ever stand between you and an action you have decided to take. When what you want
+disagrees with what the app expected, **the app updates its display and gets out of the way.**
+
+Three rules, in force everywhere:
+
+1. **The machine is conservative; you are unconstrained.** Anything the app builds *for* you
+   stays inside the budget. Anything *you* add may take it over, and does so without argument.
+2. **No control is ever disabled because of a time, count or fit calculation.** Disabling is
+   reserved for a genuinely impossible action (no network, nothing selected). If a choice would
+   produce a poor result, let it be chosen and *say what happened*, with the fix as a control.
+3. **Over-budget is reported, never punished.** It renders in `--graphite` in the same neutral
+   voice as an overrunning chore in §6.5 — never `--stamp`, never a warning icon, never a
+   confirmation step. Colouring overrun red punishes honesty about how long chores actually take,
+   and that is as true when planning as it is mid-round.
+
+*This generalises a decision the design had already made in one corner and then failed to apply
+anywhere else.* §6.5 gets it right for a chore overrunning during a round; §5.7, §6.1 and §6.2
+originally got it wrong for the same information at planning time — a disabled budget chip, an
+`+ add` picker that hid anything that did not fit, a `THAT'S RIGHT` disabled until a date was
+supplied, and a `buildRound` invariant that made an over-budget round unrepresentable. All four
+are corrected below, and the corrections are the normative text.
+
+**The test an implementer should apply:** if a user action is refused, prevented, greyed out or
+gated behind a confirmation, and the reason traces back to an estimated duration or a budget —
+it is wrong. Allow it, show the consequence, offer the undo.
+
+---
+
 ## 2. Who this is for and when they open it
 
 One person. A developer. Single household. He will close the tab on synthetic enthusiasm and he will not fill in a form to record his own housework.
@@ -324,7 +358,7 @@ Rows are 56px minimum, separated by a 1px `--rule` top border (not bordered card
 | `.btn-text` | no border, `--graphite`, underline on hover | already done, skip, dismiss |
 | `.btn-danger` | no fill, `--stamp` text, 1px `--stamp` edge | Delete permanently |
 
-Every button: `min-height: 44px`, `font-size: 16px`, `gap: 12px` minimum between siblings (today Edit and Archive are 0.0px apart, which is why a mis-tap destroys a chore). `[disabled]` renders at `--graphite` on `--sunk` with an inline reason next to it — never a bare disabled control.
+Every button: `min-height: 44px`, `font-size: 16px`, `gap: 12px` minimum between siblings (today Edit and Archive are 0.0px apart, which is why a mis-tap destroys a chore). `[disabled]` renders at `--graphite` on `--sunk` with an inline reason next to it — never a bare disabled control. **And per §1a rule 2 this state is nearly unreachable by design:** it is legitimate only for an action that is genuinely impossible right now (a save with no connection, a picker with nothing to pick), never for one the app merely thinks is unwise. There is no disabled control anywhere in §6 that is gated on a duration, a budget or a fit.
 
 ### 5.5 `.sheet` — the replacement for every native dialog
 
@@ -336,7 +370,7 @@ A single `--ink` bar, `--r-pill`, fixed above the bottom nav, `role="status"`. `
 
 ### 5.7 `.chips` — budget and filter
 
-Budget: `15 · 30 · 60 · ⌾` in stamp voice, `--r-chip`, active one filled `--enamel`. A chip that would yield nothing renders disabled **with its reason inline** (`nothing under 10 min`), which retires the structurally dead 5-minute chip rather than letting it fail every time. `⌾` opens a stepper sheet seeded with the last custom value. Category filter is a `⌄` disclosure in the same header, never a separate labelled `<select>`.
+Budget: `15 · 30 · 60 · ⌾` in stamp voice, `--r-chip`, active one filled `--enamel`. **No budget chip is ever disabled** (§1a rule 2) — a chip that would yield nothing is selectable like any other, and the round area then explains itself and offers the fix: `Nothing fits 15 minutes. The shortest chore is Water the plants, 10 min. [Make it 10]`. That is why the structurally dead 5-minute chip is *removed from the set* rather than shipped disabled: a chip nobody can use is a design error, not a state to render. `⌾` opens a stepper sheet seeded with the last custom value. Category filter is a `⌄` disclosure in the same header, never a separate labelled `<select>`.
 
 ### 5.8 `.ring` — the round ring *(Doing only)*
 
@@ -391,8 +425,13 @@ Opens with the round **already built**. Budget read from `localStorage` (default
 │  │             START              │  │   64px, --enamel
 │  └────────────────────────────────┘  │
 │  TOO LONG FOR 30 MIN                 │
-│  Round of small fixes 2h [Make room] │
+│  Round of small fixes  2h            │
+│         [Add anyway]  [Make room]    │
 ╰──────────────────────────────────────╯
+
+   ── after [Add anyway]: no warning, no ──
+   ── confirm; the total just re-strikes ──
+│      2h 25 of 30 min · 1h 55 over    │   --graphite, never --stamp
 
   LATE ································· 4
 ╭──────────────────────────────────────╮
@@ -418,8 +457,9 @@ Opens with the round **already built**. Budget read from `localStorage` (default
 **Interactions.**
 - Budget chip → recomputes the round instantly. No Propose button exists.
 - `⇄` on a row → drop it; the gap refills from `findFillerTask` (already written, currently used for nothing else) and the total re-strikes. Long-press to reorder.
-- `+ add` → a one-row picker of what else fits the spare minutes.
-- `Make room` → sets the budget to that chore's minutes and rebuilds. **This block is the fix for the app's largest blind spot:** `buildBundle`'s greedy first-fit silently discards everything above the budget — with the live data that is 435 of 615 backlog minutes that can never appear in any proposal.
+- `+ add` → a picker of **every** eligible chore, ordered by slip — never filtered to what fits (§1a rule 1). What fits the spare minutes sits above a hairline rule; everything else sits below it, each row showing what choosing it would do to the total: `Household laundry  45 min  → 70 of 30`. Both halves are tappable. Adding an over-budget chore is a single tap with no confirmation and no warning; the round total simply re-strikes to `70 of 30 min · 40 over` in `--graphite`.
+- **The round total is a readout, not a limit.** Once you are over, the header reads `70 of 30 min · 40 over` and the `⇄` on each row is how you get back under, if you want to. There is no state in which the app declines to add a chore you asked for, and no confirmation step in front of going over.
+- `Make room` on the `TOO LONG` block → sets the budget to that chore's minutes and rebuilds, for when you want the round re-planned around it. It sits **beside** `[Add anyway]`, which just adds the chore and lets the total go over. Two different intents, two controls, neither of them a refusal. **This block is the fix for the app's largest blind spot:** `buildBundle`'s greedy first-fit silently discards everything above the budget — with the live data that is 435 of 615 backlog minutes that can never appear in any proposal.
 - `⌄` → category filter. When a *place* filter is active, the round keeps that place's chores consecutive so you finish a room before you move.
 - START → creates the session, writes `bundleOrder`, routes to `#/doing`.
 - A LATE row → `#/chore/:id`.
@@ -429,6 +469,11 @@ Opens with the round **already built**. Budget read from `localStorage` (default
 **Copy.**
 - Heading: the date, in stamp voice. There is no `<h1>Chore Planner</h1>` anywhere — you know what app you opened.
 - Round header: `THE ROUND` · `25 of 30 min · 5 spare`
+- Round header, over budget: `70 of 30 min · 40 over` — a readout in `--graphite`, in the same
+  register as `+02:40` on an overrunning chore. Not `Over budget!`, not `⚠`, not `--stamp`.
+- `+ add` picker, below the rule: `these are longer than the time you have` — a label on a
+  section you can still pick from, not a refusal.
+- `NEEDS A DATE · 1` — the ledger for chores confirmed while their date was refused.
 - Empty (no chores at all): `Nothing here yet. Write down something you've been meaning to do.` — capture field focused.
 - Empty (nothing fits): `Nothing fits 15 minutes. The shortest chore is Water the plants, 10 min.` with a `[Make it 10]` action. An error that explains itself and fixes itself.
 - Nothing late: `Nothing is late.` — and the LATE ledger is not rendered at all, rather than saying "No late tasks."
@@ -457,9 +502,13 @@ Where the thesis is cashed: the 528px, 22-control approval card becomes **two li
 │  we don't guess dates that cost money│
 │                                      │
 │  ┌────────────────────────────────┐  │
-│  │         THAT'S RIGHT           │  │  disabled until date set
+│  │         THAT'S RIGHT           │  │  never disabled (§1a)
 │  └────────────────────────────────┘  │
 ╰──────────────────────────────────────╯
+   confirming without a date is allowed:
+   the chore is confirmed, the date stays
+   refused, and it lands in NEEDS A DATE
+   on Today — one tap to set, whenever
 
 ╭──────────────────────────────────────╮
 │  Meal planning                     ? │
@@ -498,6 +547,18 @@ export function mayGuessDate ({ schedule, cadenceDays, category }) {
 }
 ```
 All three tests are derivable from records the app already has, testable, and they do not rot. `datesAreYours` is a per-category toggle in Setup, so the user can extend the rule without a code change.
+
+**A refusal withholds a guess. It never withholds the button** (§1a rule 2). `THAT'S RIGHT` is
+always live. Confirming a plate whose date is refused inks every other field, leaves
+`scheduledDate` null, and files the chore under a `NEEDS A DATE · n` ledger at the top of Today —
+above `LATE`, because it is the one group the app genuinely cannot resolve for you. One tap on the
+row opens the date picker. The chore is otherwise a normal confirmed chore.
+
+This is the difference between *"I will not guess your insurance renewal"* — which is the
+protection we actually want — and *"you may not finish triaging your inbox until you look up your
+insurance renewal"*, which is the app holding eight unrelated chores hostage to one lookup you
+cannot do from the sofa. The safety property is preserved exactly: no date is ever fabricated for
+a chore that costs money.
 
 **Dedupe runs at capture, locally, with no model call.** Token-overlap against existing names; above 0.6 the plate opens with a refusal question instead of a suggestion:
 
@@ -810,7 +871,27 @@ export function buildRound (tasks, budget, opts) {
   // 3. when a place filter is active, keep that place's chores consecutive
   return { rows, totalMinutes, spareMinutes, tooLong }
 }
+
+// §1a rule 1. buildRound is the MACHINE's proposal and stays under budget.
+// addToRound is the USER's action and has no budget test at all — it cannot
+// fail, cannot warn, and cannot ask. overBy is a readout for the header.
+export function addToRound (round, task, budget) {
+  const rows = [...round.rows, task]
+  const totalMinutes = rows.reduce((n, t) => n + (t.estimatedDuration || 0), 0)
+  return {
+    ...round,
+    rows,
+    totalMinutes,
+    spareMinutes: Math.max(budget - totalMinutes, 0),
+    overBy: Math.max(totalMinutes - budget, 0)     // 0 = not over; render in --graphite
+  }
+}
 ```
+
+`overBy > 0` is a perfectly ordinary state. Nothing downstream branches on it except the header
+readout: `START` behaves identically, the ring in §5.8 sizes its segments from the actual total
+rather than the budget, and the receipt in §6.6 reports `24 min` against whatever was planned
+without editorialising. A round the user deliberately overfilled is not an error condition.
 
 **The local guesser.** `localGuess.js`, pure, no model, always has an answer:
 1. nearest existing chore by name token overlap → its category, duration and cadence;
@@ -940,6 +1021,10 @@ No adjectives, no exclamation marks, no confetti. A fact you did not previously 
 | Empty | `No tasks awaiting review.` / `No active tasks.` / `No archived tasks.` (three stacked denials) | one invitation: `Nothing here yet. Write down something you've been meaning to do.` |
 | Empty | `No tasks fit this time budget.` | `Nothing fits 15 minutes. The shortest chore is Water the plants, 10 min. [Make it 10]` |
 | Disabled | `Add a category before using AI enrichment.` (parked permanently) | (removed; the local guesser always works) |
+| Disabled | a budget chip greyed out with `nothing under 10 min` | (removed; §1a — the chip is selectable and the round area explains itself) |
+| Disabled | `THAT'S RIGHT` greyed out until a date is supplied | (removed; §1a — confirm without a date, the chore lands in `NEEDS A DATE`) |
+| Over budget | (unrepresentable — the round could not exceed the budget) | `70 of 30 min · 40 over` in `--graphite` |
+| Too long | `[Make room]` only | `[Add anyway]  [Make room]` — two intents, neither a refusal |
 
 ---
 
