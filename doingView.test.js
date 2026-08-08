@@ -362,6 +362,9 @@ function createPersistence ({
     quickCreates,
     taskUpdates,
     getTask (id) { return tasks.has(id) ? clone(tasks.get(id)) : null },
+    patchTask (id, fields) {
+      tasks.set(id, { ...tasks.get(id), ...clone(fields) })
+    },
     patchSession (fields) { session = { ...session, ...clone(fields) } },
     get session () { return session },
     get executionCalls () { return executionCalls },
@@ -584,6 +587,34 @@ test('stale outcome applies a paused authoritative aggregate without writes', as
     assert.equal(persistence.sessionUpdateCalls, 0)
     assert.equal(state.currentSession.status, 'paused')
     assert.equal(document.control('doingDecisionPanel').hidden, false)
+  })
+})
+
+test('stale Done re-renders an archived bundled task as Cancel-only without writes', async () => {
+  const task1 = task('task-1')
+  const session = {
+    _id: 'session-1', status: 'active', startTime: 10000,
+    taskBundle: ['task-1'], timeBudgetMinutes: 15,
+    accumulatedActiveMs: 0, activeStartedAt: 10000, checkpointElapsedMs: 0
+  }
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [task1],
+    bundle: [task1]
+  }, async ({ document, persistence }) => {
+    const staleDone = document.outcomeControl('task-1', 'done')
+    persistence.patchTask('task-1', { status: 'archived' })
+
+    await document.dispatchStaleControl(staleDone)
+
+    assert.equal(persistence.executionCalls, 0)
+    assert.equal(persistence.taskUpdates.length, 0)
+    assert.equal(persistence.sessionUpdateCalls, 0)
+    assert.equal(state.currentSession.status, 'active')
+    assert.equal(document.outcomeControl('task-1', 'done'), undefined)
+    assert.equal(document.outcomeControl('task-1', 'already_done'), undefined)
+    assert.ok(document.outcomeControl('task-1', 'cancelled'))
   })
 })
 

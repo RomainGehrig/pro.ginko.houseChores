@@ -495,6 +495,10 @@ async function completeTask (taskId, outcome) {
 
     const task = aggregate.bundle.find(candidate => candidate._id === taskId)
     if (!task) throw new Error('The selected task is no longer attached to this session.')
+    if (task.unavailable && outcome !== 'cancelled') {
+      await applyAuthoritativeCompletionState(aggregate)
+      return
+    }
     const endTime = Date.now()
     const timing = outcomeTiming(aggregate.session, aggregate.executions, endTime)
     const resolved = resolvedTaskIds(aggregate.executions)
