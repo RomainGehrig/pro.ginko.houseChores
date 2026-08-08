@@ -1,4 +1,4 @@
-import { initTasksView } from './tasksView.js'
+import { initTasksView, refreshTasksView } from './tasksView.js'
 import { initSessionView } from './sessionView.js'
 import { initDoingView, startDoing } from './doingView.js'
 import { initReviewView } from './reviewView.js'
@@ -9,6 +9,9 @@ import { initCategoryLocationView } from './categoryLocationView.js'
 import { sessionStore } from './sessionStore.js'
 import { setCurrentSessionAggregate } from './state.js'
 import { escapeHtml } from './helpers.js'
+import { initArchiveView } from './archiveView.js'
+import { initSheet } from './sheet.js'
+import { initUndoToast } from './undoToast.js'
 
 async function openInitialView () {
   try {
@@ -32,6 +35,9 @@ async function openInitialView () {
 
 async function init () {
   await categoryLocationStore.initialize()
+  initSheet()
+  initUndoToast()
+  initArchiveView({ refreshTasks: refreshTasksView })
   initCategoryLocationView()
   await initTasksView()
   initSessionView()

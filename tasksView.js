@@ -9,10 +9,7 @@ import {
 } from './categoryLocationLogic.js'
 import { escapeAttribute } from './categoryLocationView.js'
 import { escapeHtml } from './helpers.js'
-import {
-  buildActiveTaskDetailsHtml,
-  buildEnrichmentAvailability
-} from './taskPresentationLogic.js'
+import { buildEnrichmentAvailability } from './taskPresentationLogic.js'
 import { localDateFromDate } from './scheduleLogic.js'
 import { saveTaskWithRefresh } from './taskSaveLogic.js'
 import {
@@ -23,6 +20,7 @@ import {
 } from './scheduleEditor.js'
 import { activeTaskGroupsHtml, referenceStateSuffix } from './chores/listView.js'
 import { optimisticArchive, pendingUndo } from './undoToast.js'
+import { renderArchiveView } from './archiveView.js'
 
 let tasksCache = []
 let editingTaskId = null
@@ -47,9 +45,10 @@ export async function refreshTasksView() {
 }
 
 function renderTasks() {
+  const snapshot = categoryLocationStore.getSnapshot()
   renderProposed()
-  renderActive()
-  renderArchived()
+  renderActive(snapshot)
+  renderArchiveView(tasksCache, snapshot)
   syncEnrichmentAvailability()
 }
 
@@ -266,33 +265,13 @@ function handleActiveScheduleChange (evt) {
   }
 }
 
-function renderActive() {
+function renderActive(snapshot = categoryLocationStore.getSnapshot()) {
   const container = document.getElementById('activeCards')
   const active = getActiveTasks()
-  const snapshot = categoryLocationStore.getSnapshot()
   container.innerHTML = activeTaskGroupsHtml(active, snapshot, localDateFromDate(new Date()), {
     editingTaskId,
     taskEditorError
   })
-}
-
-function renderArchived() {
-  const container = document.getElementById('archivedCards')
-  const archived = tasksCache.filter(t => t.status === 'archived')
-  const snapshot = categoryLocationStore.getSnapshot()
-  const archiveCount = document.getElementById('archiveNavCount')
-  if (archiveCount) archiveCount.textContent = archived.length
-  container.innerHTML = archived.length
-    ? archived.map(task => archivedTaskCardHtml(task, snapshot)).join('')
-    : '<p class="empty">No archived tasks.</p>'
-}
-
-export function archivedTaskCardHtml (task, snapshot) {
-  return '<div class="task-card archived" data-id="' + escapeAttribute(task._id) + '">' +
-    '<div class="task-name">' + escapeHtml(String(task.name ?? '')) +
-      ' <span class="state-badge stamp">Archived</span></div>' +
-    buildActiveTaskDetailsHtml(task, snapshot) +
-  '</div>'
 }
 
 async function handleProposedClick(evt) {
