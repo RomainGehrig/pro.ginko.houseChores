@@ -422,6 +422,170 @@ git commit -m "fix: persist continuation suggestion allowance"
 
 ---
 
+### Task 3: Never replay an old execution over a newer task completion
+
+**Files:**
+
+- Modify: `sessionStore.js`
+- Modify: `sessionStore.test.js`
+
+**Interfaces:**
+
+- Recovery compares the task's valid persisted completion marker with the execution snapshot marker.
+- Equal means already applied; greater means the task has since completed elsewhere and must not be touched; only missing/older markers are repairable.
+
+- [ ] **Step 1: Add a failing stale-terminal-session regression**
+
+In `sessionStore.test.js`, hydrate a completed old session whose execution ended at `1000` and carries the exact snapshot `{ lastCompletedDate: 1000, scheduledDate: '2026-08-15' }`. Return a current recurring task with `{ lastCompletedDate: 2000, scheduledDate: '2026-08-22' }`. Assert refresh returns the newer task unchanged and never calls `updateTaskRecord`.
+
+Also keep the existing response-lost equality test and the unapplied older/missing-marker recovery tests so all three ordering cases are explicit.
+
+- [ ] **Step 2: Verify RED**
+
+Run:
+
+```bash
+node --test sessionStore.test.js
+```
+
+Expected: FAIL because hydrate currently updates whenever the markers are merely unequal, rolling the task back to the old snapshot.
+
+- [ ] **Step 3: Guard recovery by marker order**
+
+In the hydrate repair loop, skip any snapshot that is not newer than the task marker:
+
+```js
+const taskCompletedAt = finiteNumericMarker(task?.lastCompletedDate)
+if (!snapshot || !task ||
+  (taskCompletedAt !== null && taskCompletedAt >= snapshot.lastCompletedDate)) continue
+```
+
+Do not add a wall-clock cutoff or infer ordering from `_date_modified`. Numeric `lastCompletedDate` is the immutable completion marker selected by the approved design.
+
+- [ ] **Step 4: Verify and commit**
+
+Run:
+
+```bash
+node --test sessionStore.test.js doingView.test.js completionSaveLogic.test.js doingCompletionLogic.test.js
+```
+
+Expected: all focused tests PASS.
+
+Commit:
+
+```bash
+git add sessionStore.js sessionStore.test.js
+git commit -m "fix: preserve newer task completions during recovery"
+```
+
+---
+
+### Task 4: Make terminal Review loading explicit and retryable
+
+**Files:**
+
+- Modify: `reviewView.js`
+- Modify: `reviewView.test.js`
+- Modify: `doingView.js`
+- Modify: `doingView.test.js`
+
+**Interfaces:**
+
+- `startReview()` clears stale cached executions and renders loading before any query, enables Finish only after both execution/task reads succeed, and leaves stale data inaccessible on failure.
+- `renderReviewLoadError(message, retry)` renders an alert and a retry button inside Review while keeping Finish disabled.
+- `doingView` retries Review loading directly for the already-terminal current session; it does not route through `refreshDoing`'s active/paused guard.
+- Session mutation locks are released in `finally`, including when applying the authoritative aggregate or initializing Review fails.
+
+- [ ] **Step 1: Add failing review-state tests**
+
+In `reviewView.test.js`, cover loading/error presentation with a fake Review DOM: starting a load immediately clears a previously rendered card and disables Finish; a successful load renders only the new session and re-enables Finish; `renderReviewLoadError` uses text-safe DOM, keeps Finish disabled, and its button invokes the supplied retry.
+
+In `doingView.test.js`, make the first execution query after durable conclusion fail and the second succeed. After clicking Conclude, assert:
+
+```js
+assert.equal(persistence.session.status, 'completed')
+assert.equal(document.control('view-review').style.display, 'block')
+assert.ok(document.control('retryReviewLoadBtn'))
+assert.equal(document.control('finishReviewBtn').disabled, true)
+```
+
+Click `retryReviewLoadBtn`; assert the completed session's review card appears, Finish is enabled, and no active-session refresh/write is required. Also assert the failed load did not leave Doing/session controls locked.
+
+- [ ] **Step 2: Verify RED**
+
+Run:
+
+```bash
+node --test reviewView.test.js doingView.test.js
+```
+
+Expected: FAIL because Review retains its old cache, has no loading/error/retry state, and the apply rejection escapes while `sessionMutationInFlight` remains true.
+
+- [ ] **Step 3: Implement explicit Review loading and error rendering**
+
+At the start of `startReview`, reset cache and render a loading state before the first await:
+
+```js
+executionsCache = []
+const list = document.getElementById('reviewList')
+const finish = document.getElementById('finishReviewBtn')
+finish.disabled = true
+list.replaceChildren()
+const loading = document.createElement('p')
+loading.className = 'inline-status'
+loading.textContent = 'Loading review…'
+loading.setAttribute('role', 'status')
+list.appendChild(loading)
+```
+
+Only after both queries and `renderReviewList()` succeed should `finish.disabled = false`.
+
+Export an error renderer that clears the list, uses `textContent` for the error, appends `button#retryReviewLoadBtn`, invokes the supplied async retry, and keeps Finish disabled until a later successful `startReview`.
+
+- [ ] **Step 4: Add a terminal-safe Review loader and guaranteed unlock**
+
+In `doingView.js`, import the error renderer and wrap Review initialization:
+
+```js
+async function loadCurrentReview () {
+  try {
+    await startReview()
+    return true
+  } catch (error) {
+    renderReviewLoadError(
+      'Could not load this session review: ' + error.message,
+      loadCurrentReview
+    )
+    return false
+  }
+}
+```
+
+The completed branch of `applyAggregate` calls `loadCurrentReview()` after switching to Review. This retry is valid for terminal state and must not call `refreshDoing`.
+
+Refactor `runSessionMutation` so `sessionMutationInFlight = false` and `setSessionMutationControlsDisabled(false)` execute in `finally` after the operation/apply path. Preserve the existing mutation error message/retry behavior for failures before an aggregate is durable.
+
+- [ ] **Step 5: Verify focused/full behavior and commit**
+
+Run:
+
+```bash
+node --test reviewView.test.js doingView.test.js sessionStore.test.js
+node --test *.test.js
+```
+
+Expected: focused and full suites PASS, with no skipped tests or warning noise.
+
+Commit:
+
+```bash
+git add reviewView.js reviewView.test.js doingView.js doingView.test.js
+git commit -m "fix: recover failed review loading"
+```
+
+---
+
 ## Branch Verification and Handoff
 
 After both reviewed task commits:
