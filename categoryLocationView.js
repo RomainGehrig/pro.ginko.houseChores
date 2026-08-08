@@ -3,6 +3,7 @@
 
 import { categoryLocationStore } from './categoryLocationStore.js'
 import { escapeHtml } from './helpers.js'
+import { pendingUndo } from './undoToast.js'
 
 const referenceConfig = {
   category: {
@@ -102,6 +103,33 @@ export async function applyReferenceMutation (write, applyUiUpdate) {
   return snapshot
 }
 
+export async function archiveReferenceWithUndo ({
+  kind,
+  id,
+  archive,
+  restore,
+  mutate = runMutation,
+  queue = pendingUndo
+}) {
+  const label = kind === 'category' ? 'Category' : 'Location'
+  const result = await mutate(
+    archive,
+    label + ' archived. Existing task assignments are retained.'
+  )
+  if (!result.ok) return result
+
+  await queue({
+    key: `reference:${kind}:${id}`,
+    label: label + ' archived',
+    commit: () => null,
+    revert: async () => {
+      const restored = await mutate(restore, label + ' restored.')
+      return { kind, id, status: restored.ok ? 'active' : 'archived' }
+    }
+  }, 6000)
+  return result
+}
+
 function renderReferenceList (kind, references) {
   const container = document.getElementById(kind === 'category' ? 'categoryManagerList' : 'locationManagerList')
   const groups = splitReferences(references)
@@ -196,9 +224,12 @@ async function handleClick (event) {
     return
   }
   if (action === 'archive') {
-    const confirmed = window.confirm('Archive this ' + kind + '? Existing task assignments will be retained.')
-    if (!confirmed) return
-    await runMutation(() => config.archive(id), config.label + ' archived.')
+    await archiveReferenceWithUndo({
+      kind,
+      id,
+      archive: () => config.archive(id),
+      restore: () => config.restore(id)
+    })
     return
   }
   if (action === 'restore') {
@@ -213,8 +244,10 @@ async function runMutation (mutation, successMessage) {
     const snapshot = await mutation()
     const feedback = mutationFeedback(snapshot, successMessage)
     showStatus(feedback.message, feedback.state)
+    return { ok: true, snapshot, feedback }
   } catch (error) {
     showStatus(error.message || 'Could not save changes.', 'error')
+    return { ok: false, error }
   } finally {
     setBusy(false)
   }

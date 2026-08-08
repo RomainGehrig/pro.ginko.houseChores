@@ -131,3 +131,54 @@ test('renders quote-bearing reference names safely in the inline rename input', 
     globalThis.document = originalDocument
   }
 })
+
+test('archives a reference immediately, retains assignment copy, and queues its normal restore path', async () => {
+  const calls = []
+  const queued = []
+  const result = await referenceView.archiveReferenceWithUndo({
+    kind: 'category',
+    id: 'category-1',
+    archive: async () => calls.push('archive-write'),
+    restore: async () => calls.push('restore-write'),
+    mutate: async (operation, successMessage) => {
+      calls.push(['status', successMessage])
+      await operation()
+      return { ok: true }
+    },
+    queue: async (action, ttl) => queued.push({ action, ttl })
+  })
+
+  assert.deepEqual(result, { ok: true })
+  assert.deepEqual(calls, [
+    ['status', 'Category archived. Existing task assignments are retained.'],
+    'archive-write'
+  ])
+  assert.equal(queued.length, 1)
+  assert.equal(queued[0].ttl, 6000)
+  assert.equal(queued[0].action.key, 'reference:category:category-1')
+  assert.equal(queued[0].action.label, 'Category archived')
+  assert.equal(await queued[0].action.commit(), null)
+
+  assert.deepEqual(await queued[0].action.revert(), {
+    kind: 'category', id: 'category-1', status: 'active'
+  })
+  assert.deepEqual(calls.slice(-2), [
+    ['status', 'Category restored.'],
+    'restore-write'
+  ])
+})
+
+test('a failed reference archive never opens the shared undo action', async () => {
+  let queueCalls = 0
+  const result = await referenceView.archiveReferenceWithUndo({
+    kind: 'location',
+    id: 'location-1',
+    archive: async () => assert.fail('mutate controls the failed operation'),
+    restore: async () => assert.fail('restore must not run'),
+    mutate: async () => ({ ok: false }),
+    queue: async () => { queueCalls++ }
+  })
+
+  assert.deepEqual(result, { ok: false })
+  assert.equal(queueCalls, 0)
+})
