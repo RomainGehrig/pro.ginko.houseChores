@@ -486,38 +486,111 @@ test('attaching a searched task revalidates that it is still active before writi
   assert.deepEqual(updates, [])
 })
 
-test('suggestion attachment revalidates the cumulative ledger against authoritative remaining time', async () => {
-  const session = {
-    _id: 's1', status: 'paused', startTime: 1000,
-    taskBundle: ['t1', 'suggested-first-3m'], timeBudgetMinutes: 10,
-    accumulatedActiveMs: 5 * 60000, activeStartedAt: null,
-    checkpointElapsedMs: 5 * 60000, pausedAt: 301000
-  }
-  const updates = []
+function continuationFixture () {
+  const sessions = new Map([['s1', {
+    _id: 's1', status: 'paused', startTime: 1000, taskBundle: ['t1'],
+    timeBudgetMinutes: 10, accumulatedActiveMs: 5 * 60000,
+    activeStartedAt: null, checkpointElapsedMs: 5 * 60000, pausedAt: 301000
+  }]])
   const tasks = new Map([
     ['t1', { _id: 't1', name: 'Sink', status: 'active', estimatedDuration: 2 }],
-    ['suggested-first-3m', {
-      _id: 'suggested-first-3m', name: 'Hallway', status: 'active', estimatedDuration: 3
-    }],
-    ['suggested-next-3m', {
-      _id: 'suggested-next-3m', name: 'Windows', status: 'active', estimatedDuration: 3
-    }]
+    ['suggestion-a', { _id: 'suggestion-a', name: 'Hallway', status: 'active', estimatedDuration: 4 }],
+    ['suggestion-b', { _id: 'suggestion-b', name: 'Windows', status: 'active', estimatedDuration: 2 }],
+    ['searched-30m', { _id: 'searched-30m', name: 'Garage', status: 'active', estimatedDuration: 30 }]
   ])
-  const store = createSessionStore({
+  const dependencies = {
     now: () => 600000,
-    getSession: async () => structuredClone(session),
+    getSession: async id => structuredClone(sessions.get(id)),
     listExecutions: async () => [],
-    listTasks: async ids => ids.map(id => tasks.get(id)).filter(Boolean),
-    updateSessionRecord: async (id, fields) => updates.push({ id, fields })
+    listTasks: async ids => ids.map(id => tasks.get(id)).filter(Boolean)
+      .map(task => structuredClone(task)),
+    updateSessionRecord: async (id, fields) => sessions.set(id, {
+      ...sessions.get(id), ...structuredClone(fields)
+    })
+  }
+  return { sessions, tasks, createStore: () => createSessionStore(dependencies) }
+}
+
+test('a reloaded store enforces persisted continuation allowance', async () => {
+  const { sessions, createStore } = continuationFixture()
+  await createStore().attachTasks('s1', ['suggestion-a'], {
+    suggestionTaskIds: ['suggestion-a']
   })
 
+  assert.deepEqual(sessions.get('s1').continuationSuggestionEntries, [{
+    taskId: 'suggestion-a', estimatedDurationMinutes: 4
+  }])
   await assert.rejects(
-    store.attachTasks('s1', ['suggested-next-3m'], {
-      suggestionTaskIds: ['suggested-first-3m', 'suggested-next-3m']
+    createStore().attachTasks('s1', ['suggestion-b'], {
+      suggestionTaskIds: ['suggestion-b']
     }),
     { message: 'That suggestion would exceed the remaining session budget.' }
   )
-  assert.deepEqual(updates, [])
+})
+
+test('a sequential second-device store cannot invent earlier suggestion IDs', async () => {
+  const { sessions, createStore } = continuationFixture()
+  await createStore().attachTasks('s1', ['suggestion-a'], {
+    suggestionTaskIds: ['suggestion-a']
+  })
+
+  await assert.rejects(
+    createStore().attachTasks('s1', ['suggestion-b'], {
+      suggestionTaskIds: ['invented-earlier-id', 'suggestion-b']
+    }),
+    { message: 'That suggestion would exceed the remaining session budget.' }
+  )
+  assert.deepEqual(sessions.get('s1').taskBundle, ['t1', 'suggestion-a'])
+})
+
+test('persisted continuation entries retain the selected duration snapshot', async () => {
+  const { sessions, tasks, createStore } = continuationFixture()
+  await createStore().attachTasks('s1', ['suggestion-a'], {
+    suggestionTaskIds: ['suggestion-a']
+  })
+  tasks.set('suggestion-a', { ...tasks.get('suggestion-a'), estimatedDuration: 1 })
+
+  await assert.rejects(
+    createStore().attachTasks('s1', ['suggestion-b'], {
+      suggestionTaskIds: ['suggestion-b']
+    }),
+    { message: 'That suggestion would exceed the remaining session budget.' }
+  )
+  assert.deepEqual(sessions.get('s1').continuationSuggestionEntries, [{
+    taskId: 'suggestion-a', estimatedDurationMinutes: 4
+  }])
+})
+
+test('resuming and pausing reset the continuation allowance for a new pause', async () => {
+  const { sessions, createStore } = continuationFixture()
+  const store = createStore()
+  await store.attachTasks('s1', ['suggestion-a'], {
+    suggestionTaskIds: ['suggestion-a']
+  })
+  await store.resume('s1', 610000)
+  await store.pause('s1', 620000)
+
+  assert.deepEqual(sessions.get('s1').continuationSuggestionEntries, [])
+  const aggregate = await createStore().attachTasks('s1', ['suggestion-b'], {
+    suggestionTaskIds: ['suggestion-b']
+  })
+  assert.deepEqual(aggregate.session.continuationSuggestionEntries, [{
+    taskId: 'suggestion-b', estimatedDurationMinutes: 2
+  }])
+})
+
+test('search attachment changes the bundle without changing the continuation ledger', async () => {
+  const { sessions, createStore } = continuationFixture()
+  sessions.get('s1').continuationSuggestionEntries = [{
+    taskId: 'suggestion-a', estimatedDurationMinutes: 4
+  }]
+
+  await createStore().attachTasks('s1', ['searched-30m'], { suggestionTaskIds: null })
+
+  assert.deepEqual(sessions.get('s1').taskBundle, ['t1', 'searched-30m'])
+  assert.deepEqual(sessions.get('s1').continuationSuggestionEntries, [{
+    taskId: 'suggestion-a', estimatedDurationMinutes: 4
+  }])
 })
 
 test('pending Quick add recovery preserves an existing task after attachment fails', async () => {

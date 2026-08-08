@@ -1249,7 +1249,10 @@ test('ambiguous suggestion attachment retains allowance and ignores repeated cha
         taskBundle: [...new Set([
           ...persistenceRef.session.taskBundle,
           'suggested-2m'
-        ])]
+        ])],
+        continuationSuggestionEntries: [{
+          taskId: 'suggested-2m', estimatedDurationMinutes: 2
+        }]
       })
       markStarted()
       await attachmentGate
@@ -1298,6 +1301,92 @@ test('ambiguous suggestion attachment retains allowance and ignores repeated cha
   } finally {
     sessionStore.attachTasks = originalAttachTasks
     sessionStore.refresh = originalRefresh
+  }
+})
+
+test('reopened paused picker honors persisted suggestion allowance after reload', async () => {
+  const original = task('original-task')
+  const selected = { ...task('selected-4m'), estimatedDuration: 4 }
+  const candidate = { ...task('candidate-2m'), estimatedDuration: 2 }
+  const session = {
+    _id: 'reloaded-suggestion-session', status: 'paused', startTime: 10000,
+    taskBundle: ['original-task', 'selected-4m'], timeBudgetMinutes: 10,
+    accumulatedActiveMs: 5 * 60000, activeStartedAt: null,
+    pausedAt: 310000, checkpointElapsedMs: 5 * 60000,
+    continuationSuggestionEntries: [
+      { taskId: 'selected-4m', estimatedDurationMinutes: 4 }
+    ],
+    pendingAddition: null
+  }
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [original, selected, candidate],
+    bundle: [original, selected],
+    executions: [{
+      taskId: 'original-task', sessionId: session._id, outcome: 'done',
+      startTime: 10000, endTime: 310000, rawDurationMs: 5 * 60000,
+      activeElapsedMs: 5 * 60000, actualDuration: 5
+    }]
+  }, async ({ document, persistence }) => {
+    await document.clickControl('openContinueBtn')
+    await document.checkSuggestion('candidate-2m')
+
+    assert.deepEqual(persistence.session.taskBundle, ['original-task', 'selected-4m'])
+    assert.match(
+      document.control('continueRemaining').textContent,
+      /exceed the remaining session budget/
+    )
+  })
+})
+
+test('paused picker sends only the clicked suggestion as its request source', async () => {
+  const original = task('original-task')
+  const selected = { ...task('selected-3m'), estimatedDuration: 3 }
+  const candidate = { ...task('candidate-2m'), estimatedDuration: 2 }
+  const session = {
+    _id: 'single-suggestion-request-session', status: 'paused', startTime: 10000,
+    taskBundle: ['original-task', 'selected-3m'], timeBudgetMinutes: 10,
+    accumulatedActiveMs: 5 * 60000, activeStartedAt: null,
+    pausedAt: 310000, checkpointElapsedMs: 5 * 60000,
+    continuationSuggestionEntries: [
+      { taskId: 'selected-3m', estimatedDurationMinutes: 3 }
+    ],
+    pendingAddition: null
+  }
+  const originalAttachTasks = sessionStore.attachTasks
+  const attachCalls = []
+  sessionStore.attachTasks = async (...args) => {
+    attachCalls.push(args)
+    return originalAttachTasks(...args)
+  }
+
+  try {
+    await withDoingEnvironment({
+      session,
+      persistedTasks: [original, selected, candidate],
+      bundle: [original, selected],
+      executions: [{
+        taskId: 'original-task', sessionId: session._id, outcome: 'done',
+        startTime: 10000, endTime: 310000, rawDurationMs: 5 * 60000,
+        activeElapsedMs: 5 * 60000, actualDuration: 5
+      }]
+    }, async ({ document, persistence }) => {
+      await document.clickControl('openContinueBtn')
+      await document.checkSuggestion('candidate-2m')
+
+      assert.deepEqual(attachCalls, [[
+        session._id,
+        ['candidate-2m'],
+        { suggestionTaskIds: ['candidate-2m'] }
+      ]])
+      assert.deepEqual(persistence.session.continuationSuggestionEntries, [
+        { taskId: 'selected-3m', estimatedDurationMinutes: 3 },
+        { taskId: 'candidate-2m', estimatedDurationMinutes: 2 }
+      ])
+    })
+  } finally {
+    sessionStore.attachTasks = originalAttachTasks
   }
 })
 

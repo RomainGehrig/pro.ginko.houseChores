@@ -49,7 +49,8 @@ export function buildSessionDraft (proposal, startTime) {
     checkpointElapsedMs: 0,
     pausedAt: null,
     unassignedDurationMs: 0,
-    pendingAddition: null
+    pendingAddition: null,
+    continuationSuggestionEntries: []
   }
 }
 

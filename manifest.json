@@ -139,6 +139,7 @@
         "pausedAt": { "type": "String", "description": "Timestamp when the session most recently paused, or null (numeric)." },
         "unassignedDurationMs": { "type": "String", "description": "Counted milliseconds not allocated to a task when concluded (numeric)." },
         "pendingAddition": { "type": "Object", "description": "Recoverable marker for one title-only create-and-attach operation, or null." },
+        "continuationSuggestionEntries": { "type": "Array", "description": "Per-pause suggestion selections with taskId and captured estimatedDurationMinutes, reset on resume or a new pause." },
         "status": { "type": "String", "description": "One of: active, paused, completed, or interrupted." }
       }
     }

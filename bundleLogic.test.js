@@ -50,6 +50,7 @@ test('session draft keeps the parameters captured with its proposed bundle', () 
     checkpointElapsedMs: 0,
     pausedAt: null,
     unassignedDurationMs: 0,
-    pendingAddition: null
+    pendingAddition: null,
+    continuationSuggestionEntries: []
   })
 })

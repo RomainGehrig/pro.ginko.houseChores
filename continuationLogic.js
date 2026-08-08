@@ -6,6 +6,19 @@ import { prioritizeTasks } from './bundleLogic.js'
 const active = task => task.status === 'active' || task.status === 'approved_recurring'
 const estimateMs = task => Math.max(0, Number(task?.estimatedDuration || 0)) * 60000
 
+export function normalizeContinuationSuggestionEntries (value) {
+  if (!Array.isArray(value)) return []
+  const seen = new Set()
+  return value.flatMap(entry => {
+    const taskId = typeof entry?.taskId === 'string' ? entry.taskId.trim() : ''
+    const estimatedDurationMinutes = Number(entry?.estimatedDurationMinutes)
+    if (!taskId || seen.has(taskId) || !Number.isFinite(estimatedDurationMinutes) ||
+      estimatedDurationMinutes <= 0) return []
+    seen.add(taskId)
+    return [{ taskId, estimatedDurationMinutes }]
+  })
+}
+
 export function suggestContinuationTasks (tasks, excludedIds, remainingMs) {
   const excluded = new Set(excludedIds)
   return prioritizeTasks(tasks.filter(task =>

@@ -20,6 +20,7 @@ import { showView, setNavVisible } from './viewRouter.js'
 import { startReview } from './reviewView.js'
 import { sessionStore } from './sessionStore.js'
 import {
+  normalizeContinuationSuggestionEntries,
   searchContinuationTasks,
   suggestContinuationTasks,
   suggestionSelectionFits
@@ -40,8 +41,6 @@ let pendingSessionRetry = null
 let boundDoingContent = null
 let boundWindow = null
 let continuationTasks = []
-let continuationSuggestionSelections = []
-let continuationPauseKey = null
 const ambiguousSuggestionIds = new Set()
 
 const completionCoordinator = createCompletionCoordinator({
@@ -105,8 +104,6 @@ async function applyAggregate (aggregate, { allowNavigation = true } = {}) {
   setCurrentSessionAggregate(aggregate)
   if (aggregate.session.status !== 'paused') {
     continuationTasks = []
-    continuationSuggestionSelections = []
-    continuationPauseKey = null
     ambiguousSuggestionIds.clear()
   }
   if (aggregate.session.status === 'completed') {
@@ -250,21 +247,18 @@ async function handleDoingChange (event) {
   await acceptSuggestedTask(candidate, event.target)
 }
 
-function pauseKey (session) {
-  return [session?._id, session?.pausedAt, session?.accumulatedActiveMs].join(':')
-}
+const persistedSuggestionSelections = () =>
+  normalizeContinuationSuggestionEntries(
+    state.currentSession?.continuationSuggestionEntries
+  ).map(entry => ({
+    _id: entry.taskId,
+    estimatedDuration: entry.estimatedDurationMinutes
+  }))
 
 async function openContinuePicker () {
   if (state.currentSession?.status !== 'paused') return
   const panel = document.getElementById('doingContinuePanel')
   if (!panel) return
-
-  const key = pauseKey(state.currentSession)
-  if (key !== continuationPauseKey) {
-    continuationPauseKey = key
-    continuationSuggestionSelections = []
-    ambiguousSuggestionIds.clear()
-  }
 
   try {
     await refreshTasksView()
@@ -323,10 +317,6 @@ async function reconcileAmbiguousSuggestionSelections (retry) {
     const aggregate = await sessionStore.refresh(state.currentSession._id, Date.now())
     pendingSessionRetry = null
     await applyAggregate(aggregate)
-    const attachedIds = new Set(aggregate.session.taskBundle || [])
-    continuationSuggestionSelections = continuationSuggestionSelections.filter(task =>
-      !ambiguousSuggestionIds.has(task._id) || attachedIds.has(task._id)
-    )
     ambiguousSuggestionIds.clear()
     if (aggregate.session.status === 'paused') await openContinuePicker()
     return true
@@ -355,7 +345,7 @@ async function acceptSuggestedTask (candidate, checkbox) {
     if (state.currentSession?.status !== 'paused') return false
   }
   const remainingMs = remainingBudgetMs(state.currentSession, Date.now())
-  const otherSelections = continuationSuggestionSelections.filter(
+  const otherSelections = persistedSuggestionSelections().filter(
     task => task._id !== candidate._id
   )
   if (!suggestionSelectionFits(
@@ -369,12 +359,11 @@ async function acceptSuggestedTask (candidate, checkbox) {
     return false
   }
 
-  continuationSuggestionSelections = [...otherSelections, candidate]
   const attached = await runContinuationMutation(
     () => sessionStore.attachTasks(
       state.currentSession._id,
       [candidate._id],
-      { suggestionTaskIds: continuationSuggestionSelections.map(task => task._id) }
+      { suggestionTaskIds: [candidate._id] }
     ),
     'Could not add the suggested task',
     () => acceptSuggestedTask(candidate),
@@ -383,9 +372,6 @@ async function acceptSuggestedTask (candidate, checkbox) {
   if (attached === null) ambiguousSuggestionIds.add(candidate._id)
   else ambiguousSuggestionIds.delete(candidate._id)
   if (attached === false) {
-    continuationSuggestionSelections = continuationSuggestionSelections.filter(
-      task => task._id !== candidate._id
-    )
     if (checkbox) checkbox.checked = false
   }
   return attached === true

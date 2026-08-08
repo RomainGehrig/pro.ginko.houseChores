@@ -5,6 +5,7 @@ import { createSession, getSessionById, listUnfinishedSessions, updateSession } 
 import { listExecutionsBySession } from './executionData.js'
 import { createTaskWithId, listTasksByIds, updateTask } from './taskData.js'
 import { buildSessionDraft } from './bundleLogic.js'
+import { normalizeContinuationSuggestionEntries } from './continuationLogic.js'
 import {
   chooseCurrentSession,
   conclusionFields,
@@ -206,28 +207,35 @@ export function createSessionStore ({
         ? 'That task is no longer available as a suggestion.'
         : 'That task is no longer available.')
     }
-    if (suggestionTaskIds) {
-      const ledgerIds = [...new Set(suggestionTaskIds)]
-      const ledgerTasks = await listTasks(ledgerIds)
-      const candidateIds = new Set(requestedIds)
-      const eligibleCandidates = ledgerTasks.filter(task => candidateIds.has(task._id))
-      const allCandidatesEligible = eligibleCandidates.length === candidateIds.size &&
-        eligibleCandidates.every(task => attachableTask(task) && Number(task.estimatedDuration) > 0)
-      const estimateMs = ledgerTasks.reduce((sum, task) =>
-        sum + Math.max(0, Number(task.estimatedDuration || 0)) * 60000, 0
-      )
-      if (ledgerTasks.length !== ledgerIds.length || !allCandidatesEligible) {
-        throw new Error('That task is no longer available as a suggestion.')
-      }
-      if (estimateMs > remainingBudgetMs(aggregate.session, atMs)) {
-        throw new Error('That suggestion would exceed the remaining session budget.')
-      }
-    }
     const taskBundle = [...new Set([
       ...(aggregate.session.taskBundle || []),
       ...requestedIds
     ])]
-    await updateSessionRecord(sessionId, { taskBundle })
+    if (suggestionTaskIds !== null) {
+      const existingEntries = normalizeContinuationSuggestionEntries(
+        aggregate.session.continuationSuggestionEntries
+      )
+      const entryIds = new Set(existingEntries.map(entry => entry.taskId))
+      const candidateTasks = requestedTasks.filter(task => !entryIds.has(task._id))
+      const requestedSuggestionIds = new Set(suggestionTaskIds || [])
+      if (requestedIds.some(id => !requestedSuggestionIds.has(id)) ||
+        candidateTasks.some(task => !(Number(task.estimatedDuration) > 0))) {
+        throw new Error('That task is no longer available as a suggestion.')
+      }
+      const continuationSuggestionEntries = [...existingEntries, ...candidateTasks.map(task => ({
+        taskId: task._id,
+        estimatedDurationMinutes: Number(task.estimatedDuration)
+      }))]
+      const consumedMs = continuationSuggestionEntries.reduce((sum, entry) =>
+        sum + entry.estimatedDurationMinutes * 60000, 0
+      )
+      if (consumedMs > remainingBudgetMs(aggregate.session, atMs)) {
+        throw new Error('That suggestion would exceed the remaining session budget.')
+      }
+      await updateSessionRecord(sessionId, { taskBundle, continuationSuggestionEntries })
+    } else {
+      await updateSessionRecord(sessionId, { taskBundle })
+    }
     return refresh(sessionId, atMs)
   }
 

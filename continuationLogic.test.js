@@ -4,6 +4,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  normalizeContinuationSuggestionEntries,
   searchContinuationTasks,
   suggestContinuationTasks,
   suggestionSelectionFits
@@ -37,4 +38,14 @@ test('several suggestions consume the allowance cumulatively', () => {
   assert.equal(suggestionSelectionFits(
     [{ estimatedDuration: 6 }], { estimatedDuration: 5 }, 10 * 60000
   ), false)
+})
+
+test('normalizes persisted suggestion snapshots and ignores malformed duplicates', () => {
+  assert.deepEqual(normalizeContinuationSuggestionEntries([
+    { taskId: 'a', estimatedDurationMinutes: 4 },
+    { taskId: 'a', estimatedDurationMinutes: 9 },
+    { taskId: '', estimatedDurationMinutes: 3 },
+    { taskId: 'b', estimatedDurationMinutes: 0 }
+  ]), [{ taskId: 'a', estimatedDurationMinutes: 4 }])
+  assert.deepEqual(normalizeContinuationSuggestionEntries(null), [])
 })

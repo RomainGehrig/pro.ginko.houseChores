@@ -41,12 +41,16 @@ export function pauseFields (session, atMs) {
     status: 'paused',
     accumulatedActiveMs: activeElapsedMs(session, atMs),
     activeStartedAt: null,
-    pausedAt: number(atMs)
+    pausedAt: number(atMs),
+    continuationSuggestionEntries: []
   }
 }
 
 export function resumeFields (atMs) {
-  return { status: 'active', activeStartedAt: number(atMs), pausedAt: null }
+  return {
+    status: 'active', activeStartedAt: number(atMs), pausedAt: null,
+    continuationSuggestionEntries: []
+  }
 }
 
 export function resolvedTaskIds (executions) {

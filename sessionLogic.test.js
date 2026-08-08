@@ -25,10 +25,12 @@ test('pause freezes elapsed and resume starts a fresh active run', () => {
     status: 'active', accumulatedActiveMs: 4000, activeStartedAt: 10000
   }, 16000), {
     status: 'paused', accumulatedActiveMs: 10000,
-    activeStartedAt: null, pausedAt: 16000
+    activeStartedAt: null, pausedAt: 16000,
+    continuationSuggestionEntries: []
   })
   assert.deepEqual(resumeFields(50000), {
-    status: 'active', activeStartedAt: 50000, pausedAt: null
+    status: 'active', activeStartedAt: 50000, pausedAt: null,
+    continuationSuggestionEntries: []
   })
   assert.equal(activeElapsedMs({
     status: 'active', accumulatedActiveMs: 10000, activeStartedAt: 50000
