@@ -63,6 +63,9 @@ test('route shell declares four primary canonical anchors, eight focus headings,
     ['chores', '#/chores'],
     ['log', '#/log']
   ])
+  assert.match(html, /<nav id="workNav" class="work-nav" aria-label="In-progress work" hidden>/)
+  assert.match(html, /data-context-route="doing"[^>]*href="#\/doing"[^>]*hidden[^>]*>Resume round<\/a>/)
+  assert.match(html, /data-context-route="review"[^>]*href="#\/receipt"[^>]*hidden[^>]*>Return to review<\/a>/)
   assert.deepEqual(screenIds, [
     'view-today', 'view-inbox', 'view-chores', 'view-archive',
     'view-setup', 'view-doing', 'view-review', 'view-log'
@@ -104,6 +107,8 @@ test('bottom navigation uses the 45px target floor, fixed safe-area placement, c
   const navRules = css.match(/\.bottom-nav\s+a\s*\{([\s\S]*?)\n\}/)?.[1] || ''
 
   assert.match(navRules, /min-height:\s*45px;/)
+  const workNavRules = css.match(/\.work-nav\s+a\s*\{([\s\S]*?)\n\}/)?.[1] || ''
+  assert.match(workNavRules, /min-height:\s*45px;/)
   assert.match(css, /\.bottom-nav\s*\{[\s\S]*position:\s*fixed;/)
   assert.match(css, /\.bottom-nav\s*\{[\s\S]*safe-area-inset-bottom/)
   assert.match(css, /#app\s*\{[\s\S]*padding:[^;]*safe-area-inset-bottom/)

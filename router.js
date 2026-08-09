@@ -87,6 +87,27 @@ function activeNavRouteName (routeName) {
   return PRIMARY_ROUTE_BY_ROUTE[routeName] || null
 }
 
+function contextualItems () {
+  if (typeof document === 'undefined') return []
+  return ['doing', 'review']
+    .map(name => document.querySelector?.('[data-context-route="' + name + '"]'))
+    .filter(Boolean)
+}
+
+function contextualRouteIsCurrent (name, route) {
+  return name === 'doing' ? route.name === 'doing' : route.name === 'receipt'
+}
+
+function renderContextualNavigation (route) {
+  const items = contextualItems()
+  for (const item of items) {
+    const available = item.dataset?.available === 'true'
+    item.hidden = !available || contextualRouteIsCurrent(item.dataset.contextRoute, route)
+  }
+  const nav = document.getElementById?.('workNav')
+  if (nav) nav.hidden = !items.some(item => !item.hidden)
+}
+
 function renderRoute (route) {
   const screenName = ROUTE_SCREENS[route.name] || ROUTE_SCREENS.today
   if (typeof document === 'undefined') return route
@@ -101,6 +122,7 @@ function renderRoute (route) {
     if (active) item.setAttribute?.('aria-current', 'page')
     else item.removeAttribute?.('aria-current')
   }
+  renderContextualNavigation(route)
 
   const heading = document.getElementById?.('view-' + screenName)
     ?.querySelector?.('.route-heading[tabindex="-1"]')
@@ -146,8 +168,15 @@ export function showView (name, param) {
   return renderRoute(route)
 }
 
-export function setNavVisible (name, visible) {
+export function setNavVisible (name, visible, param = null) {
   if (typeof document === 'undefined') return
-  const item = document.querySelector?.('.bottom-nav [data-route="' + name + '"]')
-  if (item) item.style.display = visible ? 'inline-block' : 'none'
+  const item = document.querySelector?.('[data-context-route="' + name + '"]')
+  if (!item) return
+  item.dataset.available = String(Boolean(visible))
+  if (name === 'review' && param) {
+    item.setAttribute?.('href', hashForRoute({ name: 'receipt', param: String(param) }))
+  }
+  const currentHash = lastRenderedHash ||
+    (typeof window === 'undefined' ? '' : window.location?.hash)
+  renderContextualNavigation(parseRoute(currentHash))
 }

@@ -677,6 +677,37 @@ test('bottom primary navigation has phone-sized targets, fixed safe-area placeme
   assert.ok(Number.parseFloat(result.transitionDuration) <= 0.001, JSON.stringify(result))
 })
 
+test('contextual work navigation stays in flow with usable targets at phone and desktop widths', async () => {
+  for (const viewport of [{ width: 390, height: 640 }, { width: 1280, height: 800 }]) {
+    const result = await runBrowserScenario({
+      viewport,
+      body: '<main id="app"><nav id="workNav" class="work-nav" aria-label="In-progress work">' +
+        '<a data-context-route="doing" href="#/doing">Resume round</a>' +
+        '<a data-context-route="review" href="#/receipt/session">Return to review</a>' +
+        '</nav><section id="content">Current route</section></main>',
+      script: `
+        const nav = document.getElementById('workNav')
+        const content = document.getElementById('content')
+        const links = [...nav.querySelectorAll('a')]
+        const navRect = nav.getBoundingClientRect()
+        const contentRect = content.getBoundingClientRect()
+        const result = {
+          position: getComputedStyle(nav).position,
+          targetHeights: links.map(link => link.getBoundingClientRect().height),
+          contentStartsAfterNav: contentRect.top >= navRect.bottom,
+          scrollWidth: document.documentElement.scrollWidth,
+          viewportWidth: window.innerWidth
+        }
+      `
+    })
+
+    assert.equal(result.position, 'static', JSON.stringify({ viewport, result }))
+    assert.ok(result.targetHeights.every(height => height >= 44.5), JSON.stringify({ viewport, result }))
+    assert.equal(result.contentStartsAfterNav, true, JSON.stringify({ viewport, result }))
+    assert.ok(result.scrollWidth <= result.viewportWidth, JSON.stringify({ viewport, result }))
+  }
+})
+
 test('bottom sheet traps focus, renders safe text, dismisses, and restores prior focus', async () => {
   const result = await runBrowserScenario({
     viewport: { width: 390, height: 640 },

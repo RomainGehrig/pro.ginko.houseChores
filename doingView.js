@@ -110,7 +110,7 @@ async function applyAggregate (aggregate, { allowNavigation = true } = {}) {
   if (aggregate.session.status === 'completed') {
     clearInterval(timerInterval)
     setNavVisible('doing', false)
-    setNavVisible('review', true)
+    setNavVisible('review', true, aggregate.session._id)
     if (allowNavigation) showView('review', aggregate.session._id)
     await loadCurrentReview()
     return

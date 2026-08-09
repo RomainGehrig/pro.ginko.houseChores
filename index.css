@@ -169,6 +169,24 @@ label:has(input[type="radio"]) {
   display: none !important;
 }
 
+.work-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  margin: 0 48px var(--s3) 0;
+}
+
+.work-nav a {
+  align-items: center;
+  border: 1px solid var(--rule);
+  border-radius: var(--r-control);
+  color: var(--enamel);
+  display: inline-flex;
+  min-height: 45px;
+  padding: var(--s2) var(--s3);
+  text-decoration: none;
+}
+
 .bottom-nav {
   background: var(--plate);
   border-top: 1px solid var(--rule);

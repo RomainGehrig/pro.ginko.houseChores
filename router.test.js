@@ -25,16 +25,30 @@ function installRouterDom (hash = '') {
     }]
   }))
   const listeners = new Map()
+  const workNav = { hidden: true }
+  const contextual = new Map(['doing', 'review'].map(route => {
+    const attributes = new Map()
+    return [route, {
+      hidden: true,
+      dataset: { contextRoute: route },
+      setAttribute: (key, value) => attributes.set(key, value),
+      getAttribute: key => attributes.get(key) || null
+    }]
+  }))
   globalThis.document = {
-    getElementById: id => views.get(id.slice('view-'.length)) || null,
+    getElementById: id => id === 'workNav' ? workNav : views.get(id.slice('view-'.length)) || null,
     querySelectorAll: selector => selector === '.bottom-nav [data-route]' ? [...nav.values()] : [],
-    querySelector: selector => nav.get(selector.match(/data-route="([^"]+)"/)?.[1]) || null
+    querySelector: selector => {
+      const contextRoute = selector.match(/data-context-route="([^"]+)"/)?.[1]
+      if (contextRoute) return contextual.get(contextRoute) || null
+      return nav.get(selector.match(/data-route="([^"]+)"/)?.[1]) || null
+    }
   }
   globalThis.window = {
     location: { hash },
     addEventListener: (type, listener) => listeners.set(type, listener)
   }
-  return { views, nav, listeners }
+  return { views, nav, contextual, workNav, listeners }
 }
 
 test('parseRoute recognizes every final route and decodes its parameter', () => {
@@ -133,4 +147,45 @@ test('legacy showView callers bridge to their final screen routes and absent pri
 
   assert.doesNotThrow(() => setNavVisible('doing', true))
   assert.doesNotThrow(() => setNavVisible('review', false))
+})
+
+test('contextual work links leave and return to hydrated Doing and Review without replacing edits', () => {
+  const dom = installRouterDom('#/doing')
+  initRouter()
+  dom.views.get('doing').draftValue = 'pause note in progress'
+  setNavVisible('doing', true)
+
+  assert.equal(dom.contextual.get('doing').hidden, true)
+  showView('today')
+  assert.equal(dom.contextual.get('doing').hidden, false)
+  assert.equal(dom.workNav.hidden, false)
+  showView('doing')
+  assert.equal(dom.contextual.get('doing').hidden, true)
+  assert.equal(dom.views.get('doing').draftValue, 'pause note in progress')
+
+  dom.views.get('review').draftValue = 'edited review notes'
+  setNavVisible('review', true, 'session/42')
+  showView('review', 'session/42')
+  assert.equal(dom.contextual.get('review').hidden, true)
+  showView('chores')
+  assert.equal(dom.contextual.get('review').hidden, false)
+  assert.equal(dom.contextual.get('review').getAttribute('href'), '#/receipt/session%2F42')
+  showView('review', 'session/42')
+  assert.equal(dom.contextual.get('review').hidden, true)
+  assert.equal(dom.views.get('review').draftValue, 'edited review notes')
+})
+
+test('ending Doing and finishing Review clear their contextual return controls', () => {
+  const dom = installRouterDom('#/today')
+  initRouter()
+  setNavVisible('doing', true)
+  setNavVisible('review', true, 'completed-session')
+  assert.equal(dom.workNav.hidden, false)
+
+  setNavVisible('doing', false)
+  assert.equal(dom.contextual.get('doing').hidden, true)
+  assert.equal(dom.contextual.get('review').hidden, false)
+  setNavVisible('review', false)
+  assert.equal(dom.contextual.get('review').hidden, true)
+  assert.equal(dom.workNav.hidden, true)
 })
