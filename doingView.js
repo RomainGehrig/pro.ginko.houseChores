@@ -21,10 +21,8 @@ import { showView, setNavVisible } from './router.js'
 import { renderReviewLoadError, startReview } from './reviewView.js'
 import { sessionStore } from './sessionStore.js'
 import {
-  normalizeContinuationSuggestionEntries,
   searchContinuationTasks,
-  suggestContinuationTasks,
-  suggestionSelectionFits
+  suggestContinuationTasks
 } from './continuationLogic.js'
 import {
   activeElapsedMs,
@@ -257,14 +255,6 @@ async function handleDoingChange (event) {
   await acceptSuggestedTask(candidate, event.target)
 }
 
-const persistedSuggestionSelections = () =>
-  normalizeContinuationSuggestionEntries(
-    state.currentSession?.continuationSuggestionEntries
-  ).map(entry => ({
-    _id: entry.taskId,
-    estimatedDuration: entry.estimatedDurationMinutes
-  }))
-
 async function openContinuePicker () {
   if (state.currentSession?.status !== 'paused') return
   const panel = document.getElementById('doingContinuePanel')
@@ -353,26 +343,10 @@ async function acceptSuggestedTask (candidate, checkbox) {
     if (state.currentSession?.taskBundle?.includes(candidate._id)) return true
     if (state.currentSession?.status !== 'paused') return false
   }
-  const remainingMs = remainingBudgetMs(state.currentSession, Date.now())
-  const otherSelections = persistedSuggestionSelections().filter(
-    task => task._id !== candidate._id
-  )
-  if (!suggestionSelectionFits(
-    otherSelections,
-    candidate,
-    remainingMs
-  )) {
-    if (checkbox) checkbox.checked = false
-    const remaining = document.getElementById('continueRemaining')
-    if (remaining) remaining.textContent = 'That suggestion would exceed the remaining session budget.'
-    return false
-  }
-
   const attached = await runContinuationMutation(
     () => sessionStore.attachTasks(
       state.currentSession._id,
-      [candidate._id],
-      { suggestionTaskIds: [candidate._id] }
+      [candidate._id]
     ),
     'Could not add the suggested task',
     () => acceptSuggestedTask(candidate),

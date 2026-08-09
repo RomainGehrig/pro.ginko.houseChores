@@ -1043,7 +1043,58 @@ test('paused picker attaches suggestions and search, quick-adds a proposed task,
   }
 })
 
-test('suggestion failure reconciliation preserves the authoritative pause and disabled Resume', async () => {
+test('explicitly selected suggestions beyond the remaining estimate use unrestricted attachment', async () => {
+  const original = task('original-task')
+  const first = { ...task('suggestion-a'), estimatedDuration: 4 }
+  const second = { ...task('suggestion-b'), estimatedDuration: 4 }
+  const session = {
+    _id: 'over-estimate-selection', status: 'paused', startTime: 10000,
+    taskBundle: ['original-task'], timeBudgetMinutes: 10,
+    accumulatedActiveMs: 5 * 60000, activeStartedAt: null,
+    pausedAt: 310000, checkpointElapsedMs: 5 * 60000,
+    pendingAddition: null
+  }
+  const executions = [{
+    taskId: 'original-task', sessionId: session._id, outcome: 'done',
+    startTime: 10000, endTime: 310000, rawDurationMs: 5 * 60000,
+    activeElapsedMs: 5 * 60000, actualDuration: 5
+  }]
+  const originalAttachTasks = sessionStore.attachTasks
+  const attachCalls = []
+  sessionStore.attachTasks = async (...args) => {
+    attachCalls.push(args)
+    return originalAttachTasks(...args)
+  }
+
+  try {
+    await withDoingEnvironment({
+      session,
+      persistedTasks: [original, first, second],
+      bundle: [original],
+      executions
+    }, async ({ document, persistence }) => {
+      await document.clickControl('openContinueBtn')
+      await document.checkSuggestion('suggestion-a')
+      await document.checkSuggestion('suggestion-b')
+
+      assert.deepEqual(attachCalls, [
+        [session._id, ['suggestion-a']],
+        [session._id, ['suggestion-b']]
+      ])
+      assert.deepEqual(persistence.session.taskBundle, [
+        'original-task', 'suggestion-a', 'suggestion-b'
+      ])
+      assert.doesNotMatch(
+        document.control('continueRemaining').textContent,
+        /exceed|warning|error/i
+      )
+    })
+  } finally {
+    sessionStore.attachTasks = originalAttachTasks
+  }
+})
+
+test('explicit suggestion selection follows the authoritative pause without budget refusal', async () => {
   const original = task('original-task')
   const suggested = {
     ...task('suggested-5m'), estimatedDuration: 5, scheduledDate: '2026-08-01'
@@ -1075,10 +1126,10 @@ test('suggestion failure reconciliation preserves the authoritative pause and di
 
     await document.checkSuggestion('suggested-5m')
 
-    assert.deepEqual(persistence.session.taskBundle, ['original-task'])
+    assert.deepEqual(persistence.session.taskBundle, ['original-task', 'suggested-5m'])
     assert.equal(state.currentSession.accumulatedActiveMs, 9 * 60000)
-    assert.equal(document.control('resumeSessionBtn').disabled, true)
-    assert.match(
+    assert.equal(document.control('resumeSessionBtn').disabled, false)
+    assert.doesNotMatch(
       document.control('doingStatus').textContent,
       /exceed the remaining session budget/
     )
@@ -1286,7 +1337,7 @@ test('a later suggestion reconciles and drops an unattached ambiguous selection'
   }
 })
 
-test('ambiguous suggestion attachment retains allowance and ignores repeated change events', async () => {
+test('ambiguous suggestion attachment reconciles once and leaves later explicit selection unrestricted', async () => {
   const original = task('original-task')
   const first = { ...task('suggested-2m'), estimatedDuration: 2 }
   const second = { ...task('suggested-4m'), estimatedDuration: 4 }
@@ -1359,11 +1410,11 @@ test('ambiguous suggestion attachment retains allowance and ignores repeated cha
 
       await document.checkSuggestion('suggested-4m')
 
-      assert.deepEqual(attachCalls, ['suggested-2m'])
+      assert.deepEqual(attachCalls, ['suggested-2m', 'suggested-4m'])
       assert.deepEqual(persistence.session.taskBundle, [
-        'original-task', 'suggested-2m'
+        'original-task', 'suggested-2m', 'suggested-4m'
       ])
-      assert.match(
+      assert.doesNotMatch(
         document.control('continueRemaining').textContent,
         /exceed the remaining session budget/
       )
@@ -1374,7 +1425,7 @@ test('ambiguous suggestion attachment retains allowance and ignores repeated cha
   }
 })
 
-test('reopened paused picker honors persisted suggestion allowance after reload', async () => {
+test('reopened paused picker does not turn persisted suggestion estimates into a user gate', async () => {
   const original = task('original-task')
   const selected = { ...task('selected-4m'), estimatedDuration: 4 }
   const candidate = { ...task('candidate-2m'), estimatedDuration: 2 }
@@ -1402,15 +1453,17 @@ test('reopened paused picker honors persisted suggestion allowance after reload'
     await document.clickControl('openContinueBtn')
     await document.checkSuggestion('candidate-2m')
 
-    assert.deepEqual(persistence.session.taskBundle, ['original-task', 'selected-4m'])
-    assert.match(
+    assert.deepEqual(persistence.session.taskBundle, [
+      'original-task', 'selected-4m', 'candidate-2m'
+    ])
+    assert.doesNotMatch(
       document.control('continueRemaining').textContent,
       /exceed the remaining session budget/
     )
   })
 })
 
-test('paused picker sends only the clicked suggestion as its request source', async () => {
+test('paused picker sends an explicit suggestion through the unrestricted attachment path', async () => {
   const original = task('original-task')
   const selected = { ...task('selected-3m'), estimatedDuration: 3 }
   const candidate = { ...task('candidate-2m'), estimatedDuration: 2 }
@@ -1447,12 +1500,10 @@ test('paused picker sends only the clicked suggestion as its request source', as
 
       assert.deepEqual(attachCalls, [[
         session._id,
-        ['candidate-2m'],
-        { suggestionTaskIds: ['candidate-2m'] }
+        ['candidate-2m']
       ]])
       assert.deepEqual(persistence.session.continuationSuggestionEntries, [
-        { taskId: 'selected-3m', estimatedDurationMinutes: 3 },
-        { taskId: 'candidate-2m', estimatedDurationMinutes: 2 }
+        { taskId: 'selected-3m', estimatedDurationMinutes: 3 }
       ])
     })
   } finally {
