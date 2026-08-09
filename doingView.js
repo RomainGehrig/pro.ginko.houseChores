@@ -115,9 +115,11 @@ async function applyAggregate (aggregate, { allowNavigation = true } = {}) {
   }
   if (aggregate.session.status === 'interrupted') {
     clearInterval(timerInterval)
+    setNavVisible('doing', false)
     renderDoingError('This session was superseded by newer unfinished work.')
     return
   }
+  setNavVisible('doing', true)
   renderDoing()
 }
 

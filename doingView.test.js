@@ -54,12 +54,19 @@ function createControl (id = '') {
 function createDoingDocument ({ failFirstReviewDisplay = false } = {}) {
   const nodes = new Map()
   const navControls = new Map()
+  const contextualControls = new Map(['doing', 'review'].map(route => {
+    const control = createControl('context-' + route)
+    control.dataset.contextRoute = route
+    control.setAttribute = (name, value) => { control[name] = value }
+    return [route, control]
+  }))
   const dynamicIds = new Set()
   let controls = []
   let shouldFailReviewDisplay = failFirstReviewDisplay
   const content = createControl('doingContent')
   content._dynamicChildren = []
   nodes.set('doingContent', content)
+  nodes.set('workNav', createControl('workNav'))
   const reviewList = createControl('reviewList')
   reviewList.querySelectorAll = () => []
   reviewList.onBeforeChildren = () => {
@@ -180,6 +187,8 @@ function createDoingDocument ({ failFirstReviewDisplay = false } = {}) {
       return control
     },
     querySelector: selector => {
+      const contextRoute = selector.match(/^\[data-context-route="([^"]+)"\]$/)?.[1]
+      if (contextRoute) return contextualControls.get(contextRoute) || null
       const view = selector.match(/^\.nav-btn\[data-view="([^"]+)"\]$/)?.[1]
       return view ? navControls.get(view) || null : null
     },
@@ -223,7 +232,8 @@ function createDoingDocument ({ failFirstReviewDisplay = false } = {}) {
       return content.dispatch('click', { target })
     },
     dispatchStaleControl: target => content.dispatch('click', { target }),
-    control: id => nodes.get(id) || null
+    control: id => nodes.get(id) || null,
+    contextControl: route => contextualControls.get(route) || null
   }
   return document
 }
@@ -574,6 +584,7 @@ test('stale outcome applies a paused authoritative aggregate without writes', as
     persistedTasks: [task1],
     bundle: [task1]
   }, async ({ document, persistence }) => {
+    assert.equal(document.contextControl('doing').dataset.available, 'true')
     const staleDone = document.outcomeControl('task-1', 'done')
     persistence.patchSession({
       status: 'paused', accumulatedActiveMs: 9000,
@@ -669,6 +680,8 @@ test('stale Conclude renders interrupted state without a session write', async (
 
     assert.equal(persistence.sessionUpdateCalls, 0)
     assert.equal(state.currentSession.status, 'interrupted')
+    assert.equal(document.contextControl('doing').dataset.available, 'false')
+    assert.equal(document.contextControl('doing').hidden, true)
     assert.match(
       document.control('doingContent').children[0].textContent,
       /superseded by newer unfinished work/
