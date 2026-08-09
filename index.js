@@ -1,7 +1,7 @@
 import { initTasksView, refreshTasksView } from './tasksView.js'
 import { initSessionView } from './sessionView.js'
 import { initDoingView, startDoing } from './doingView.js'
-import { initReviewView } from './reviewView.js'
+import { initReviewView, startReview } from './reviewView.js'
 import { initHistoryView, refreshHistoryView } from './historyView.js'
 import { hasRequestedRoute, initRouter, showView, setNavVisible } from './router.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
@@ -44,7 +44,10 @@ async function init () {
   initDoingView()
   initReviewView()
   initHistoryView()
-  initRouter({ onLogRoute: refreshHistoryView })
+  initRouter({
+    onLogRoute: refreshHistoryView,
+    onReceiptRoute: sessionId => startReview({ sessionId })
+  })
   await openInitialView()
 }
 

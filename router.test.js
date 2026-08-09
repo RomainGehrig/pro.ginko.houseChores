@@ -3,7 +3,7 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { initRouter, parseRoute, setNavVisible, showView } from './router.js'
+import { hasRequestedRoute, initRouter, parseRoute, setNavVisible, showView } from './router.js'
 
 const screenNames = ['today', 'inbox', 'chores', 'archive', 'setup', 'doing', 'review', 'log']
 const primaryRoutes = ['today', 'inbox', 'chores', 'log']
@@ -44,11 +44,27 @@ function installRouterDom (hash = '') {
       return nav.get(selector.match(/data-route="([^"]+)"/)?.[1]) || null
     }
   }
+  let currentHash = hash
+  const pushes = []
+  const replaces = []
+  const location = {
+    get hash () { return currentHash },
+    set hash (value) {
+      currentHash = value
+      pushes.push(value)
+    }
+  }
   globalThis.window = {
-    location: { hash },
+    location,
+    history: {
+      replaceState: (_state, _title, value) => {
+        currentHash = value
+        replaces.push(value)
+      }
+    },
     addEventListener: (type, listener) => listeners.set(type, listener)
   }
-  return { views, nav, contextual, workNav, listeners }
+  return { views, nav, contextual, workNav, listeners, pushes, replaces }
 }
 
 test('parseRoute recognizes every final route and decodes its parameter', () => {
@@ -188,4 +204,40 @@ test('ending Doing and finishing Review clear their contextual return controls',
   setNavVisible('review', false)
   assert.equal(dom.contextual.get('review').hidden, true)
   assert.equal(dom.workNav.hidden, true)
+})
+
+test('receipt dispatch passes the decoded id to the injected loader', async () => {
+  installRouterDom('#/receipt/session%2F42')
+  const loaded = []
+  initRouter({ onReceiptRoute: async id => { loaded.push(id) } })
+  await Promise.resolve()
+
+  assert.deepEqual(loaded, ['session/42'])
+})
+
+test('boot fallback replaces empty and invalid history without creating a Back bounce', () => {
+  for (const hash of ['', '#/today/extra']) {
+    const dom = installRouterDom(hash)
+    initRouter()
+
+    assert.deepEqual(dom.replaces, ['#/today'], hash)
+    assert.deepEqual(dom.pushes, [], hash)
+    dom.listeners.get('hashchange')()
+    assert.deepEqual(dom.replaces, ['#/today'], hash)
+    assert.deepEqual(dom.pushes, [], hash)
+  }
+})
+
+test('only a recognized initial route suppresses automatic unfinished-session display', () => {
+  for (const hash of ['', '#', '#/', '#/unknown', '#/receipt', '#/today/extra', 'today', '#/chore/%E0%A4%A']) {
+    installRouterDom(hash)
+    initRouter()
+    assert.equal(hasRequestedRoute(), false, hash)
+  }
+
+  for (const hash of ['#/today', '#/inbox', '#/doing', '#/chore/kitchen', '#/receipt/session%2F42']) {
+    installRouterDom(hash)
+    initRouter()
+    assert.equal(hasRequestedRoute(), true, hash)
+  }
 })

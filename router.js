@@ -33,27 +33,31 @@ const LEGACY_ROUTES = {
 }
 
 let refreshHistory = null
+let loadReceipt = null
 let requestedInitialRoute = false
 let lastRenderedHash = null
 
-export function parseRoute (hash) {
+function recognizedRoute (hash) {
   const value = String(hash || '')
-  if (value === '' || value === '#' || value === '#/') return { ...TODAY }
-  if (!value.startsWith('#/')) return { ...TODAY }
+  if (!value.startsWith('#/')) return null
 
   const segments = value.slice(2).split('/')
   if (segments.length === 1 && SIMPLE_ROUTES.has(segments[0])) {
     return { name: segments[0], param: null }
   }
   if (segments.length !== 2 || !PARAMETER_ROUTES.has(segments[0]) || !segments[1]) {
-    return { ...TODAY }
+    return null
   }
 
   try {
     return { name: segments[0], param: decodeURIComponent(segments[1]) }
   } catch {
-    return { ...TODAY }
+    return null
   }
+}
+
+export function parseRoute (hash) {
+  return recognizedRoute(hash) || { ...TODAY }
 }
 
 function hashForRoute (route) {
@@ -131,24 +135,44 @@ function renderRoute (route) {
   return route
 }
 
+function replaceCurrentHash (hash) {
+  if (typeof window === 'undefined' || !window.location) return
+  if (typeof window.history?.replaceState === 'function') {
+    window.history.replaceState(null, '', hash)
+    return
+  }
+  window.location.replace?.(hash)
+}
+
+function dispatchReceiptLoad (route) {
+  if (route.name !== 'receipt' || !loadReceipt) return
+  try {
+    Promise.resolve(loadReceipt(route.param)).catch(() => {})
+  } catch {
+    // The injected loader owns inline error presentation.
+  }
+}
+
 function dispatchHash ({ force = false } = {}) {
   const hash = typeof window === 'undefined' ? '' : window.location?.hash
   const route = parseRoute(hash)
   const canonicalHash = hashForRoute(route)
   if (typeof window !== 'undefined' && window.location && window.location.hash !== canonicalHash) {
-    window.location.hash = canonicalHash
+    replaceCurrentHash(canonicalHash)
   }
   if (force || lastRenderedHash !== canonicalHash) {
     lastRenderedHash = canonicalHash
     renderRoute(route)
+    dispatchReceiptLoad(route)
   }
   return route
 }
 
-export function initRouter ({ onLogRoute } = {}) {
+export function initRouter ({ onLogRoute, onReceiptRoute } = {}) {
   refreshHistory = onLogRoute || null
+  loadReceipt = onReceiptRoute || null
   const initialHash = typeof window === 'undefined' ? '' : window.location?.hash
-  requestedInitialRoute = Boolean(initialHash && initialHash !== '#')
+  requestedInitialRoute = Boolean(recognizedRoute(initialHash))
   lastRenderedHash = null
   if (typeof window !== 'undefined') window.addEventListener?.('hashchange', dispatchHash)
   return dispatchHash({ force: true })

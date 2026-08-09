@@ -337,3 +337,109 @@ test('Review load errors clear stale cards, keep Finish disabled, and retry safe
     assert.equal(retried, 1)
   })
 })
+
+test('a direct receipt loads its completed session without replacing an unrelated active session', async () => {
+  await withReviewDocument(async ({ reviewList, finish }) => {
+    const unrelated = { _id: 'active-session', status: 'active' }
+    let queryCount = 0
+    state.currentSession = unrelated
+    globalThis.freezr = {
+      query: async collection => {
+        queryCount++
+        return ({
+          sessions: [unrelated, { _id: 'receipt-session', status: 'completed', taskBundle: ['receipt-task'] }],
+          taskExecutions: [{
+            _id: 'receipt-execution', sessionId: 'receipt-session', taskId: 'receipt-task',
+            outcome: 'done', actualDuration: 7
+          }],
+          tasks: [{
+            _id: 'receipt-task', name: 'Receipt task', status: 'active',
+            schedule: { type: 'one_off' }
+          }]
+        })[collection] || []
+      }
+    }
+
+    assert.equal(await reviewView.startReview({ sessionId: 'receipt-session' }), true)
+
+    assert.strictEqual(state.currentSession, unrelated)
+    assert.match(reviewList.innerHTML, /Receipt task/)
+    assert.equal(finish.disabled, false)
+
+    reviewList.innerHTML = '<div class="exec-card">Unsaved review edit</div>'
+    const loadedQueries = queryCount
+    assert.equal(await reviewView.startReview({ sessionId: 'receipt-session' }), true)
+    assert.equal(queryCount, loadedQueries)
+    assert.match(reviewList.innerHTML, /Unsaved review edit/)
+  })
+})
+
+test('missing and ineligible direct receipts render inline without a retry control', async () => {
+  for (const sessions of [[], [{ _id: 'active-receipt', status: 'active' }]]) {
+    await withReviewDocument(async ({ document, reviewList, finish }) => {
+      globalThis.freezr = { query: async collection => collection === 'sessions' ? sessions : [] }
+
+      assert.equal(await reviewView.startReview({ sessionId: sessions[0]?._id || 'missing' }), false)
+
+      assert.equal(finish.disabled, true)
+      assert.match(reviewList.children[0].textContent, /review is not available/i)
+      assert.equal(document.getElementById('retryReviewLoadBtn'), null)
+    })
+  }
+})
+
+test('a direct receipt query failure renders a one-shot retry and no raw exception', async () => {
+  await withReviewDocument(async ({ document, reviewList, finish }) => {
+    let sessionReads = 0
+    globalThis.freezr = {
+      query: async collection => {
+        if (collection === 'sessions' && sessionReads++ === 0) throw new Error('raw session query failed')
+        if (collection === 'sessions') return [{ _id: 'retry-receipt', status: 'completed' }]
+        return []
+      }
+    }
+
+    assert.equal(await reviewView.startReview({ sessionId: 'retry-receipt' }), false)
+    assert.equal(finish.disabled, true)
+    assert.match(reviewList.children[0].textContent, /Could not load this session review/)
+    assert.equal(reviewList.children[0].textContent.includes('raw session query failed'), false)
+
+    const retry = document.getElementById('retryReviewLoadBtn')
+    assert.ok(retry)
+    await retry.dispatch('click')
+    assert.equal(finish.disabled, false)
+    assert.match(reviewList.innerHTML, /No tasks were completed/)
+  })
+})
+
+test('a stale direct receipt load cannot replace the newer receipt route', async () => {
+  let releaseSessionA
+  const sessionARead = new Promise(resolve => { releaseSessionA = resolve })
+  let sessionReads = 0
+
+  await withReviewDocument(async ({ reviewList, finish }) => {
+    globalThis.freezr = {
+      query: async collection => {
+        if (collection === 'sessions') {
+          sessionReads++
+          return sessionReads === 1
+            ? sessionARead
+            : [{ _id: 'receipt-b', status: 'completed', taskBundle: ['task-b'] }]
+        }
+        if (collection === 'taskExecutions') {
+          return [{ _id: 'execution-b', sessionId: 'receipt-b', taskId: 'task-b', outcome: 'done', actualDuration: 8 }]
+        }
+        return [{ _id: 'task-b', name: 'Receipt B task', status: 'active', schedule: { type: 'one_off' } }]
+      }
+    }
+
+    const receiptALoad = reviewView.startReview({ sessionId: 'receipt-a' })
+    await reviewView.startReview({ sessionId: 'receipt-b' })
+    releaseSessionA([{ _id: 'receipt-a', status: 'completed', taskBundle: ['task-a'] }])
+    await receiptALoad
+
+    assert.match(reviewList.innerHTML, /Receipt B task/)
+    assert.doesNotMatch(reviewList.innerHTML, /task-a/)
+    assert.equal(finish.disabled, false)
+  })
+})

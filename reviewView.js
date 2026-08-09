@@ -1,6 +1,7 @@
 import { state } from './state.js'
 import { listExecutionsBySession, updateExecution, listExecutionsByTask } from './executionData.js'
 import { updateTask, listTasksByIds } from './taskData.js'
+import { getSessionById } from './sessionData.js'
 import { suggestDuration } from './aiEnrich.js'
 import { formatDuration, escapeHtml, formatFactHtml } from './helpers.js'
 import { showView, setNavVisible } from './router.js'
@@ -9,9 +10,11 @@ import { refreshTasksView } from './tasksView.js'
 let executionsCache = []
 let durationOffersCache = []
 let reviewLoadGeneration = 0
+let reviewSessionId = null
+let readyReviewSessionId = null
 
 function reviewLoadIsCurrent (generation, sessionId) {
-  return generation === reviewLoadGeneration && state.currentSession?._id === sessionId
+  return generation === reviewLoadGeneration && reviewSessionId === sessionId
 }
 
 export function applyDurationCorrection (execution, value) {
@@ -101,9 +104,21 @@ export function initReviewView() {
   })
 }
 
-export async function startReview({ onCurrentError } = {}) {
-  const sessionId = state.currentSession._id
+export async function startReview (options = {}) {
+  const explicitSessionId = Object.hasOwn(options, 'sessionId')
+  const onCurrentError = options.onCurrentError
+  const sessionId = String(options.sessionId || state.currentSession?._id || '')
+  if (!sessionId) {
+    renderReviewLoadError('This session review is not available.')
+    return false
+  }
+  if (!options.force && readyReviewSessionId === sessionId) {
+    setNavVisible('review', true, sessionId)
+    return true
+  }
   const generation = ++reviewLoadGeneration
+  reviewSessionId = sessionId
+  readyReviewSessionId = null
   executionsCache = []
   durationOffersCache = []
   const list = document.getElementById('reviewList')
@@ -118,6 +133,16 @@ export async function startReview({ onCurrentError } = {}) {
   list.appendChild(loading)
 
   try {
+    if (explicitSessionId) {
+      const session = await getSessionById(sessionId)
+      if (!reviewLoadIsCurrent(generation, sessionId)) return false
+      if (!session || session.status !== 'completed') {
+        setNavVisible('review', false)
+        renderReviewLoadError('This session review is not available.')
+        return false
+      }
+    }
+    setNavVisible('review', true, sessionId)
     const executions = await listExecutionsBySession(sessionId)
     if (!reviewLoadIsCurrent(generation, sessionId)) return false
     const taskIds = [...new Set(executions.map(e => e.taskId))]
@@ -130,6 +155,7 @@ export async function startReview({ onCurrentError } = {}) {
     }))
     if (!reviewLoadIsCurrent(generation, sessionId)) return false
     executionsCache = loadedExecutions
+    readyReviewSessionId = sessionId
     renderReviewList()
     finish.disabled = false
     setTimeout(() => loadDurationOffers(generation, sessionId, loadedExecutions, tasks), 0)
@@ -140,12 +166,20 @@ export async function startReview({ onCurrentError } = {}) {
       onCurrentError(error)
       return false
     }
+    if (explicitSessionId) {
+      renderReviewLoadError(
+        'Could not load this session review.',
+        () => startReview({ sessionId, force: true })
+      )
+      return false
+    }
     throw error
   }
 }
 
-export function renderReviewLoadError(message, retry) {
+export function renderReviewLoadError(message, retry = null) {
   reviewLoadGeneration++
+  readyReviewSessionId = null
   executionsCache = []
   durationOffersCache = []
   renderDurationOffers()
@@ -158,6 +192,7 @@ export function renderReviewLoadError(message, retry) {
   error.textContent = message
   error.setAttribute('role', 'alert')
   list.appendChild(error)
+  if (!retry) return
   const button = document.createElement('button')
   button.id = 'retryReviewLoadBtn'
   button.textContent = 'Retry review loading'
@@ -248,6 +283,8 @@ export async function saveExecutionReviews (executions, saveExecution = updateEx
 
 async function handleFinish() {
   reviewLoadGeneration++
+  reviewSessionId = null
+  readyReviewSessionId = null
   await saveExecutionReviews(executionsCache)
   await applyDurationOfferUpdates(durationOffersCache)
   await refreshTasksView()
