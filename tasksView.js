@@ -225,16 +225,28 @@ function renderProposed() {
   const container = document.getElementById('proposedCards')
   const snapshot = categoryLocationStore.getSnapshot()
   const proposed = tasksCache.filter(t => t.status === 'proposed')
-  const inboxNav = document.getElementById('inboxNav')
-  if (inboxNav) {
-    inboxNav.hidden = proposed.length === 0
-    inboxNav.setAttribute('aria-label', 'Inbox, ' + proposed.length + ' to confirm')
-    const count = inboxNav.querySelector('.nav-count')
-    if (count) count.textContent = proposed.length
-  }
+  renderInboxNavigation(proposed.length)
   container.innerHTML = proposed.length
     ? proposed.map(task => proposedCardHtml(task, snapshot)).join('')
     : '<p class="empty">No tasks awaiting review.</p>'
+}
+
+export function renderInboxNavigation (
+  proposedCount,
+  inboxNav = document.getElementById('inboxNav')
+) {
+  if (inboxNav) {
+    inboxNav.hidden = false
+    inboxNav.setAttribute(
+      'aria-label',
+      proposedCount === 0 ? 'Inbox, no tasks to confirm' : 'Inbox, ' + proposedCount + ' to confirm'
+    )
+    const count = inboxNav.querySelector('.nav-count')
+    if (count) {
+      count.hidden = proposedCount === 0
+      count.textContent = proposedCount
+    }
+  }
 }
 
 function proposedCardHtml(task, snapshot) {

@@ -218,6 +218,34 @@ test('refresh during the undo window restores the exact original on Undo', async
   assert.deepEqual(harness.cache(), [original])
 })
 
+test('Inbox stays discoverable while only its zero count hides across render transitions', () => {
+  const count = { hidden: false, textContent: '' }
+  const labels = []
+  const inbox = {
+    hidden: true,
+    querySelector: selector => selector === '.nav-count' ? count : null,
+    setAttribute: (name, value) => labels.push([name, value])
+  }
+
+  assert.equal(typeof tasksView.renderInboxNavigation, 'function')
+  tasksView.renderInboxNavigation(0, inbox)
+  assert.equal(inbox.hidden, false)
+  assert.equal(count.hidden, true)
+  assert.equal(count.textContent, 0)
+  assert.deepEqual(labels.at(-1), ['aria-label', 'Inbox, no tasks to confirm'])
+
+  tasksView.renderInboxNavigation(1, inbox)
+  assert.equal(inbox.hidden, false)
+  assert.equal(count.hidden, false)
+  assert.equal(count.textContent, 1)
+  assert.deepEqual(labels.at(-1), ['aria-label', 'Inbox, 1 to confirm'])
+
+  tasksView.renderInboxNavigation(4, inbox)
+  assert.equal(count.hidden, false)
+  assert.equal(count.textContent, 4)
+  assert.deepEqual(labels.at(-1), ['aria-label', 'Inbox, 4 to confirm'])
+})
+
 test('active task groups render due-first ledger headings and rows', () => {
   const tasks = [{
     _id: 'later', name: 'Later task', status: 'active', estimatedDuration: 10,
