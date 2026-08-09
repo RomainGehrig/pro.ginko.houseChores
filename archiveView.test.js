@@ -10,6 +10,7 @@ import {
   runArchiveAction
 } from './archiveView.js'
 import { archiveTaskOptimistically } from './tasksView.js'
+import { createUndoQueue } from './undoToast.js'
 
 const archivedTask = {
   _id: 'task-1',
@@ -174,6 +175,119 @@ test('a caught pending archive commit failure restores cache and aborts permanen
     ok: false,
     message: "Couldn't archive that. The chore is unchanged."
   })
+})
+
+function deferredChoice () {
+  let resolve
+  const promise = new Promise(resolveChoice => { resolve = resolveChoice })
+  return { promise, resolve }
+}
+
+function expiryArchiveHarness ({ update }) {
+  let timerCallback
+  const calls = []
+  const queue = createUndoQueue({
+    schedule: callback => { timerCallback = callback; return 1 },
+    cancel: () => {}
+  })
+  const original = {
+    ...archivedTask,
+    status: 'active',
+    nested: { exact: ['snapshot'] }
+  }
+  let cached = structuredClone(original)
+  const queued = archiveTaskOptimistically(original, {
+    replace: replacement => { cached = replacement },
+    clearEditing: () => {},
+    render: () => {},
+    queue: queue.pendingUndo,
+    update: async (...args) => {
+      calls.push(['archive', ...args])
+      return update(...args)
+    },
+    showFailure: message => calls.push(['failure', message]),
+    pending: new Map()
+  }).queued
+  return {
+    calls,
+    original,
+    cached: () => cached,
+    queue,
+    queued,
+    fireExpiry: () => timerCallback()
+  }
+}
+
+test('failed expiry while the delete sheet is open cannot authorize permanent deletion', async () => {
+  const harness = expiryArchiveHarness({
+    update: async () => { throw new Error('archive offline') }
+  })
+  await harness.queued
+  const choice = deferredChoice()
+  let deleteCalls = 0
+  let refreshCalls = 0
+
+  const deleting = runArchiveAction({
+    action: 'delete',
+    task: harness.cached(),
+    confirmDelete: async () => {
+      harness.calls.push(['sheet'])
+      return choice.promise
+    },
+    commit: harness.queue.commit,
+    remove: async () => { deleteCalls++ },
+    refresh: async () => { refreshCalls++ }
+  })
+  await Promise.resolve()
+  await harness.fireExpiry()
+  choice.resolve('delete')
+  const result = await deleting
+
+  assert.deepEqual(harness.calls, [
+    ['sheet'],
+    ['archive', 'task-1', { status: 'archived' }],
+    ['failure', "Couldn't archive that. The chore is unchanged."]
+  ])
+  assert.deepEqual(harness.cached(), harness.original)
+  assert.equal(deleteCalls, 0)
+  assert.equal(refreshCalls, 0)
+  assert.deepEqual(result, {
+    ok: false,
+    message: "Couldn't archive that. The chore is unchanged."
+  })
+})
+
+test('successful expiry while the delete sheet is open permits one permanent deletion', async () => {
+  const harness = expiryArchiveHarness({ update: async () => ({ ok: true }) })
+  await harness.queued
+  const choice = deferredChoice()
+  let deleteCalls = 0
+  let refreshCalls = 0
+
+  const deleting = runArchiveAction({
+    action: 'delete',
+    task: harness.cached(),
+    confirmDelete: async () => {
+      harness.calls.push(['sheet'])
+      return choice.promise
+    },
+    commit: harness.queue.commit,
+    remove: async () => { deleteCalls++ },
+    refresh: async () => { refreshCalls++ }
+  })
+  await Promise.resolve()
+  await harness.fireExpiry()
+  choice.resolve('delete')
+  const result = await deleting
+
+  assert.deepEqual(harness.calls, [
+    ['sheet'],
+    ['archive', 'task-1', { status: 'archived' }]
+  ])
+  assert.equal(harness.cached().status, 'archived')
+  assert.equal(deleteCalls, 1)
+  assert.equal(refreshCalls, 1)
+  assert.deepEqual(result, { ok: true, deleted: true })
 })
 
 test('archive action failures return factual inline messages without raw exceptions', async () => {

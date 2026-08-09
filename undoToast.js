@@ -27,6 +27,7 @@ export function createUndoQueue({
   let timer = null
   let timerToken = null
   let transitionTail = Promise.resolve()
+  let settledCommit = null
   const subscribers = new Set()
 
   const publish = action => {
@@ -47,7 +48,9 @@ export function createUndoQueue({
     currentAction = null
     publish(null)
     const result = await action[kind]()
-    return { action, result }
+    const settlement = { action, result }
+    if (kind === 'commit') settledCommit = { key: action.key, settlement }
+    return settlement
   }
 
   const serialize = operation => {
@@ -56,7 +59,11 @@ export function createUndoQueue({
     return result
   }
 
-  const commit = key => serialize(() => settle('commit', key))
+  const commit = key => serialize(async () => {
+    const settlement = await settle('commit', key)
+    if (settlement || key === undefined) return settlement
+    return settledCommit?.key === key ? settledCommit.settlement : null
+  })
   const undo = key => serialize(() => settle('revert', key))
 
   const pendingUndo = (action, ttl = 6000) => serialize(async () => {
@@ -69,6 +76,7 @@ export function createUndoQueue({
       }
     }
 
+    if (settledCommit?.key === action.key) settledCommit = null
     currentAction = action
     const token = {}
     timerToken = token

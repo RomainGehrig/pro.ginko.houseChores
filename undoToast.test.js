@@ -171,6 +171,38 @@ test('expiry commits exactly once and clears the pending action', async () => {
   assert.equal(harness.timers.size, 0)
 })
 
+test('a keyed commit remembers its most recent settled result while Undo stays unavailable', async () => {
+  const harness = schedulerHarness()
+  const queue = createUndoQueue({ schedule: harness.schedule, cancel: harness.cancel })
+  const failedResult = { ok: false, message: 'Archive failed' }
+  const failedAction = {
+    key: 'task:settled', label: 'Settled failure',
+    commit: async () => failedResult,
+    revert: async () => ({ restored: true })
+  }
+  await queue.pendingUndo(failedAction)
+  await harness.fire([...harness.timers.keys()][0])
+
+  assert.deepEqual(await queue.commit('task:settled'), {
+    action: failedAction,
+    result: failedResult
+  })
+  assert.equal(await queue.undo('task:settled'), null)
+  assert.equal(await queue.commit('task:never-existed'), null)
+
+  const replacement = {
+    key: 'task:settled', label: 'Replacement',
+    commit: async () => ({ ok: true }),
+    revert: async () => ({ restored: 'replacement' })
+  }
+  await queue.pendingUndo(replacement)
+  assert.deepEqual(await queue.undo('task:settled'), {
+    action: replacement,
+    result: { restored: 'replacement' }
+  })
+  assert.equal(await queue.commit('task:settled'), null)
+})
+
 test('expiry commit failures call onError after pending state is cleared', async () => {
   const harness = schedulerHarness()
   const errors = []
