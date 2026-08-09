@@ -25,6 +25,18 @@ import { renderArchiveView } from './archiveView.js'
 let tasksCache = []
 let editingTaskId = null
 let taskEditorError = ''
+const pendingTaskArchives = new Map()
+
+export function overlayPendingTaskArchives (tasks, pendingArchives) {
+  const fetchedIds = new Set(tasks.map(task => String(task._id)))
+  const overlaid = tasks.map(task =>
+    pendingArchives.get(`task:${task._id}`)?.archived || task
+  )
+  for (const transaction of pendingArchives.values()) {
+    if (!fetchedIds.has(String(transaction.archived._id))) overlaid.push(transaction.archived)
+  }
+  return overlaid
+}
 
 export async function initTasksView() {
   document.getElementById('addTasksBtn').addEventListener('click', handleAddTasks)
@@ -40,7 +52,7 @@ export async function initTasksView() {
 }
 
 export async function refreshTasksView() {
-  tasksCache = await listAllTasks()
+  tasksCache = overlayPendingTaskArchives(await listAllTasks(), pendingTaskArchives)
   renderTasks()
 }
 
@@ -128,9 +140,11 @@ export function archiveTaskOptimistically (task, {
   render,
   queue = pendingUndo,
   update = updateTask,
-  showFailure
+  showFailure,
+  pending = null
 }) {
   const transaction = optimisticArchive(task)
+  pending?.set(transaction.key, transaction)
   replace(transaction.archived)
   clearEditing()
   render()
@@ -141,8 +155,11 @@ export function archiveTaskOptimistically (task, {
     commit: async () => {
       try {
         const value = await update(task._id, { status: 'archived' })
+        if (pending?.get(transaction.key) === transaction) pending.delete(transaction.key)
+        replace(transaction.archived)
         return { ok: true, value }
       } catch {
+        if (pending?.get(transaction.key) === transaction) pending.delete(transaction.key)
         replace(transaction.original)
         render()
         const message = "Couldn't archive that. The chore is unchanged."
@@ -151,6 +168,7 @@ export function archiveTaskOptimistically (task, {
       }
     },
     revert: async () => {
+      if (pending?.get(transaction.key) === transaction) pending.delete(transaction.key)
       replace(transaction.original)
       render()
       return { taskId: task._id, status: transaction.original.status }
@@ -380,7 +398,8 @@ async function handleActiveClick(evt) {
         status.textContent = message
         status.dataset.state = 'error'
         status.setAttribute('role', 'alert')
-      }
+      },
+      pending: pendingTaskArchives
     })
     return
   }

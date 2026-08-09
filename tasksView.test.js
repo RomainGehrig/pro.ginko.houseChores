@@ -1,5 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
+import * as tasksView from './tasksView.js'
 import {
   archiveTaskOptimistically,
   buildActiveTaskScheduleFields,
@@ -127,6 +128,94 @@ test('failed archive commit restores the exact cached record and reports factual
     taskId: 'task-failure',
     status: 'approved_recurring'
   })
+})
+
+function archiveRefreshHarness (original, update) {
+  let cache = [structuredClone(original)]
+  let queuedAction
+  const pending = new Map()
+  const renderSnapshots = []
+  const messages = []
+  archiveTaskOptimistically(original, {
+    replace: replacement => {
+      cache = cache.map(task => task._id === replacement._id ? replacement : task)
+    },
+    clearEditing: () => {},
+    render: () => renderSnapshots.push(structuredClone(cache)),
+    queue: action => { queuedAction = action; return Promise.resolve(action) },
+    update,
+    showFailure: message => messages.push(message),
+    pending
+  })
+  return {
+    pending,
+    queuedAction: () => queuedAction,
+    refresh: fetched => {
+      cache = tasksView.overlayPendingTaskArchives(fetched, pending)
+      renderSnapshots.push(structuredClone(cache))
+    },
+    cache: () => cache,
+    renderSnapshots,
+    messages
+  }
+}
+
+test('refresh during archive expiry keeps the optimistic overlay through successful settlement', async () => {
+  const original = {
+    _id: 'refresh-success', name: 'Clean pantry', status: 'active',
+    nested: { order: ['exact', 'snapshot'] }
+  }
+  const harness = archiveRefreshHarness(original, async () => ({ _id: original._id }))
+
+  assert.equal(harness.pending.size, 1)
+  harness.refresh([{ ...structuredClone(original), serverVersion: 'still-active' }])
+  assert.deepEqual(harness.cache(), [{ ...original, status: 'archived' }])
+
+  assert.deepEqual(await harness.queuedAction().commit(), {
+    ok: true,
+    value: { _id: original._id }
+  })
+  assert.equal(harness.pending.size, 0)
+  assert.deepEqual(harness.cache(), [{ ...original, status: 'archived' }])
+})
+
+test('refresh during archive expiry restores the exact original after failed settlement', async () => {
+  const original = {
+    _id: 'refresh-failure', name: 'Clean shed', status: 'approved_recurring',
+    schedule: { type: 'periodic', every: 3, unit: 'week' }, nested: { keep: ['all'] }
+  }
+  const harness = archiveRefreshHarness(original, async () => { throw new Error('offline') })
+
+  assert.equal(harness.pending.size, 1)
+  harness.refresh([{ ...structuredClone(original), status: 'active', serverVersion: 'stale' }])
+  assert.equal(harness.cache()[0].status, 'archived')
+
+  assert.deepEqual(await harness.queuedAction().commit(), {
+    ok: false,
+    message: "Couldn't archive that. The chore is unchanged."
+  })
+  assert.equal(harness.pending.size, 0)
+  assert.deepEqual(harness.cache(), [original])
+  assert.deepEqual(harness.messages, ["Couldn't archive that. The chore is unchanged."])
+})
+
+test('refresh during the undo window restores the exact original on Undo', async () => {
+  const original = {
+    _id: 'refresh-undo', name: 'Clean balcony', status: 'active',
+    metadata: { locations: ['outside'] }
+  }
+  const harness = archiveRefreshHarness(original, async () => assert.fail('Undo must not commit'))
+
+  assert.equal(harness.pending.size, 1)
+  harness.refresh([{ ...structuredClone(original), serverVersion: 'still-active' }])
+  assert.equal(harness.cache()[0].status, 'archived')
+
+  assert.deepEqual(await harness.queuedAction().revert(), {
+    taskId: original._id,
+    status: 'active'
+  })
+  assert.equal(harness.pending.size, 0)
+  assert.deepEqual(harness.cache(), [original])
 })
 
 test('active task groups render due-first ledger headings and rows', () => {
