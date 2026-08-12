@@ -12,7 +12,7 @@ function dayNumber (value) {
   return parts ? Date.UTC(parts.year, parts.month - 1, parts.day) / DAY_MS : null
 }
 
-function daysBetween (from, to) {
+export function daysBetween (from, to) {
   const fromDay = dayNumber(from)
   const toDay = dayNumber(to)
   return fromDay === null || toDay === null ? null : toDay - fromDay
