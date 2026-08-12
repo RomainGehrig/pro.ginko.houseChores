@@ -55,6 +55,19 @@ function scheduleFactHtml (schedule) {
   return formatFactHtml(scheduleSummary(schedule))
 }
 
+// The one phrasing for "where this chore stands": a completion fact and the
+// cadence it is measured against, never a count of how far behind you are.
+export function buildChoreNoteHtml (task, today) {
+  const cadenceText = compactCadence(cadenceDays(task?.schedule))
+  const completedDaysAgo = daysSinceCompletion(task?.lastCompletedDate, today)
+  if (task?.schedule?.type !== 'periodic') return scheduleFactHtml(task?.schedule)
+
+  return formatFactHtml((completedDaysAgo === null
+    ? 'not yet done'
+    : 'last done ' + completedDaysAgo + 'd ago') +
+    (cadenceText ? ' · about every ' + cadenceText : ''))
+}
+
 export function buildTaskLedgerSummaryHtml (task, today) {
   const cadence = cadenceDays(task?.schedule)
   const cadenceText = compactCadence(cadence)
@@ -66,12 +79,7 @@ export function buildTaskLedgerSummaryHtml (task, today) {
     : '<span class="row-stamp">' + formatFactHtml(periodic
         ? completedDaysAgo === null ? '—' : completedDaysAgo + 'd'
         : compactScheduledDate(task?.scheduledDate)) + '</span>'
-  const note = periodic
-    ? formatFactHtml((completedDaysAgo === null
-        ? 'not yet done'
-        : 'last done ' + completedDaysAgo + 'd ago') +
-      (cadenceText ? ' · about every ' + cadenceText : ''))
-    : scheduleFactHtml(task?.schedule)
+  const note = buildChoreNoteHtml(task, today)
 
   return stamp +
     '<span class="row-name">' + formatFactHtml(String(task?.name ?? '')) + '</span>' +

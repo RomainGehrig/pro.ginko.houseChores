@@ -129,13 +129,16 @@ export function initSheet () {
   return true
 }
 
-export function openSheet ({ title, message, actions = [] }) {
+export function openSheet ({ title, message, bodyHtml = null, actions = [] }) {
   if (!initSheet()) return Promise.resolve(null)
   finishForReplacement()
 
   priorFocus = document.activeElement
   elements.title.textContent = String(title ?? '')
-  elements.message.textContent = String(message ?? '')
+  // bodyHtml comes from the app's own builders, which escape every chore-supplied
+  // value. Controls stay in `actions` so the focus trap still sees all of them.
+  if (bodyHtml === null) elements.message.textContent = String(message ?? '')
+  else elements.message.innerHTML = String(message ? '<span class="sheet-lede">' + message + '</span>' : '') + bodyHtml
   elements.actions.replaceChildren()
 
   for (const action of actions) {

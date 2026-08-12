@@ -69,9 +69,18 @@ test('with no budget set, the fit line asks for one rather than judging the pick
 })
 
 test('the vessel fills in proportion to the budget', () => {
-  assert.deepEqual(vesselGeometry(0, 30), { fillPercent: 0, linePercent: 92, overhangs: false })
-  assert.deepEqual(vesselGeometry(15, 30), { fillPercent: 46, linePercent: 92, overhangs: false })
-  assert.deepEqual(vesselGeometry(30, 30), { fillPercent: 92, linePercent: 92, overhangs: false })
+  assert.deepEqual(vesselGeometry(0, 30),
+    { fillPercent: 0, linePercent: 92, fillFraction: 0, lineFraction: 1, overhangs: false })
+  assert.deepEqual(vesselGeometry(15, 30),
+    { fillPercent: 46, linePercent: 92, fillFraction: 0.5, lineFraction: 1, overhangs: false })
+  assert.deepEqual(vesselGeometry(30, 30),
+    { fillPercent: 92, linePercent: 92, fillFraction: 1, lineFraction: 1, overhangs: false })
+})
+
+test('geometry also reports plain fractions so each layout can choose its span', () => {
+  const geometry = vesselGeometry(45, 30)
+  assert.equal(geometry.fillFraction, 1)
+  assert.equal(geometry.lineFraction, 30 / 45)
 })
 
 test('over budget the vessel stays full and the budget line drops to meet it', () => {
@@ -82,5 +91,6 @@ test('over budget the vessel stays full and the budget line drops to meet it', (
 })
 
 test('with no budget there is no line to draw', () => {
-  assert.deepEqual(vesselGeometry(20, 0), { fillPercent: 0, linePercent: 0, overhangs: false })
+  assert.deepEqual(vesselGeometry(20, 0),
+    { fillPercent: 0, linePercent: 0, fillFraction: 0, lineFraction: 0, overhangs: false })
 })

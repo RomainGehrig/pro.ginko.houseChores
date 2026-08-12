@@ -44,16 +44,20 @@ export function bundleFitLine (totalMinutes, budgetMinutes, pickedCount) {
 // drawn overhanging into open air rather than being clipped or refused.
 export function vesselGeometry (totalMinutes, budgetMinutes) {
   if (!budgetMinutes || budgetMinutes <= 0) {
-    return { fillPercent: 0, linePercent: 0, overhangs: false }
+    return { fillPercent: 0, linePercent: 0, fillFraction: 0, lineFraction: 0, overhangs: false }
   }
 
   const overhangs = totalMinutes > budgetMinutes
-  const fillPercent = totalMinutes <= 0
-    ? 0
-    : overhangs ? FULL_SPAN_PERCENT : (totalMinutes / budgetMinutes) * FULL_SPAN_PERCENT
-  const linePercent = overhangs
-    ? (budgetMinutes / totalMinutes) * FULL_SPAN_PERCENT
-    : FULL_SPAN_PERCENT
+  const fillFraction = totalMinutes <= 0 ? 0 : overhangs ? 1 : totalMinutes / budgetMinutes
+  const lineFraction = overhangs ? budgetMinutes / totalMinutes : 1
 
-  return { fillPercent, linePercent, overhangs }
+  // Fractions let each layout choose its own span — the column leaves headroom
+  // for the budget label, the desktop bar runs the full width.
+  return {
+    fillPercent: fillFraction * FULL_SPAN_PERCENT,
+    linePercent: lineFraction * FULL_SPAN_PERCENT,
+    fillFraction,
+    lineFraction,
+    overhangs
+  }
 }

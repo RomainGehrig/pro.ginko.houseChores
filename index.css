@@ -71,6 +71,7 @@
      a chore that has waited is riper, not late. */
   --ripe-cold: #CCDBB2;
   --ripe-warm: #F6A06B;
+  --ripe-ink: #2E2B25;
 
   --face-display: "Caprasimo", Georgia, "Times New Roman", serif;
   --face-read: "Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
@@ -134,8 +135,9 @@
     --sage-soft: #3D472B;
     --sage-ink: #E1EECC;
 
-    --ripe-cold: #56633F;
-    --ripe-warm: #B2622D;
+    --ripe-cold: #4A5836;
+    --ripe-warm: #C97A3E;
+    --ripe-ink: #F9F4ED;
   }
 }
 
@@ -1317,4 +1319,429 @@ textarea {
   color: var(--graphite);
   min-width: 52px;
   text-align: right;
+}
+
+/* ── Today — the vessel ─────────────────────────────────────────────────────
+   The budget is a shape you fill. The fill is allowed to overhang the budget
+   line: going over is drawn, never blocked. */
+
+.visually-hidden {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+.today-head h1 {
+  font-size: var(--t-count);
+  margin: var(--s1) 0 var(--s3);
+}
+
+.budget-choices {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.pill-input {
+  background: transparent;
+  text-align: center;
+  width: 104px;
+}
+
+.pill-input.is-on {
+  background: var(--enamel);
+  border-color: var(--enamel);
+  color: var(--on-enamel);
+}
+
+.pill-input.is-on::placeholder {
+  color: color-mix(in srgb, var(--on-enamel) 75%, transparent);
+}
+
+.vessel {
+  display: flex;
+  gap: var(--gutter);
+  height: 300px;
+  margin-top: var(--s2);
+}
+
+.vessel-column {
+  --vessel-fill: 0;
+  --vessel-line: 1;
+  flex: none;
+  padding-top: 22px;
+  position: relative;
+  width: 118px;
+}
+
+.vessel-line {
+  border-top: 2px dashed color-mix(in srgb, var(--ink) 50%, transparent);
+  bottom: calc(var(--vessel-line) * 92%);
+  height: 0;
+  left: -4px;
+  pointer-events: none;
+  position: absolute;
+  right: -4px;
+  transition: bottom var(--t-fill) var(--e-fill);
+  z-index: 2;
+}
+
+.vessel-line-label {
+  background: var(--ground);
+  border-radius: var(--r-pill);
+  bottom: 4px;
+  color: var(--graphite);
+  font-size: 10px;
+  padding: 1px 6px;
+  position: absolute;
+  right: 0;
+  white-space: nowrap;
+}
+
+.vessel-fill {
+  border-radius: 26px;
+  bottom: 0;
+  display: flex;
+  flex-direction: column-reverse;
+  gap: 3px;
+  height: calc(var(--vessel-fill) * 92%);
+  left: 0;
+  overflow: hidden;
+  position: absolute;
+  right: 0;
+  transition: height var(--t-fill) var(--e-fill);
+}
+
+.vessel-block {
+  align-items: center;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--ripe-ink);
+  cursor: pointer;
+  display: flex;
+  font-size: 11px;
+  gap: var(--s2);
+  justify-content: center;
+  min-height: 24px;
+  overflow: hidden;
+  padding: 0 var(--s2);
+}
+
+.vessel-block-name {
+  display: none;
+}
+
+.vessel-side {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.vessel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  justify-content: flex-end;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.vessel-entry-btn {
+  background: none;
+  border: 0;
+  box-shadow: none;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-height: 45px;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.vessel-entry-name {
+  font-size: 16px;
+  line-height: 1.2;
+}
+
+.vessel-entry-note {
+  font-size: 11px;
+}
+
+.vessel-idle {
+  font-size: var(--t-note);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.today-readout {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+  margin-top: var(--s3);
+}
+
+.today-readout-lines {
+  flex: 1;
+  min-width: 0;
+}
+
+.today-total {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 0;
+}
+
+/* Over budget is a readout, in the reading colour. Never red, never an error. */
+.today-fit {
+  font-size: 11.5px;
+  margin: 0;
+}
+
+/* ── Today — the pool ─────────────────────────────────────────────────────── */
+
+.pool {
+  margin-top: var(--s5);
+}
+
+.pool-cats {
+  display: flex;
+  gap: var(--s2);
+  margin: var(--s2) 0;
+  overflow-x: auto;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+
+.pool-cats::-webkit-scrollbar {
+  display: none;
+}
+
+.cat-tab {
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  border-radius: 0;
+  box-shadow: none;
+  color: var(--graphite);
+  cursor: pointer;
+  flex: none;
+  font-size: var(--t-stamp);
+  font-weight: 600;
+  letter-spacing: .09em;
+  min-height: 45px;
+  padding: 3px 2px 4px;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.cat-tab[aria-pressed="true"] {
+  border-bottom-color: var(--sage);
+  color: var(--sage-ink);
+  font-weight: 700;
+}
+
+.pool-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.pool-chip-wrap {
+  align-items: stretch;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-pill);
+  display: inline-flex;
+  overflow: hidden;
+}
+
+.pool-chip-wrap.is-on {
+  background: var(--enamel);
+  border-color: var(--enamel);
+  color: var(--on-enamel);
+}
+
+.pool-chip,
+.pool-chip-info {
+  background: none;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  color: inherit;
+  cursor: pointer;
+  min-height: 45px;
+}
+
+.pool-chip {
+  align-items: center;
+  display: inline-flex;
+  font-size: 12.5px;
+  gap: 7px;
+  padding: var(--s2) 6px var(--s2) 14px;
+}
+
+.pool-chip-dot {
+  border-radius: var(--r-pill);
+  flex: none;
+  height: 9px;
+  width: 9px;
+}
+
+.pool-chip-wrap.is-on .pool-chip-dot {
+  display: none;
+}
+
+.pool-chip-minutes {
+  font-size: 11.5px;
+  opacity: .72;
+}
+
+.pool-chip-info {
+  border-left: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 12px;
+}
+
+.pool-empty {
+  font-size: var(--t-note);
+  margin: 0;
+  max-width: 44ch;
+}
+
+/* ── Chore detail, inside the shared sheet ─────────────────────────────────── */
+
+.detail-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: var(--s3);
+}
+
+.detail-facts,
+.detail-fact {
+  display: flex;
+}
+
+.detail-facts {
+  flex-direction: column;
+  gap: 9px;
+}
+
+.detail-fact {
+  gap: var(--gutter);
+  justify-content: space-between;
+}
+
+.detail-fact-label {
+  color: var(--graphite);
+  flex: none;
+}
+
+.detail-fact-value {
+  text-align: right;
+}
+
+.sheet-lede {
+  display: block;
+  margin-bottom: var(--s3);
+}
+
+/* ── Wider than a phone ─────────────────────────────────────────────────────
+   The vessel turns on its side and the pool sits beside the session. */
+
+@media (min-width: 900px) {
+  #app {
+    max-width: 1020px;
+  }
+
+  .today-head h1 {
+    font-size: var(--t-total);
+  }
+
+  .vessel {
+    flex-direction: column;
+    gap: 10px;
+    height: auto;
+  }
+
+  .vessel-column {
+    background: var(--plate);
+    border-radius: 26px;
+    height: 96px;
+    padding-top: 0;
+    width: 100%;
+  }
+
+  .vessel-line {
+    border-left: 2px dashed color-mix(in srgb, var(--ink) 50%, transparent);
+    border-top: 0;
+    bottom: 0;
+    height: auto;
+    left: calc(var(--vessel-line) * 100%);
+    right: auto;
+    top: 0;
+    transition: left var(--t-fill) var(--e-fill);
+    width: 0;
+  }
+
+  .vessel-line-label {
+    bottom: auto;
+    right: auto;
+    top: -18px;
+    transform: translateX(-50%);
+  }
+
+  .vessel-fill {
+    border-radius: 26px;
+    flex-direction: row;
+    height: 100%;
+    top: 0;
+    transition: width var(--t-fill) var(--e-fill);
+    width: calc(var(--vessel-fill) * 100%);
+  }
+
+  .vessel-block {
+    flex-direction: column;
+    gap: 2px;
+    justify-content: center;
+    min-width: 0;
+    padding: 0 var(--gutter);
+  }
+
+  .vessel-block-name {
+    display: block;
+    font-family: var(--face-display);
+    font-size: 15px;
+    line-height: 1.1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .vessel-side {
+    justify-content: flex-start;
+  }
+
+  .vessel-list {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: var(--s3) var(--s4);
+    justify-content: flex-start;
+  }
+
+  .vessel-entry {
+    max-width: 240px;
+  }
 }

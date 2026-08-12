@@ -18,18 +18,19 @@ test('manifest inventories every JavaScript artifact including nested route rend
   assert.deepEqual(declared, actual)
 })
 
-test('static category filter contains only the empty dynamic-list fallback', async () => {
+test('the category filter ships empty and is labelled for assistive tech', async () => {
   const html = await readFile(new URL('./index.html', import.meta.url), 'utf8')
-  const selectMarkup = html.match(/<select id="categoryFilter">([\s\S]*?)<\/select>/)?.[1] || ''
-  const optionValues = [...selectMarkup.matchAll(/<option\s+value="([^"]*)"/g)]
-    .map(match => match[1])
+  const filter = html.match(/<div id="categoryFilter"[^>]*>([\s\S]*?)<\/div>/)
 
-  assert.deepEqual(optionValues, [''])
+  assert.ok(filter, 'expected a category filter container')
+  assert.equal(filter[1].trim(), '')
+  assert.match(filter[0], /role="group"/)
+  assert.match(filter[0], /aria-label="Category filter"/)
 })
 
 test('static budget choices mark only their figures as instrument text', async () => {
   const html = await readFile(new URL('./index.html', import.meta.url), 'utf8')
-  const budgetMarkup = [...html.matchAll(/<button class="time-btn"[^>]*>(.*?)<\/button>/g)]
+  const budgetMarkup = [...html.matchAll(/<button class="pill time-btn"[^>]*>(.*?)<\/button>/g)]
     .map(match => match[1])
 
   assert.deepEqual(budgetMarkup, [
@@ -37,6 +38,15 @@ test('static budget choices mark only their figures as instrument text', async (
     '<span class="fig">15</span> min',
     '<span class="fig">30</span> min'
   ])
+})
+
+test('the budget choices report their own pressed state', async () => {
+  const html = await readFile(new URL('./index.html', import.meta.url), 'utf8')
+  const budgets = [...html.matchAll(/<button class="pill time-btn"[^>]*>/g)].map(match => match[0])
+
+  assert.equal(budgets.length, 3)
+  for (const button of budgets) assert.match(button, /aria-pressed="(?:true|false)"/)
+  assert.match(html, /id="customMinutes"[^>]*aria-label="Custom minutes"/)
 })
 
 test('Review provides a named static duration-offer region before Finish', async () => {
@@ -54,7 +64,7 @@ test('route shell declares four primary canonical anchors, eight focus headings,
   const nav = [...navMarkup.matchAll(/<a[^>]*data-route="([^"]+)"[^>]*href="([^"]+)"[^>]*>/g)]
     .map(match => [match[1], match[2]])
   const screenIds = [...html.matchAll(/<section id="(view-[^"]+)" class="view"/g)].map(match => match[1])
-  const routeHeadings = [...html.matchAll(/<h1 class="route-heading" tabindex="-1">/g)]
+  const routeHeadings = [...html.matchAll(/<h1[^>]*class="route-heading[^"]*"[^>]*tabindex="-1"[^>]*>/g)]
   const allH1Headings = [...html.matchAll(/<h1\b[^>]*>/g)]
 
   assert.deepEqual(nav, [

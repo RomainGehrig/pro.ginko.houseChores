@@ -5,24 +5,44 @@
   </nav>
 
   <section id="view-today" class="view">
-    <h1 class="route-heading" tabindex="-1">Today</h1>
-    <div class="time-options">
-      <button class="time-btn" data-minutes="5"><span class="fig">5</span> min</button>
-      <button class="time-btn" data-minutes="15"><span class="fig">15</span> min</button>
-      <button class="time-btn" data-minutes="30"><span class="fig">30</span> min</button>
-      <label>Custom: <input id="customMinutes" type="number" min="1" placeholder="minutes"></label>
+    <header class="today-head">
+      <p class="eyebrow">Today</p>
+      <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">Today. </span>I&#39;ve got <span id="budgetHeadline" class="fig">30</span> min</h1>
+      <div class="budget-choices" role="group" aria-label="Time budget">
+        <button class="pill time-btn" type="button" data-minutes="5" aria-pressed="false"><span class="fig">5</span> min</button>
+        <button class="pill time-btn" type="button" data-minutes="15" aria-pressed="false"><span class="fig">15</span> min</button>
+        <button class="pill time-btn" type="button" data-minutes="30" aria-pressed="false"><span class="fig">30</span> min</button>
+        <input id="customMinutes" class="pill pill-input fig" type="number" min="1" inputmode="numeric" placeholder="Custom" aria-label="Custom minutes">
+      </div>
+    </header>
+
+    <div class="vessel">
+      <div id="vesselColumn" class="vessel-column">
+        <div id="vesselLine" class="vessel-line" hidden><span id="vesselLineLabel" class="vessel-line-label fig"></span></div>
+        <div id="vesselFill" class="vessel-fill"></div>
+      </div>
+      <div class="vessel-side">
+        <ol id="vesselList" class="vessel-list"></ol>
+        <p id="vesselIdle" class="vessel-idle muted">Tap a chore below to drop it in, or let the app fill the session for you.</p>
+      </div>
     </div>
-    <div class="category-filter">
-      <label>Category filter:
-        <select id="categoryFilter">
-          <option value="">All</option>
-        </select>
-      </label>
+
+    <div class="today-readout">
+      <div class="today-readout-lines">
+        <p id="bundleTotalLine" class="today-total">Nothing in yet</p>
+        <p id="bundleFitLine" class="today-fit muted">Nothing picked yet</p>
+      </div>
+      <button id="proposeBundleBtn" class="btn btn-secondary" type="button">Fill it</button>
+      <button id="startSessionBtn" class="btn btn-primary" type="button">Start</button>
     </div>
-    <button id="proposeBundleBtn">Propose Bundle</button>
-    <div id="sessionStatus" role="status"></div>
-    <div id="bundlePreview"></div>
-    <button id="startSessionBtn" style="display:none">Start Doing</button>
+
+    <div id="sessionStatus" class="inline-status" role="status"></div>
+
+    <section class="pool" aria-labelledby="poolHeading">
+      <p id="poolHeading" class="eyebrow eyebrow-quiet">Ripest first &middot; hold for details</p>
+      <div id="categoryFilter" class="pool-cats" role="group" aria-label="Category filter"></div>
+      <div id="poolChips" class="pool-chips"></div>
+    </section>
   </section>
 
   <section id="view-inbox" class="view" style="display:none">
