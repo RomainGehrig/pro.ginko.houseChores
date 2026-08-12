@@ -206,6 +206,14 @@
       "Description": "Production DOM tests covering authoritative refresh, any-order outcomes, persistence retries, pause, and continuation."
     },
     {
+      "path": "reopenLogic.js",
+      "Description": "Pure rules for taking back an outcome: which task fields to restore and what time returns."
+    },
+    {
+      "path": "reopenLogic.test.js",
+      "Description": "Node tests covering reopen snapshots, checkpoint return, and records saved before snapshots existed."
+    },
+    {
       "path": "receiptLogic.js",
       "Description": "Pure Receipt copy: drift from an estimate, difficulty words, headline, offers line and save label."
     },

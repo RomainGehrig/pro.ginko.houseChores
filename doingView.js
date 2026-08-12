@@ -3,6 +3,7 @@
 
 import { state, setCurrentSessionAggregate } from './state.js'
 import { completionAttemptIdFor, createExecution } from './executionData.js'
+import { taskFieldsBeforeUpdate } from './reopenLogic.js'
 import { listTasksByIds, updateTask } from './taskData.js'
 import { updateSession } from './sessionData.js'
 import { formatTimer } from './helpers.js'
@@ -232,6 +233,9 @@ async function handleDoingClick (event) {
   }
   if (button.dataset.taskId && button.dataset.outcome) {
     return completeTask(button.dataset.taskId, button.dataset.outcome)
+  }
+  if (button.dataset.reopenExecutionId) {
+    return reopenExecution(button.dataset.reopenExecutionId)
   }
   if (button.id === 'pauseSessionBtn') return pauseSession()
   if (button.id === 'concludeSessionBtn') return concludeSession()
@@ -560,7 +564,8 @@ async function prepareAndCompletePendingTask () {
       difficultyRating: null,
       notes: '',
       completionAttemptId: completionAttemptIdFor(attempt.aggregate.session._id, attempt.taskId),
-      taskUpdateSnapshot: taskUpdate
+      taskUpdateSnapshot: taskUpdate,
+      taskFieldsBefore: taskFieldsBeforeUpdate(prepared.task, taskUpdate)
     },
     taskId: attempt.taskId,
     taskUpdate,
@@ -726,6 +731,16 @@ function pauseSession () {
     () => sessionStore.pause(state.currentSession._id, Date.now()),
     'Could not pause the session',
     pauseSession
+  )
+}
+
+// Taking back an outcome is itself an undo, so it reports what happened and
+// leaves the chore actionable again rather than stacking a second undo on top.
+function reopenExecution (executionId) {
+  return runSessionMutation(
+    () => sessionStore.reopen(state.currentSession._id, executionId),
+    'Could not reopen the chore',
+    () => reopenExecution(executionId)
   )
 }
 

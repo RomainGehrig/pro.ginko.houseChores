@@ -10,6 +10,8 @@ export const createExecution = data => {
 
 export const updateExecution = (id, fields) => freezr.updateFields('taskExecutions', id, fields)
 
+export const deleteExecution = id => freezr.delete('taskExecutions', id)
+
 export const listExecutionsBySession = async (sessionId) => {
   const all = await freezr.query('taskExecutions', {}, { sort: { _date_modified: -1 } })
   return all.filter(e => e.sessionId === sessionId)

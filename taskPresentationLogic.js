@@ -141,8 +141,13 @@ export function buildDoingSessionHtml (session, bundle, executions, categories =
         escapeHtml(outcomeLabel(execution.outcome)) + '</span>'
       : ''
     const resultHtml = execution
-      ? '<div class="doing-task-result">' + formatFactHtml(outcomeLabel(execution.outcome)) +
-        ' \u00b7 ' + formatFactHtml(formatTimer(executionSeconds(execution))) + '</div>'
+      ? '<div class="doing-task-result">' +
+        '<span>' + formatFactHtml(outcomeLabel(execution.outcome)) + ' \u00b7 ' +
+          formatFactHtml(formatTimer(executionSeconds(execution))) + '</span>' +
+        '<button type="button" class="btn btn-ghost reopen-btn" data-reopen-execution-id="' +
+          escapeHtml(String(execution._id ?? '')) + '" aria-label="Reopen ' +
+          escapeHtml(String(task?.name ?? '')) + '">Reopen</button>' +
+        '</div>'
       : active
         ? '<div class="doing-task-actions">' + outcomeActionsHtml(task) + '</div>'
         : ''

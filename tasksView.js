@@ -304,7 +304,8 @@ const durationPillsHtml = duration => {
         '" aria-pressed="' + (chosen === minutes ? 'true' : 'false') + '">' +
         minutes + ' min</button>'
     ).join('') +
-    '<input class="duration-custom pill pill-compact pill-input fig" type="number" min="1" ' +
+    '<input class="duration-custom pill pill-compact pill-input fig" type="number" ' +
+      'name="customDuration" min="1" ' +
       'inputmode="numeric" placeholder="Custom" aria-label="Custom minutes" value="' +
       escapeAttribute(isCustom ? duration : '') + '">' +
     '</div>'

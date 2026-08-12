@@ -2,10 +2,11 @@
 // ABOUTME: Keeps freezr persistence outside pure timing and DOM rendering.
 
 import { createSession, getSessionById, listUnfinishedSessions, updateSession } from './sessionData.js'
-import { listExecutionsBySession } from './executionData.js'
+import { deleteExecution, listExecutionsBySession } from './executionData.js'
 import { createTaskWithId, listTasksByIds, updateTask } from './taskData.js'
 import { buildSessionDraft } from './bundleLogic.js'
 import { normalizeContinuationSuggestionEntries } from './continuationLogic.js'
+import { reopenPlan } from './reopenLogic.js'
 import {
   chooseCurrentSession,
   conclusionFields,
@@ -53,6 +54,7 @@ export function createSessionStore ({
   listSessions = listUnfinishedSessions,
   getSession = getSessionById,
   listExecutions = listExecutionsBySession,
+  deleteExecutionRecord = deleteExecution,
   listTasks = listTasksByIds,
   createSessionRecord = createSession,
   updateSessionRecord = updateSession,
@@ -187,6 +189,21 @@ export function createSessionStore ({
     return refresh(sessionId, atMs)
   }
 
+  // The chore is put back before its outcome is removed: if the write fails the
+  // outcome still stands, and hydrate's repair pass re-applies it.
+  async function reopen (sessionId, executionId, atMs = now()) {
+    const aggregate = await refresh(sessionId, atMs)
+    if (terminal(aggregate.session)) return aggregate
+    const execution = aggregate.executions.find(item => item._id === executionId)
+    if (!execution) return aggregate
+
+    const plan = reopenPlan(execution, aggregate.executions)
+    if (plan.taskUpdate) await updateTaskRecord(execution.taskId, plan.taskUpdate)
+    await deleteExecutionRecord(executionId)
+    if (plan.sessionUpdate) await updateSessionRecord(sessionId, plan.sessionUpdate)
+    return refresh(sessionId, atMs)
+  }
+
   async function conclude (sessionId, atMs = now()) {
     const aggregate = await refresh(sessionId, atMs)
     if (aggregate.session.status !== 'paused') return aggregate
@@ -305,7 +322,9 @@ export function createSessionStore ({
     }
   }
 
-  return { restoreCurrent, refresh, start, pause, conclude, attachTasks, quickAdd, resume }
+  return {
+    restoreCurrent, refresh, start, pause, conclude, reopen, attachTasks, quickAdd, resume
+  }
 }
 
 export const sessionStore = createSessionStore()

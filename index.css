@@ -2023,8 +2023,21 @@ textarea {
 }
 
 .doing-task-result {
+  align-items: center;
   color: var(--graphite);
+  display: flex;
   font-size: 12px;
+  gap: var(--s3);
+}
+
+.doing-task-result > span {
+  flex: 1;
+}
+
+.doing-task-result .reopen-btn {
+  flex: none;
+  font-size: 12px;
+  padding: var(--s1) var(--s3);
 }
 
 .doing-task-actions {

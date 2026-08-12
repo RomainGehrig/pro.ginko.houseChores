@@ -1224,3 +1224,84 @@ test('all store operations hydrate legacy terminal sessions without writes', asy
     }
   }
 })
+
+test('reopening the latest outcome removes it, restores the chore, and gives the time back', async () => {
+  const tasks = new Map([['weekly', {
+    _id: 'weekly', status: 'active', scheduledDate: '2026-08-15',
+    lastCompletedDate: 1723111200000
+  }]])
+  const sessions = new Map([['s1', {
+    ...activeSession({ taskBundle: ['weekly'] }), checkpointElapsedMs: 60000
+  }]])
+  let executions = [{
+    _id: 'x1', taskId: 'weekly', sessionId: 's1', endTime: 1723111200000,
+    activeElapsedMs: 60000, rawDurationMs: 60000, outcome: 'done',
+    taskFieldsBefore: { lastCompletedDate: null, scheduledDate: '2026-08-08' }
+  }]
+  const deleted = []
+
+  const store = createSessionStore({
+    getSession: async id => structuredClone(sessions.get(id)),
+    listExecutions: async () => structuredClone(executions),
+    listTasks: async ids => ids.map(id => tasks.get(id)).filter(Boolean)
+      .map(task => structuredClone(task)),
+    updateSessionRecord: async (id, fields) => sessions.set(id, { ...sessions.get(id), ...fields }),
+    updateTaskRecord: async (id, fields) => tasks.set(id, { ...tasks.get(id), ...fields }),
+    deleteExecutionRecord: async id => {
+      deleted.push(id)
+      executions = executions.filter(execution => execution._id !== id)
+    },
+    now: () => 1723111260000
+  })
+
+  const aggregate = await store.reopen('s1', 'x1')
+
+  assert.deepEqual(deleted, ['x1'])
+  assert.deepEqual(aggregate.executions, [])
+  assert.equal(tasks.get('weekly').scheduledDate, '2026-08-08')
+  assert.equal(tasks.get('weekly').lastCompletedDate, null)
+  assert.equal(sessions.get('s1').checkpointElapsedMs, 0)
+})
+
+test('reopening restores the chore before removing the outcome, so a failure self-heals', async () => {
+  const tasks = new Map([['weekly', {
+    _id: 'weekly', status: 'active', scheduledDate: '2026-08-15',
+    lastCompletedDate: 1723111200000
+  }]])
+  const sessions = new Map([['s1', activeSession({ taskBundle: ['weekly'] })]])
+  const executions = [{
+    _id: 'x1', taskId: 'weekly', sessionId: 's1', endTime: 1723111200000,
+    activeElapsedMs: 60000, rawDurationMs: 60000, outcome: 'done',
+    taskFieldsBefore: { lastCompletedDate: null, scheduledDate: '2026-08-08' }
+  }]
+
+  const store = createSessionStore({
+    getSession: async id => structuredClone(sessions.get(id)),
+    listExecutions: async () => structuredClone(executions),
+    listTasks: async ids => ids.map(id => tasks.get(id)).filter(Boolean)
+      .map(task => structuredClone(task)),
+    updateSessionRecord: async (id, fields) => sessions.set(id, { ...sessions.get(id), ...fields }),
+    updateTaskRecord: async () => { throw new Error('offline') },
+    deleteExecutionRecord: async () => { throw new Error('should not be reached') },
+    now: () => 1723111260000
+  })
+
+  await assert.rejects(() => store.reopen('s1', 'x1'), /offline/)
+  assert.equal(executions.length, 1)
+})
+
+test('reopening an outcome that is already gone changes nothing', async () => {
+  const sessions = new Map([['s1', activeSession({ taskBundle: ['weekly'] })]])
+  const store = createSessionStore({
+    getSession: async id => structuredClone(sessions.get(id)),
+    listExecutions: async () => [],
+    listTasks: async () => [],
+    updateSessionRecord: async () => { throw new Error('should not write') },
+    updateTaskRecord: async () => { throw new Error('should not write') },
+    deleteExecutionRecord: async () => { throw new Error('should not delete') },
+    now: () => 1723111260000
+  })
+
+  const aggregate = await store.reopen('s1', 'gone')
+  assert.deepEqual(aggregate.executions, [])
+})

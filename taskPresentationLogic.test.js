@@ -267,3 +267,26 @@ test('ledger summary gives today a filled state and keeps one-off dates neutral'
   assert.match(pastMarkup, /class="row-note">Once</)
   assert.doesNotMatch(todayMarkup + pastMarkup, /\b(?:due|late|overdue)\b|\+\d+d/i)
 })
+
+test('a resolved chore offers to be reopened, naming the outcome it would take back', () => {
+  const markup = buildDoingSessionHtml(
+    { _id: 's1', status: 'active', timeBudgetMinutes: 30 },
+    [{ _id: 't1', name: 'Water the plants', estimatedDuration: 10 }],
+    [{ _id: 'x1', taskId: 't1', outcome: 'done', rawDurationMs: 420000 }],
+    []
+  )
+
+  assert.match(markup, /data-reopen-execution-id="x1"[^>]*>Reopen</)
+  assert.match(markup, /aria-label="Reopen Water the plants"/)
+})
+
+test('an unresolved chore has nothing to reopen', () => {
+  const markup = buildDoingSessionHtml(
+    { _id: 's1', status: 'active', timeBudgetMinutes: 30 },
+    [{ _id: 't1', name: 'Water the plants', estimatedDuration: 10 }],
+    [],
+    []
+  )
+
+  assert.doesNotMatch(markup, /data-reopen-execution-id/)
+})
