@@ -206,6 +206,14 @@
       "Description": "Production DOM tests covering authoritative refresh, any-order outcomes, persistence retries, pause, and continuation."
     },
     {
+      "path": "receiptLogic.js",
+      "Description": "Pure Receipt copy: drift from an estimate, difficulty words, headline, offers line and save label."
+    },
+    {
+      "path": "receiptLogic.test.js",
+      "Description": "Node tests holding the Receipt's phrasing neutral and its counts correct."
+    },
+    {
       "path": "reviewView.js",
       "Description": "Renders post-session execution edits and stale-safe named offers for explicit duration-estimate updates."
     },

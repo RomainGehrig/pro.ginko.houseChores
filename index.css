@@ -253,9 +253,9 @@ label:has(input[type="radio"]) {
   color: var(--ink);
   cursor: pointer;
   display: inline-flex;
-  font-family: var(--face-display);
+  font-family: var(--face-read);
   font-size: 14px;
-  font-weight: 400;
+  font-weight: 600;
   gap: 6px;
   justify-content: center;
   line-height: 1.2;
@@ -2116,10 +2116,9 @@ textarea {
   }
 }
 
-/* Doing, Review and the Log carry their destination in their own rendered
-   header, so the route heading stays for focus and announcement only. */
+/* Doing and the Log carry their destination in their own rendered header, so
+   the route heading stays for focus and announcement only. */
 #view-doing .route-heading,
-#view-review .route-heading,
 #view-log .route-heading {
   clip: rect(0 0 0 0);
   clip-path: inset(50%);
@@ -2128,4 +2127,220 @@ textarea {
   position: absolute;
   white-space: nowrap;
   width: 1px;
+}
+
+
+/* ── Receipt ──────────────────────────────────────────────────────────────
+   What the session measured, offered back for correction. Drift from an
+   estimate is a fact in the neutral colour; nothing here scores the user. */
+
+.receipt {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.receipt .route-heading {
+  font-size: 29px;
+  line-height: 1.06;
+  margin: 6px 0 0;
+}
+
+.receipt-subline {
+  margin: 0;
+  font-size: 12.5px;
+}
+
+.receipt-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.exec-card {
+  background: var(--plate);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-plate);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.exec-card-head {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+}
+
+.exec-card-head .task-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.exec-card .card-facts {
+  margin: -8px 0 0;
+  font-size: 11.5px;
+  color: var(--graphite);
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.stepper {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.pill-icon {
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  border-radius: var(--r-control);
+  border: 1px solid var(--edge);
+  background: transparent;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.pill-icon:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
+
+.stepper .f-actual {
+  width: 78px;
+  text-align: center;
+  border-radius: var(--r-control);
+  font-size: 14px;
+  padding: 8px 10px;
+}
+
+.stepper-unit { font-size: 13px; }
+
+.reset-actual {
+  font-size: 12px;
+  padding: 6px 10px;
+  min-height: 0;
+}
+
+.measured-line { font-size: 11.5px; }
+
+.difficulty-set {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* The design draws 34px circles; the app's touch floor is 44px, so the target
+   grows and the circle stays round. */
+.difficulty-set .pill {
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+}
+
+/* A rating reads as a filled scale, so every step up to the chosen one fills. */
+.difficulty-set .pill.is-filled {
+  background: var(--enamel);
+  border-color: var(--enamel);
+  color: var(--on-enamel);
+}
+
+.difficulty-word {
+  font-size: 12px;
+  margin-left: 4px;
+}
+
+.exec-card .f-notes {
+  resize: none;
+  font-size: 13.5px;
+  border-radius: 20px;
+}
+
+.estimates {
+  background: var(--plate);
+  border-radius: var(--r-plate);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.estimates h2 {
+  font-size: 20px;
+  margin: 0;
+}
+
+.estimates > p { margin: 0; font-size: 12.5px; }
+
+#durationOffers {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#durationOffers:empty { display: none; }
+
+.duration-offer {
+  background: var(--sage-soft);
+  color: var(--sage-ink);
+  border-radius: 24px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.duration-offer .task-name { font-size: 15px; }
+
+.duration-offer .task-meta {
+  margin: 0;
+  font-size: 12.5px;
+  color: var(--sage-ink);
+}
+
+.duration-offer-actions { display: flex; gap: 8px; }
+
+.duration-offer-actions .pill[aria-pressed="true"] {
+  background: var(--sage);
+  border-color: var(--sage);
+  color: var(--on-sage);
+}
+
+.receipt-foot {
+  border-top: 1px solid var(--edge);
+  padding-top: 14px;
+}
+
+@media (min-width: 900px) {
+  .receipt {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 320px;
+    grid-template-areas:
+      "head estimates"
+      "list estimates"
+      "list foot";
+    column-gap: 26px;
+    align-items: start;
+  }
+
+  .receipt-head { grid-area: head; }
+  .receipt .route-heading { font-size: 38px; line-height: 1.04; }
+  .receipt-list { grid-area: list; }
+  .estimates { grid-area: estimates; }
+  .receipt-foot { grid-area: foot; border-top: 0; }
 }

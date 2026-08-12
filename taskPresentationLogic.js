@@ -106,8 +106,8 @@ const outcomeActionsHtml = task => task.unavailable
 
 const outcomeLabel = outcome => ({
   done: 'Done',
-  already_done: 'Already Done',
-  cancelled: 'Cancelled'
+  already_done: 'Already done',
+  cancelled: 'Skipped'
 })[outcome] || String(outcome || '')
 
 const hasRawDuration = value => (typeof value === 'number' ||
