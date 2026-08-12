@@ -1,4 +1,4 @@
-import { listAllTasks, createTask, updateTask } from './taskData.js'
+import { listAllTasks, createTask, createTaskWithId, updateTask, deleteTask } from './taskData.js'
 import { enrichTasks } from './aiEnrich.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
 import {
@@ -8,7 +8,7 @@ import {
   selectableReferences
 } from './categoryLocationLogic.js'
 import { escapeAttribute } from './categoryLocationView.js'
-import { escapeHtml } from './helpers.js'
+import { escapeHtml, formatDuration } from './helpers.js'
 import { buildEnrichmentAvailability } from './taskPresentationLogic.js'
 import { localDateFromDate } from './scheduleLogic.js'
 import { saveTaskWithRefresh } from './taskSaveLogic.js'
@@ -228,13 +228,23 @@ function renderProposed() {
   renderInboxNavigation(proposed.length)
   container.innerHTML = proposed.length
     ? proposed.map(task => proposedCardHtml(task, snapshot)).join('')
-    : '<p class="empty">No tasks awaiting review.</p>'
+    : '<div class="inbox-clear card"><p class="display inbox-clear-title">Inbox clear</p>' +
+      '<p class="muted">Nothing waiting to confirm. Anything you capture above lands here first.</p></div>'
+}
+
+export function buildInboxCountLine (proposedCount) {
+  if (proposedCount === 0) return 'Inbox · clear'
+  return 'Inbox · ' + proposedCount + ' waiting'
 }
 
 export function renderInboxNavigation (
   proposedCount,
   inboxNav = document.getElementById('inboxNav')
 ) {
+  const countLine = typeof document === 'undefined'
+    ? null
+    : document.getElementById('inboxCountLine')
+  if (countLine) countLine.textContent = buildInboxCountLine(proposedCount)
   if (inboxNav) {
     inboxNav.hidden = false
     inboxNav.setAttribute(
@@ -249,37 +259,131 @@ export function renderInboxNavigation (
   }
 }
 
+const DURATION_CHOICES = [5, 10, 15, 20, 30, 45]
+
+const inboxMetaLine = (task, model) => {
+  const parts = []
+  const category = model.categoryOptions.find(item => item._id === model.categoryId)
+  if (category) parts.push(String(category.name))
+  const duration = task.suggestedDuration || task.estimatedDuration
+  if (duration) parts.push(formatDuration(Number(duration)))
+  if (task.suggestedCategory || task.suggestedDuration || task.suggestedSchedule) {
+    parts.push('suggested — yours to change')
+  }
+  return parts.length ? parts.join(' · ') : 'Nothing filled in yet'
+}
+
+// Category is a pill group over a hidden input: the pills are what you touch,
+// the input stays the single value everything else already reads.
+const categoryPillsHtml = model =>
+  '<input type="hidden" class="f-category" name="categoryId" value="' +
+    escapeAttribute(model.categoryId || '') + '">' +
+  '<div class="pill-set" role="group" aria-label="Category">' +
+  model.categoryOptions.map(category =>
+    '<button type="button" class="pill pill-compact" data-field="category" data-value="' +
+      escapeAttribute(category._id) + '" aria-pressed="' +
+      (category._id === model.categoryId ? 'true' : 'false') + '">' +
+      escapeHtml(String(category.name)) + referenceStateSuffix(category) + '</button>'
+  ).join('') + '</div>'
+
+// Like category: the pills and the custom field both write one hidden value, so
+// the custom box only ever shows a duration the pills cannot express.
+const durationPillsHtml = duration => {
+  const chosen = Number(duration)
+  const isCustom = Boolean(duration) && !DURATION_CHOICES.includes(chosen)
+  return '<input type="hidden" class="f-duration" name="estimatedDuration" value="' +
+    escapeAttribute(duration) + '">' +
+    '<div class="pill-set" role="group" aria-label="Takes about">' +
+    DURATION_CHOICES.map(minutes =>
+      '<button type="button" class="pill pill-compact" data-field="duration" data-value="' + minutes +
+        '" aria-pressed="' + (chosen === minutes ? 'true' : 'false') + '">' +
+        minutes + ' min</button>'
+    ).join('') +
+    '<input class="duration-custom pill pill-compact pill-input fig" type="number" min="1" ' +
+      'inputmode="numeric" placeholder="Custom" aria-label="Custom minutes" value="' +
+      escapeAttribute(isCustom ? duration : '') + '">' +
+    '</div>'
+}
+
+const locationPillsHtml = (model, selectedLocationIds) => model.locationOptions.length
+  ? model.locationOptions.map(location =>
+      '<label class="pill pill-compact pill-check"><input class="f-location" name="locationIds" ' +
+        'type="checkbox" value="' + escapeAttribute(location._id) + '"' +
+        (selectedLocationIds.has(location._id) ? ' checked' : '') + '><span>' +
+        escapeHtml(String(location.name)) + referenceStateSuffix(location) + '</span></label>'
+    ).join('')
+  : '<span class="empty">No locations available.</span>'
+
 function proposedCardHtml(task, snapshot) {
   const model = buildProposedTaskEditorModel(task, snapshot)
-  const categoryId = model.categoryId
   const duration = task.suggestedDuration || task.estimatedDuration || ''
-  const categoryOptions = model.categoryOptions.map(category =>
-    '<option value="' + escapeAttribute(category._id) + '"' +
-      (category._id === categoryId ? ' selected' : '') + '>' +
-      escapeHtml(String(category.name)) + referenceStateSuffix(category) + '</option>'
-  ).join('')
   const selectedLocationIds = new Set(model.locationIds)
-  const locationOptions = model.locationOptions.length
-    ? model.locationOptions.map(location =>
-        '<label class="task-location"><input class="f-location" name="locationIds" type="checkbox" value="' +
-          escapeAttribute(location._id) + '"' + (selectedLocationIds.has(location._id) ? ' checked' : '') + '> ' +
-          escapeHtml(String(location.name)) + referenceStateSuffix(location) + '</label>'
-      ).join('')
-    : '<span class="empty">No locations available.</span>'
+  const name = escapeHtml(task.name)
+
   return (
-    '<div class="task-card" data-id="' + escapeAttribute(task._id) + '">' +
-      '<div class="task-name">' + escapeHtml(task.name) + '</div>' +
-      '<label>Category <select class="f-category" name="categoryId"><option value="">-</option>' + categoryOptions + '</select></label>' +
-      '<fieldset class="f-locations"><legend>Locations</legend>' + locationOptions + '</fieldset>' +
-      '<label>Duration (min) <input class="f-duration" name="estimatedDuration" type="number" min="1" value="' + escapeAttribute(duration) + '"></label>' +
-      scheduleEditorHtml(buildScheduleEditorModel(task, true)) +
-      '<button class="approve-btn">Approve</button>' +
-      '<div class="task-card-error" role="alert"></div>' +
+    '<div class="task-card inbox-card" data-id="' + escapeAttribute(task._id) + '">' +
+      '<div class="inbox-card-head">' +
+        '<div class="inbox-card-title">' +
+          '<div class="task-name display">' + name + '</div>' +
+          '<p class="inbox-meta muted">' + escapeHtml(inboxMetaLine(task, model)) + '</p>' +
+        '</div>' +
+        '<div class="inbox-card-tools">' +
+          '<button type="button" class="pill-icon enrich-one-btn" aria-label="Suggest details for ' +
+            name + '">\u2726</button>' +
+          '<button type="button" class="pill-icon discard-btn" aria-label="Discard ' +
+            name + '">\u00d7</button>' +
+          '<button type="button" class="btn btn-sage approve-btn">Confirm</button>' +
+        '</div>' +
+      '</div>' +
+      '<div class="inbox-card-body">' +
+        '<div class="field-group"><span class="eyebrow eyebrow-quiet">Category</span>' +
+          categoryPillsHtml(model) + '</div>' +
+        '<div class="field-group"><span class="eyebrow eyebrow-quiet">Takes about</span>' +
+          durationPillsHtml(duration) + '</div>' +
+        '<div class="field-group"><span class="eyebrow eyebrow-quiet">Where</span>' +
+          '<fieldset class="f-locations pill-set">' +
+          '<legend class="visually-hidden">Locations</legend>' +
+          locationPillsHtml(model, selectedLocationIds) + '</fieldset></div>' +
+        '<div class="field-group">' + scheduleEditorHtml(buildScheduleEditorModel(task, true)) + '</div>' +
+        '<div class="task-card-error" role="alert"></div>' +
+      '</div>' +
     '</div>'
   )
 }
 
+// Pills write to the field the rest of the app already reads, then repaint
+// their own group so the pressed state and the value never disagree.
+function handleInboxPillClick (evt) {
+  const pill = evt.target.closest('[data-field]')
+  if (!pill) return
+  const card = pill.closest('.task-card')
+  if (!card) return
+
+  const field = pill.dataset.field
+  const target = card.querySelector(field === 'category' ? '.f-category' : '.f-duration')
+  if (!target) return
+
+  const alreadyOn = pill.getAttribute('aria-pressed') === 'true'
+  target.value = alreadyOn ? '' : pill.dataset.value
+  if (field === 'duration') card.querySelector('.duration-custom').value = ''
+  for (const sibling of pill.parentElement.querySelectorAll('[data-field="' + field + '"]')) {
+    sibling.setAttribute('aria-pressed', sibling === pill && !alreadyOn ? 'true' : 'false')
+  }
+  target.dispatchEvent(new Event('change', { bubbles: true }))
+}
+
+function handleCustomDurationInput (evt) {
+  const input = evt.target.closest('.duration-custom')
+  if (!input) return
+  const card = input.closest('.task-card')
+  card.querySelector('.f-duration').value = input.value
+  for (const pill of card.querySelectorAll('[data-field="duration"]')) {
+    pill.setAttribute('aria-pressed', 'false')
+  }
+}
+
 function handleProposedScheduleChange (evt) {
+  if (evt.target.closest('.duration-custom')) handleCustomDurationInput(evt)
   const editor = evt.target.closest('.schedule-editor')
   if (editor) {
     syncScheduleEditor(editor, {
@@ -306,7 +410,80 @@ function renderActive(snapshot = categoryLocationStore.getSnapshot()) {
   })
 }
 
+async function handleEnrichOne (evt) {
+  const card = evt.target.closest('.task-card')
+  const task = tasksCache.find(item => item._id === card?.dataset.id)
+  if (!task) return
+  const categories = selectableReferences(categoryLocationStore.getSnapshot().categories)
+  const availability = buildEnrichmentAvailability(categories)
+  const errorElement = card.querySelector('.task-card-error')
+  if (availability.disabled) {
+    errorElement.textContent = availability.message
+    return
+  }
+
+  errorElement.textContent = ''
+  setTaskCardBusy(card, true)
+  try {
+    const [suggestion] = await enrichTasks([task], categories.map(category => category.name))
+    if (suggestion) {
+      await updateTask(task._id, {
+        suggestedCategory: suggestion.category || null,
+        suggestedDuration: suggestion.estimatedDuration || null,
+        suggestedSchedule: suggestion.schedule
+      })
+      await refreshTasksView()
+      return
+    }
+    errorElement.textContent = 'No suggestion came back. Everything you typed is untouched.'
+  } catch (error) {
+    errorElement.textContent = 'AI enrichment unavailable: ' + error.message
+  } finally {
+    setTaskCardBusy(card, false)
+  }
+}
+
+// Discarding a captured line is reversible for six seconds, so the Inbox never
+// has to ask twice for something you only just typed.
+function handleDiscard (evt) {
+  const card = evt.target.closest('.task-card')
+  const task = tasksCache.find(item => item._id === card?.dataset.id)
+  if (!task) return
+
+  tasksCache = tasksCache.filter(item => item._id !== task._id)
+  renderTasks()
+
+  pendingUndo({
+    key: 'discard:' + task._id,
+    label: 'Discarded',
+    commit: async () => {
+      try {
+        await deleteTask(task._id)
+        return { ok: true }
+      } catch {
+        tasksCache = tasksCache.concat([task])
+        renderTasks()
+        const message = "Couldn't discard that. The chore is unchanged."
+        document.getElementById('enrichStatus').textContent = message
+        return { ok: false, message }
+      }
+    },
+    revert: async () => {
+      try {
+        await createTaskWithId(task.name, task._id)
+      } catch {
+        // The record was never removed, so the refresh below still finds it.
+      }
+      await refreshTasksView()
+      return { taskId: task._id }
+    }
+  }, 6000)
+}
+
 async function handleProposedClick(evt) {
+  if (evt.target.closest('[data-field]')) return handleInboxPillClick(evt)
+  if (evt.target.closest('.enrich-one-btn')) return handleEnrichOne(evt)
+  if (evt.target.closest('.discard-btn')) return handleDiscard(evt)
   if (!evt.target.classList.contains('approve-btn')) return
   const card = evt.target.closest('.task-card')
   if (card.dataset.saving === 'true') return

@@ -225,6 +225,11 @@ label:has(input[type="radio"]) {
   outline-offset: 2px;
 }
 
+.route-heading:focus,
+.route-heading:focus-visible {
+  outline: none;
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -1044,20 +1049,16 @@ button:hover {
 input,
 select,
 textarea {
+  background: var(--plate);
   border: 1px solid var(--edge);
   border-radius: var(--r-chip);
-  background: var(--sunk);
-  padding: var(--s2);
+  padding: var(--s2) 14px;
 }
 
-#addTasksBtn,
-#proposeBundleBtn,
-#startSessionBtn,
-#finishReviewBtn {
-  background: var(--enamel);
-  border-color: var(--enamel);
-  color: var(--on-enamel);
-  font-weight: 700;
+.inbox-card input,
+.inbox-card select,
+.inbox-card textarea {
+  background: var(--ground);
 }
 
 .add-task-box button + button {
@@ -1743,5 +1744,199 @@ textarea {
 
   .vessel-entry {
     max-width: 240px;
+  }
+}
+
+/* ── Inbox ──────────────────────────────────────────────────────────────────
+   Capture asks for nothing but the words. Detail is added in one place, and
+   every AI suggestion stays a suggestion until you touch it. */
+
+.inbox-head h1 {
+  font-size: var(--t-count);
+  margin: var(--s1) 0 var(--s4);
+}
+
+.capture {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.capture textarea {
+  border-radius: 22px;
+  line-height: 1.45;
+  min-height: 92px;
+  resize: none;
+  width: 100%;
+}
+
+.inbox-waiting-head {
+  align-items: center;
+  display: flex;
+  gap: var(--s3);
+  justify-content: space-between;
+  margin-top: var(--s5);
+}
+
+.inbox-waiting-head .eyebrow {
+  flex: 1;
+}
+
+.inbox-card {
+  background: var(--plate);
+  border: 0;
+  border-radius: var(--r-plate);
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s4);
+}
+
+.inbox-card-head {
+  align-items: flex-start;
+  display: flex;
+  gap: var(--s3);
+  justify-content: space-between;
+}
+
+.inbox-card-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.inbox-card .task-name {
+  font-family: var(--face-display);
+  font-size: var(--t-name);
+  font-weight: 400;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.inbox-meta {
+  font-size: 11.5px;
+  margin: var(--s1) 0 0;
+}
+
+.inbox-card-tools {
+  align-items: center;
+  display: flex;
+  flex: none;
+  gap: 6px;
+}
+
+.pill-icon {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-pill);
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  font-size: 15px;
+  justify-content: center;
+  line-height: 1;
+  min-height: 45px;
+  min-width: 45px;
+  padding: 0;
+}
+
+.pill-icon:hover {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+
+.enrich-one-btn {
+  border-color: color-mix(in srgb, var(--sage) 55%, transparent);
+  color: var(--sage);
+}
+
+.inbox-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.pill-set {
+  border: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+}
+
+.pill-check {
+  cursor: pointer;
+  gap: 7px;
+}
+
+.pill-check input {
+  height: 16px;
+  margin: 0;
+  min-height: 0;
+  min-width: 0;
+  width: 16px;
+}
+
+.pill-check:has(input:checked) {
+  background: var(--sage);
+  border-color: var(--sage);
+  color: var(--on-sage);
+}
+
+.inbox-card .pill-input {
+  width: 96px;
+}
+
+.inbox-clear {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.inbox-clear-title {
+  font-size: 19px;
+  margin: 0;
+}
+
+.inbox-clear p {
+  margin: 0;
+}
+
+.inbox-card .schedule-editor {
+  border-top: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
+  gap: 9px;
+  margin-top: 0;
+  padding-top: var(--s3);
+}
+
+.inbox-card .schedule-summary {
+  color: var(--sage-ink);
+  font-size: var(--t-note);
+}
+
+@media (min-width: 900px) {
+  .inbox-head h1 {
+    font-size: var(--t-total);
+  }
+
+  .capture {
+    flex-direction: row;
+    align-items: flex-end;
+  }
+
+  .capture textarea {
+    flex: 1;
+  }
+
+  .capture .btn-block {
+    flex: none;
+    width: auto;
   }
 }

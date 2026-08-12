@@ -46,16 +46,23 @@
   </section>
 
   <section id="view-inbox" class="view" style="display:none">
-    <h1 class="route-heading" tabindex="-1">Inbox</h1>
-    <div class="add-task-box">
-      <h2>Add Tasks</h2>
-      <textarea id="newTaskInput" placeholder="One task per line, e.g.&#10;Clean bathroom&#10;Pay electricity bill"></textarea>
-      <button id="addTasksBtn">Add</button>
-      <button id="enrichBtn">Enrich with AI</button>
-      <span id="enrichStatus"></span>
+    <header class="inbox-head">
+      <p class="eyebrow"><span id="inboxCountLine">Inbox</span></p>
+      <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">Inbox. </span>Get it out of your head</h1>
+    </header>
+
+    <div class="capture">
+      <textarea id="newTaskInput" class="input" rows="3" placeholder="One task per line"></textarea>
+      <button id="addTasksBtn" class="btn btn-sage btn-block" type="button">Add</button>
     </div>
+
+    <div class="inbox-waiting-head">
+      <p class="eyebrow eyebrow-quiet">Waiting to confirm</p>
+      <button id="enrichBtn" class="btn btn-ghost" type="button">Suggest details</button>
+    </div>
+    <div id="enrichStatus" class="inline-status" role="status"></div>
+
     <div class="task-section">
-      <h2>Needs Review</h2>
       <div class="task-cards" id="proposedCards"></div>
     </div>
   </section>
