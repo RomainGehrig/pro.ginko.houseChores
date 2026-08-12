@@ -1,33 +1,89 @@
+/* ABOUTME: Organic design-system foundation and every screen's paint for the chore planner. */
+/* ABOUTME: Tokens first, then base elements, shared controls, chrome, and per-destination layout. */
+
+@font-face {
+  font-family: "Caprasimo";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/caprasimo-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Caprasimo";
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url("fonts/caprasimo-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("fonts/figtree-latin.woff2") format("woff2");
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC,
+    U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215,
+    U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: "Figtree";
+  font-style: normal;
+  font-weight: 400 700;
+  font-display: swap;
+  src: url("fonts/figtree-latin-ext.woff2") format("woff2");
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304,
+    U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0,
+    U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
 :root {
   color-scheme: light dark;
 
-  --ground: #E7ECE8;
-  --plate: #FBFCFB;
-  --sunk: #DFE6E1;
+  --ground: #F5EAD8;
+  --plate: #EBDDC5;
+  --sunk: #DCD3C4;
 
-  --ink: #12262E;
-  --graphite: #5F6A6C;
-  --rule: #C3CDC7;
-  --edge: color-mix(in srgb, var(--ink) 45%, transparent);
+  --ink: #201E1D;
+  --graphite: #5A544D;
+  --rule: #D9CDB6;
+  --edge: color-mix(in srgb, var(--ink) 22%, transparent);
 
-  --enamel: #14554C;
-  --on-enamel: #FBFCFB;
-  --stamp: #A8322A;
+  --enamel: #C67139;
+  --on-enamel: #F5EAD8;
+  --stamp: #9C3520;
 
-  --face-stamp: "Avenir Next Condensed", "Roboto Condensed", "Segoe UI Semibold",
-    "Arial Narrow", var(--face-read);
-  --face-read: -apple-system, BlinkMacSystemFont, "Segoe UI Variable Text", "Segoe UI",
-    Roboto, "Helvetica Neue", Arial, sans-serif;
-  --face-inst: ui-monospace, "SF Mono", SFMono-Regular, "Cascadia Mono", "Roboto Mono",
-    Menlo, Consolas, "Liberation Mono", monospace;
+  /* Sage — the app's second voice: things settled, filed, or freshly done. */
+  --sage: #7A8A5E;
+  --on-sage: #F5EAD8;
+  --sage-soft: #DFE6CF;
+  --sage-ink: #3D4A2C;
+
+  /* Ripeness ramp — cool and settled through to warm and ready. Never red:
+     a chore that has waited is riper, not late. */
+  --ripe-cold: #CCDBB2;
+  --ripe-warm: #F6A06B;
+
+  --face-display: "Caprasimo", Georgia, "Times New Roman", serif;
+  --face-read: "Figtree", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --face-stamp: var(--face-read);
+  --face-inst: var(--face-read);
 
   --t-stamp: 11px;
   --t-fig: 12px;
-  --t-note: 14px;
+  --t-note: 13.5px;
   --t-name: 17px;
-  --t-title: 22px;
-  --t-count: 34px;
-  --t-total: 44px;
+  --t-title: 23px;
+  --t-count: 32px;
+  --t-total: 40px;
 
   --s1: 4px;
   --s2: 8px;
@@ -38,11 +94,12 @@
   --gutter: 16px;
   --col: 560px;
 
-  --r-plate: 3px;
-  --r-chip: 2px;
+  --r-plate: 28px;
+  --r-chip: 999px;
   --r-pill: 999px;
-  --lift: 0 1px 0 rgba(18, 38, 46, .06);
-  --lift-sheet: 0 -6px 24px rgba(18, 38, 46, .14);
+  --r-control: 999px;
+  --lift: 0 3px 10px color-mix(in srgb, #2E2B25 16%, transparent);
+  --lift-sheet: 0 -12px 32px color-mix(in srgb, #2E2B25 22%, transparent);
 
   --t-ink: 180ms;
   --e-ink: cubic-bezier(.2, .8, .2, 1);
@@ -54,19 +111,31 @@
   --t-route: 90ms;
   --t-sheet: 220ms;
   --e-sheet: cubic-bezier(.22, .61, .36, 1);
+  --t-fill: 350ms;
+  --e-fill: cubic-bezier(.2, .8, .2, 1);
 }
 
+/* The design doc draws only the light ground. Dark keeps the same hues and
+   swaps the lightness so the app is usable at night without a second identity. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --ground: #0F1614;
-    --plate: #16211F;
-    --sunk: #101A18;
-    --ink: #E4EBE7;
-    --graphite: #8C9A9B;
-    --rule: #2C3A37;
-    --enamel: #4FA898;
-    --on-enamel: #0F1614;
-    --stamp: #E0685C;
+    --ground: #1A1815;
+    --plate: #2E2B25;
+    --sunk: #241F1C;
+    --ink: #F9F4ED;
+    --graphite: #A19786;
+    --rule: #474238;
+    --enamel: #F6A06B;
+    --on-enamel: #402310;
+    --stamp: #E0836A;
+
+    --sage: #AEBF92;
+    --on-sage: #272E1B;
+    --sage-soft: #3D472B;
+    --sage-ink: #E1EECC;
+
+    --ripe-cold: #56633F;
+    --ripe-warm: #B2622D;
   }
 }
 
@@ -85,16 +154,20 @@ body {
 body {
   margin: 0;
   font-family: var(--face-read);
-  font-variant-numeric: tabular-nums;
+  font-size: 15px;
+  font-variant-numeric: normal;
+  line-height: 1.55;
 }
 
 h1,
 h2,
 h3 {
   color: var(--ink);
+  font-family: var(--face-display);
   font-size: var(--t-title);
-  font-weight: 600;
+  font-weight: 400;
   letter-spacing: -.015em;
+  line-height: 1.12;
 }
 
 button,
@@ -133,13 +206,15 @@ label:has(input[type="radio"]) {
 .fig * {
   font-family: var(--face-inst);
   font-variant-numeric: tabular-nums;
+  letter-spacing: .01em;
 }
 
 .stamp {
+  color: var(--graphite);
   font-family: var(--face-stamp);
   font-size: var(--t-stamp);
-  font-weight: 700;
-  letter-spacing: .12em;
+  font-weight: 600;
+  letter-spacing: .1em;
   text-transform: uppercase;
 }
 
@@ -157,6 +232,177 @@ label:has(input[type="radio"]) {
     scroll-behavior: auto !important;
     transition-duration: .01ms !important;
   }
+}
+
+/* ── Shared controls ────────────────────────────────────────────────────────
+   The Organic kit: one button family, one pill, one tag, one card. Screens
+   compose these rather than growing their own. */
+
+.btn {
+  align-items: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: var(--r-pill);
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: var(--face-display);
+  font-size: 14px;
+  font-weight: 400;
+  gap: 6px;
+  justify-content: center;
+  line-height: 1.2;
+  min-height: 45px;
+  padding: var(--s2) var(--s4);
+}
+
+.btn-secondary {
+  border-color: var(--edge);
+}
+
+.btn-secondary:hover {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+
+.btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--enamel);
+}
+
+.btn-ghost:hover {
+  background: color-mix(in srgb, var(--enamel) 12%, transparent);
+}
+
+/* Sage carries "file this away": add, confirm, done. */
+.btn-sage {
+  background: var(--sage);
+  border-color: var(--sage);
+  color: var(--on-sage);
+}
+
+.btn-sage:hover {
+  background: color-mix(in srgb, var(--sage) 85%, var(--ink));
+}
+
+.btn-block {
+  width: 100%;
+}
+
+.pill {
+  align-items: center;
+  background: transparent;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-pill);
+  color: var(--ink);
+  cursor: pointer;
+  display: inline-flex;
+  font-family: var(--face-read);
+  font-size: 13px;
+  gap: 6px;
+  justify-content: center;
+  min-height: 45px;
+  padding: var(--s2) var(--s3);
+  white-space: nowrap;
+}
+
+.pill:hover {
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+}
+
+.pill[aria-pressed="true"],
+.pill.is-on {
+  background: var(--enamel);
+  border-color: var(--enamel);
+  color: var(--on-enamel);
+  font-weight: 600;
+}
+
+.pill[aria-pressed="true"]:hover,
+.pill.is-on:hover {
+  background: color-mix(in srgb, var(--enamel) 85%, var(--ink));
+}
+
+/* Compact pills sit in dense grids (month days, weekday rows) where a 45px
+   floor would break the grid. They keep a 32px touch box and stay in a
+   scrollable group, never as the only way to reach an action. */
+.pill-compact {
+  font-size: 12px;
+  min-height: 32px;
+  padding: var(--s1) var(--s2);
+}
+
+.tag {
+  align-items: center;
+  border-radius: var(--r-pill);
+  display: inline-flex;
+  font-size: var(--t-stamp);
+  letter-spacing: .02em;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+.tag-accent {
+  background: color-mix(in srgb, var(--enamel) 18%, var(--ground));
+  color: color-mix(in srgb, var(--enamel) 70%, var(--ink));
+}
+
+.tag-sage {
+  background: var(--sage-soft);
+  color: var(--sage-ink);
+}
+
+.tag-neutral {
+  background: var(--sunk);
+  color: var(--graphite);
+}
+
+.tag-outline {
+  border: 1px solid var(--enamel);
+  color: var(--enamel);
+}
+
+.card {
+  background: var(--plate);
+  border-radius: var(--r-plate);
+  padding: var(--s3) var(--s4);
+}
+
+.eyebrow {
+  color: var(--enamel);
+  font-size: var(--t-stamp);
+  font-weight: 600;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+}
+
+.eyebrow-quiet {
+  color: var(--graphite);
+}
+
+.display {
+  font-family: var(--face-display);
+  font-weight: 400;
+  letter-spacing: -.015em;
+  line-height: 1.06;
+}
+
+.muted {
+  color: var(--graphite);
+}
+
+@keyframes organic-rise {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes organic-breathe {
+  0%, 100% { opacity: .45; }
+  50% { opacity: .85; }
+}
+
+.rise {
+  animation: organic-rise var(--t-sheet) var(--e-ink) both;
 }
 
 #app {

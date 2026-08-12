@@ -568,7 +568,7 @@ test('phone Doing header keeps Pause clear of the injected freezr button', async
   assert.ok(result.pauseRight <= result.freezrLeft, JSON.stringify(result))
 })
 
-test('enamel foundation gives controls a 44px floor, visible focus, and reduced motion', async () => {
+test('organic foundation gives controls a 44px floor, visible focus, and reduced motion', async () => {
   const result = await runBrowserScenario({
     viewport: { width: 390, height: 640 },
     mediaFeatures: [
@@ -612,7 +612,7 @@ test('enamel foundation gives controls a 44px floor, visible focus, and reduced 
   assert.ok(Number.parseFloat(result.focusOutlineWidth) >= 2, JSON.stringify(result))
   assert.ok(Number.parseFloat(result.transitionDuration) <= 0.001, JSON.stringify(result))
   assert.deepEqual(result.tokens, {
-    ground: '#E7ECE8', plate: '#FBFCFB', ink: '#12262E', enamel: '#14554C'
+    ground: '#F5EAD8', plate: '#EBDDC5', ink: '#201E1D', enamel: '#C67139'
   })
 })
 
@@ -637,7 +637,7 @@ test('bottom navigation focus stays visible against its primary surface', async 
 
   assert.notEqual(result.outlineStyle, 'none', JSON.stringify(result))
   assert.notEqual(result.outlineColor, result.surfaceColor, JSON.stringify(result))
-  assert.equal(result.outlineColor, 'rgb(20, 85, 76)')
+  assert.equal(result.outlineColor, 'rgb(198, 113, 57)')
 })
 
 test('bottom primary navigation has phone-sized targets, fixed safe-area placement, and no horizontal overflow', async () => {
@@ -1005,20 +1005,25 @@ test('mixed measurements use instrument figures without changing their words', a
       '<label>Custom <input id="numberInput" type="number" value="20"></label>' +
       '</main>',
     script: `
+      const numerals = selector => getComputedStyle(document.querySelector(selector)).fontVariantNumeric
       const family = selector => getComputedStyle(document.querySelector(selector)).fontFamily
       const result = {
+        wordNumerals: numerals('#budget'),
+        figureNumerals: numerals('#budget .fig'),
+        inputNumerals: numerals('#numberInput'),
         wordFamily: family('#budget'),
-        figureFamily: family('#budget .fig'),
-        inputFamily: family('#numberInput')
+        figureFamily: family('#budget .fig')
       }
     `
   })
 
-  assert.notEqual(result.wordFamily, result.figureFamily, JSON.stringify(result))
-  assert.equal(result.inputFamily, result.figureFamily, JSON.stringify(result))
+  assert.equal(result.figureNumerals, 'tabular-nums', JSON.stringify(result))
+  assert.equal(result.inputNumerals, 'tabular-nums', JSON.stringify(result))
+  assert.notEqual(result.wordNumerals, result.figureNumerals, JSON.stringify(result))
+  assert.equal(result.wordFamily, result.figureFamily, JSON.stringify(result))
 })
 
-test('dark enamel tokens apply at a 390px phone viewport', async () => {
+test('dark organic tokens apply at a 390px phone viewport', async () => {
   const result = await runBrowserScenario({
     viewport: { width: 390, height: 640 },
     mediaFeatures: [{ name: 'prefers-color-scheme', value: 'dark' }],
@@ -1037,12 +1042,12 @@ test('dark enamel tokens apply at a 390px phone viewport', async () => {
   })
 
   assert.deepEqual(result, {
-    ground: '#0F1614',
-    plate: '#16211F',
-    ink: '#E4EBE7',
-    enamel: '#4FA898',
-    bodyBackground: 'rgb(15, 22, 20)',
-    bodyColor: 'rgb(228, 235, 231)'
+    ground: '#1A1815',
+    plate: '#2E2B25',
+    ink: '#F9F4ED',
+    enamel: '#F6A06B',
+    bodyBackground: 'rgb(26, 24, 21)',
+    bodyColor: 'rgb(249, 244, 237)'
   })
 })
 
@@ -1096,7 +1101,7 @@ test('active chores render as ruled ledger rows instead of bordered cards', asyn
   assert.equal(result.rowRadius, '0px')
   assert.equal(result.summaryDisplay, 'grid')
   assert.match(result.summaryColumns, /^56px /)
-  assert.equal(result.stampColor, 'rgb(95, 106, 108)')
-  assert.equal(result.todayBackground, 'rgb(20, 85, 76)')
-  assert.equal(result.todayColor, 'rgb(251, 252, 251)')
+  assert.equal(result.stampColor, 'rgb(90, 84, 77)')
+  assert.equal(result.todayBackground, 'rgb(198, 113, 57)')
+  assert.equal(result.todayColor, 'rgb(245, 234, 216)')
 })
