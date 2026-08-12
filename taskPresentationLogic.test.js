@@ -89,7 +89,7 @@ test('resolved timing falls back for null or empty raw values while preserving n
   assert.match(markup, /data-task-id="null-raw"[\s\S]*?Done · <span class="fig">02:00<\/span>/)
   assert.match(markup, /data-task-id="empty-raw"[\s\S]*?Done · <span class="fig">00:30<\/span>/)
   assert.match(markup, /data-task-id="zero-raw"[\s\S]*?Done · <span class="fig">00:00<\/span>/)
-  assert.match(markup, /target <span class="fig">1<\/span> min/)
+  assert.match(markup, /estimate <span class="fig">1<\/span> min/)
   assert.match(markup, /Budget <span class="fig">15<\/span> min/)
 })
 

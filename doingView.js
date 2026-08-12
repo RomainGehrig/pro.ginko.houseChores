@@ -152,9 +152,13 @@ function renderDoing () {
 function updateTimerDisplay () {
   const timerDisplay = document.getElementById('sessionTimerDisplay')
   if (!timerDisplay || !state.currentSession) return
-  timerDisplay.textContent = formatTimer(
-    Math.floor(activeElapsedMs(state.currentSession, Date.now()) / 1000)
-  )
+  const seconds = Math.floor(activeElapsedMs(state.currentSession, Date.now()) / 1000)
+  timerDisplay.textContent = formatTimer(seconds)
+
+  // Past the time you set, the clock changes colour and nothing else happens.
+  // It does not count down, stop the session, or turn red.
+  const budgetSeconds = Number(state.currentSession.timeBudgetMinutes || 0) * 60
+  timerDisplay.classList.toggle('is-past-budget', budgetSeconds > 0 && seconds > budgetSeconds)
 }
 
 function setSessionMutationControlsDisabled (disabled) {

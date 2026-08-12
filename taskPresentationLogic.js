@@ -94,14 +94,15 @@ export function resolveTaskCategoryName (task, categories = []) {
   return String(category?.name || task.category || 'Unknown category')
 }
 
+const outcomeButton = (task, outcome, label, className) =>
+  '<button type="button" class="' + className + '" data-task-id="' + escapeHtml(task._id) +
+  '" data-outcome="' + outcome + '">' + label + '</button>'
+
 const outcomeActionsHtml = task => task.unavailable
-  ? '<button data-task-id="' + escapeHtml(task._id) +
-    '" data-outcome="cancelled">Cancel</button>'
-  : '<button data-task-id="' + escapeHtml(task._id) + '" data-outcome="done">Done</button>' +
-    '<button data-task-id="' + escapeHtml(task._id) +
-      '" data-outcome="already_done">Already Done</button>' +
-    '<button data-task-id="' + escapeHtml(task._id) +
-      '" data-outcome="cancelled">Cancel</button>'
+  ? outcomeButton(task, 'cancelled', 'Skip', 'btn btn-ghost')
+  : outcomeButton(task, 'done', 'Done', 'btn btn-sage doing-done-btn') +
+    outcomeButton(task, 'already_done', 'Already done', 'btn btn-secondary') +
+    outcomeButton(task, 'cancelled', 'Skip', 'btn btn-ghost')
 
 const outcomeLabel = outcome => ({
   done: 'Done',
@@ -118,42 +119,63 @@ const executionSeconds = execution => Math.max(0,
     : Math.round(Number(execution.actualDuration || 0) * 60)
 )
 
+const outcomeTagClass = outcome => outcome === 'cancelled' ? 'tag tag-neutral' : 'tag tag-sage'
+
+// "2 of 5 resolved" is a position, not a score. There is no target to fall short of.
+function progressLine (bundle, executions) {
+  const resolved = executions.filter(execution =>
+    bundle.some(task => task._id === execution.taskId)).length
+  return formatFactHtml(resolved + ' of ' + bundle.length + ' resolved')
+}
+
 export function buildDoingSessionHtml (session, bundle, executions, categories = []) {
   const executionByTaskId = new Map(executions.map(execution => [execution.taskId, execution]))
   const active = session?.status === 'active'
+  const paused = session?.status === 'paused'
+
   const tasksHtml = bundle.map(task => {
     const execution = executionByTaskId.get(task._id)
     const categoryName = resolveTaskCategoryName(task, categories)
+    const outcomeTag = execution
+      ? '<span class="' + outcomeTagClass(execution.outcome) + '">' +
+        escapeHtml(outcomeLabel(execution.outcome)) + '</span>'
+      : ''
     const resultHtml = execution
       ? '<div class="doing-task-result">' + formatFactHtml(outcomeLabel(execution.outcome)) +
         ' \u00b7 ' + formatFactHtml(formatTimer(executionSeconds(execution))) + '</div>'
       : active
         ? '<div class="doing-task-actions">' + outcomeActionsHtml(task) + '</div>'
         : ''
+
     return '<article class="doing-task' + (execution ? ' is-resolved' : '') +
       '" data-task-id="' + escapeHtml(task._id) + '">' +
-        '<div class="task-name">' + formatFactHtml(String(task?.name ?? '')) + '</div>' +
-        '<div class="task-meta">' + formatFactHtml(categoryName) + ' \u00b7 target ' +
-          formatFactHtml(formatDuration(task?.estimatedDuration)) + '</div>' +
-        resultHtml +
+        '<div class="doing-task-line">' +
+          '<div class="doing-task-title">' +
+            '<div class="task-name display">' + formatFactHtml(String(task?.name ?? '')) + '</div>' +
+            '<div class="task-meta">' + formatFactHtml(categoryName) + ' \u00b7 estimate ' +
+              formatFactHtml(formatDuration(task?.estimatedDuration)) + '</div>' +
+          '</div>' + outcomeTag +
+        '</div>' + resultHtml +
       '</article>'
   }).join('')
-  const paused = session?.status === 'paused'
 
   return '<div class="doing-session-head">' +
-      '<div>' +
-        '<div class="doing-progress">Session time</div>' +
+      '<div class="doing-head-lines">' +
+        '<p class="eyebrow">Doing</p>' +
         '<div class="timer" id="sessionTimerDisplay">00:00</div>' +
-        '<div class="task-meta">Budget ' + formatFactHtml(formatDuration(session?.timeBudgetMinutes)) + '</div>' +
+        '<div class="task-meta">Budget ' +
+          formatFactHtml(formatDuration(session?.timeBudgetMinutes)) + '</div>' +
       '</div>' +
-      '<button id="pauseSessionBtn"' + (paused ? ' hidden' : '') + '>Pause</button>' +
+      '<button id="pauseSessionBtn" class="btn btn-secondary"' + (paused ? ' hidden' : '') +
+        '>Pause</button>' +
     '</div>' +
+    '<p class="doing-progress">' + progressLine(bundle, executions) + '</p>' +
     '<div id="doingStatus" class="inline-status" role="status"></div>' +
     '<div id="doingTaskList">' + tasksHtml + '</div>' +
     '<div id="doingDecisionPanel"' + (paused ? '' : ' hidden') + '>' +
-      '<p>The session is paused.</p>' +
-      '<button id="concludeSessionBtn">Conclude</button>' +
-      '<button id="openContinueBtn">Continue</button>' +
+      '<p>The session is paused. The clock is not running.</p>' +
+      '<button id="concludeSessionBtn" class="btn btn-primary">Conclude</button>' +
+      '<button id="openContinueBtn" class="btn btn-secondary">Continue</button>' +
     '</div>' +
     '<div id="doingContinuePanel" hidden></div>'
 }

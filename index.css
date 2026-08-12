@@ -1940,3 +1940,192 @@ textarea {
     width: auto;
   }
 }
+
+/* ── Doing ──────────────────────────────────────────────────────────────────
+   One clock over every task, resolvable in any order. The clock counts active
+   time only and colours past the budget without stopping anything. */
+
+.doing-session-head {
+  align-items: flex-start;
+  background: color-mix(in srgb, var(--ground) 92%, transparent);
+  backdrop-filter: blur(8px);
+  display: flex;
+  gap: var(--gutter);
+  justify-content: space-between;
+  padding: var(--s2) 56px var(--s3) 0;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+.doing-head-lines {
+  min-width: 0;
+}
+
+.doing-head-lines .eyebrow {
+  margin: 0;
+}
+
+.doing-session-head .timer {
+  font-family: var(--face-display);
+  font-size: var(--t-total);
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+  margin: var(--s1) 0 2px;
+  text-align: left;
+}
+
+.timer.is-past-budget {
+  color: var(--enamel);
+}
+
+.doing-progress {
+  color: var(--graphite);
+  font-size: var(--t-note);
+  margin: 0 0 var(--s3);
+}
+
+#doingTaskList {
+  display: grid;
+  gap: 10px;
+  margin: var(--s3) 0;
+}
+
+.doing-task {
+  background: var(--plate);
+  border: 0;
+  border-radius: var(--r-plate);
+  box-shadow: none;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: var(--s4);
+}
+
+.doing-task.is-resolved {
+  background: color-mix(in srgb, var(--plate) 55%, var(--ground));
+  color: var(--graphite);
+}
+
+.doing-task-line {
+  align-items: flex-start;
+  display: flex;
+  gap: 10px;
+  justify-content: space-between;
+}
+
+.doing-task-title {
+  flex: 1;
+  min-width: 0;
+}
+
+.doing-task .task-name {
+  font-size: var(--t-name);
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.doing-task .task-meta {
+  font-size: 11.5px;
+  margin-top: 3px;
+}
+
+.doing-task-result {
+  color: var(--graphite);
+  font-size: 12px;
+}
+
+.doing-task-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.doing-done-btn {
+  flex: 1;
+}
+
+#doingDecisionPanel {
+  align-items: center;
+  background: var(--sage-soft);
+  border: 0;
+  border-radius: var(--r-plate);
+  color: var(--sage-ink);
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  padding: var(--s4);
+}
+
+#doingDecisionPanel p {
+  flex-basis: 100%;
+  font-size: var(--t-note);
+  margin: 0 0 var(--s2);
+}
+
+#doingContinuePanel {
+  background: var(--plate);
+  border: 0;
+  border-radius: var(--r-plate);
+  display: grid;
+  gap: var(--s3);
+  margin-top: var(--s3);
+  padding: var(--s4);
+}
+
+#doingContinuePanel h2 {
+  font-size: 19px;
+}
+
+.continue-option {
+  align-items: center;
+  background: var(--ground);
+  border: 0;
+  border-radius: var(--r-pill);
+  display: grid;
+  gap: var(--s2);
+  grid-template-columns: auto 1fr auto;
+  min-height: 45px;
+  padding: var(--s2) var(--s4);
+}
+
+#continueSearchResults button {
+  background: var(--ground);
+  border: 0;
+  border-radius: var(--r-pill);
+  display: flex;
+  justify-content: space-between;
+  min-height: 45px;
+  padding: var(--s2) var(--s4);
+  text-align: left;
+  width: 100%;
+}
+
+@media (min-width: 900px) {
+  .doing-task-line {
+    align-items: center;
+  }
+
+  .doing-task .task-name {
+    font-size: 20px;
+  }
+
+  .doing-done-btn {
+    flex: none;
+    padding-inline: 28px;
+  }
+}
+
+/* Doing, Review and the Log carry their destination in their own rendered
+   header, so the route heading stays for focus and announcement only. */
+#view-doing .route-heading,
+#view-review .route-heading,
+#view-log .route-heading {
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
