@@ -100,6 +100,7 @@
   --r-pill: 999px;
   --r-control: 999px;
   --lift: 0 3px 10px color-mix(in srgb, #2E2B25 16%, transparent);
+  --scrim: color-mix(in srgb, #201E1D 42%, transparent);
   --lift-sheet: 0 -12px 32px color-mix(in srgb, #2E2B25 22%, transparent);
 
   --t-ink: 180ms;
@@ -138,6 +139,8 @@
     --ripe-cold: #4A5836;
     --ripe-warm: #C97A3E;
     --ripe-ink: #F9F4ED;
+
+    --scrim: color-mix(in srgb, #0D0C0B 62%, transparent);
   }
 }
 
@@ -498,7 +501,11 @@ label:has(input[type="radio"]) {
 }
 
 #undoToastMessage {
-  flex: 1;
+  flex: 0 1 auto;
+}
+
+.undo-separator {
+  margin-right: auto;
 }
 
 #undoToastButton {
@@ -508,7 +515,7 @@ label:has(input[type="radio"]) {
 }
 
 #sheetScrim {
-  background: rgba(18, 38, 46, .38);
+  background: var(--scrim);
   inset: 0;
   position: fixed;
   z-index: 20;
@@ -975,26 +982,11 @@ label:has(input[type="radio"]) {
   min-height: 1em;
 }
 
-.archive-actions,
-.duration-offer-actions {
+.archive-actions {
   display: flex;
   flex-wrap: wrap;
   gap: var(--s3);
   margin-top: var(--s3);
-}
-
-.duration-offer {
-  background: var(--plate);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-plate);
-  box-shadow: var(--lift);
-  margin: var(--s3) 0;
-  padding: var(--s3);
-}
-
-.duration-offer [aria-pressed="true"] {
-  background: var(--sunk);
-  border-color: var(--enamel);
 }
 
 .empty {
@@ -2116,10 +2108,9 @@ textarea {
   }
 }
 
-/* Doing and the Log carry their destination in their own rendered header, so
-   the route heading stays for focus and announcement only. */
-#view-doing .route-heading,
-#view-log .route-heading {
+/* Doing carries its destination in its own rendered header, so the route
+   heading stays for focus and announcement only. */
+#view-doing .route-heading {
   clip: rect(0 0 0 0);
   clip-path: inset(50%);
   height: 1px;
@@ -2343,4 +2334,63 @@ textarea {
   .receipt-list { grid-area: list; }
   .estimates { grid-area: estimates; }
   .receipt-foot { grid-area: foot; border-top: 0; }
+}
+
+
+/* ── Chores, Archive, Setup and the Log ─────────────────────────────────────
+   Not in the design doc. They keep their structure and take the Organic
+   paint: one head shape, quiet row controls, the same card and pill. */
+
+.screen-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 0 0 var(--s4);
+}
+
+.screen-head .route-heading {
+  font-size: 29px;
+  line-height: 1.06;
+  margin: 4px 0 0;
+}
+
+.ledger-row-actions .btn {
+  font-size: 13px;
+  padding: var(--s2) var(--s3);
+}
+
+.reference-manager {
+  background: var(--plate);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-plate);
+  padding: var(--s3) var(--s4);
+}
+
+.reference-manager summary {
+  font-family: var(--face-display);
+  font-weight: 400;
+}
+
+.reference-add-form .btn,
+.reference-add-form button {
+  border-radius: var(--r-control);
+}
+
+.reference-actions .btn {
+  font-size: 13px;
+  padding: var(--s2) var(--s3);
+}
+
+.archive-actions .btn {
+  font-size: 13px;
+}
+
+.task-card.archived {
+  background: var(--plate);
+  border: 1px solid var(--edge);
+  border-radius: var(--r-plate);
+}
+
+.route-leaf-nav {
+  margin-top: var(--s5);
 }

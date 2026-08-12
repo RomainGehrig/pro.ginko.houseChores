@@ -237,6 +237,11 @@ export function buildInboxCountLine (proposedCount) {
   return 'Inbox · ' + proposedCount + ' waiting'
 }
 
+export function buildChoresCountLine (activeCount) {
+  if (activeCount === 0) return 'Chores · none yet'
+  return 'Chores · ' + activeCount + ' active'
+}
+
 export function renderInboxNavigation (
   proposedCount,
   inboxNav = document.getElementById('inboxNav')
@@ -404,6 +409,8 @@ function handleActiveScheduleChange (evt) {
 function renderActive(snapshot = categoryLocationStore.getSnapshot()) {
   const container = document.getElementById('activeCards')
   const active = getActiveTasks()
+  const countLine = document.getElementById('choresCountLine')
+  if (countLine) countLine.textContent = buildChoresCountLine(active.length)
   container.innerHTML = activeTaskGroupsHtml(active, snapshot, localDateFromDate(new Date()), {
     editingTaskId,
     taskEditorError

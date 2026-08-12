@@ -43,16 +43,16 @@ export function activeTaskCardHtml (
     ? '<div class="ledger-row-editor">' + taskEditorHtml(task, snapshot, editorState.taskEditorError) + '</div>'
     : ''
   const actions = isEditing
-    ? '<button class="save-task-edit-btn" type="button">Save</button>' +
-      '<button class="cancel-task-edit-btn" type="button">Cancel</button>'
-    : '<button class="edit-task-btn" type="button">Edit</button>'
+    ? '<button class="btn btn-sage save-task-edit-btn" type="button">Save</button>' +
+      '<button class="btn btn-ghost cancel-task-edit-btn" type="button">Cancel</button>'
+    : '<button class="btn btn-ghost edit-task-btn" type="button">Edit</button>'
 
   return (
     '<li class="task-card ledger-row" data-id="' + escapeAttribute(task._id) + '">' +
       '<div class="ledger-row-summary">' + buildTaskLedgerSummaryHtml(task, today) + '</div>' +
       editor +
       '<div class="ledger-row-actions">' + actions +
-        '<button class="archive-btn" type="button">Archive</button>' +
+        '<button class="btn btn-secondary archive-btn" type="button">Archive</button>' +
       '</div>' +
     '</li>'
   )

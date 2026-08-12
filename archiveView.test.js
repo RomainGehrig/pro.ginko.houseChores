@@ -38,7 +38,7 @@ test('archived card safely names the chore, references, state, and permanent con
   assert.match(markup, /&lt;img src=x onerror=alert\(<span class="fig">1<\/span>\)&gt;/)
   assert.match(markup, /&lt;Category&gt;/)
   assert.match(markup, /Attic &amp; loft/)
-  assert.match(markup, /class="state-badge stamp">Archived</)
+  assert.match(markup, /class="tag tag-neutral">Archived</)
   assert.match(markup, /data-action="restore"[^>]*>Restore</)
   assert.match(markup, /data-action="delete"[^>]*>Delete permanently</)
 })

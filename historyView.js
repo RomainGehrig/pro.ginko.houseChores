@@ -4,10 +4,11 @@
 import { listAllSessions } from './sessionData.js'
 import { listAllExecutions } from './executionData.js'
 import { listAllTasks } from './taskData.js'
-import { buildHistory, describeOutcomes } from './historyLogic.js'
+import { buildHistory, describeOutcomes, buildLogCountLine, displayMinutes } from './historyLogic.js'
+import { difficultyLabel } from './receiptLogic.js'
 import { formatDateTime, formatDuration, escapeHtml, formatFactHtml } from './helpers.js'
 
-const OUTCOME_TEXT = { done: 'done', already_done: 'already done', cancelled: 'cancelled' }
+const OUTCOME_TEXT = { done: 'done', already_done: 'already done', cancelled: 'skipped' }
 
 export function initHistoryView() {
   // content is rendered on demand by refreshHistoryView
@@ -29,6 +30,8 @@ export async function refreshHistoryView() {
 }
 
 function render(history, container) {
+  const countLine = document.getElementById('logCountLine')
+  if (countLine) countLine.textContent = buildLogCountLine(history.length)
   if (!history.length) {
     container.innerHTML = '<p class="empty">No sessions yet.</p>'
     return
@@ -49,7 +52,7 @@ export function historyRowHtml(session) {
   const summary = session.taskCount
     ? session.taskCount + (session.taskCount === 1 ? ' task' : ' tasks') +
       ' · ' + describeOutcomes(session.outcomeCounts) +
-      ' · ' + formatDuration(session.totalActualMinutes)
+      ' · ' + formatDuration(displayMinutes(session.totalActualMinutes))
     : 'no tasks recorded'
 
   return (
@@ -72,7 +75,7 @@ export function historyRowHtml(session) {
 
 export function historyEntryHtml(entry) {
   const extras = []
-  if (entry.difficultyRating) extras.push(stars(entry.difficultyRating))
+  if (entry.difficultyRating) extras.push(formatFactHtml(difficultyLabel(entry.difficultyRating)))
   if (entry.notes) extras.push('“' + formatFactHtml(entry.notes) + '”')
 
   return (
@@ -80,14 +83,10 @@ export function historyEntryHtml(entry) {
       '<div class="history-entry-line">' +
         '<span class="history-entry-name">' + formatFactHtml(entry.taskName) + '</span>' +
         '<span class="history-entry-outcome">' + formatFactHtml(OUTCOME_TEXT[entry.outcome] || entry.outcome) + '</span>' +
-        '<span class="history-entry-time">' + formatFactHtml(formatDuration(entry.actualDuration)) + '</span>' +
+        '<span class="history-entry-time">' + formatFactHtml(formatDuration(displayMinutes(entry.actualDuration))) + '</span>' +
       '</div>' +
       (extras.length ? '<div class="task-meta">' + extras.join('&nbsp;&nbsp;') + '</div>' : '') +
     '</div>'
   )
 }
 
-function stars(rating) {
-  const filled = Math.max(0, Math.min(5, rating))
-  return '★'.repeat(filled) + '☆'.repeat(5 - filled)
-}

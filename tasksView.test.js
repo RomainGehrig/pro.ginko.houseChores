@@ -263,8 +263,8 @@ test('active task groups render due-first ledger headings and rows', () => {
   assert.match(markup, /<h3 id="ledger-ready" class="ledger-eyebrow stamp"><span>READY<\/span><span class="ledger-count fig">1<\/span><\/h3>/)
   assert.match(markup, /<ul class="ledger">[\s\S]*class="task-card ledger-row" data-id="ripe"/)
   assert.match(markup, /data-id="ripe"[\s\S]*class="row-stamp">—</)
-  assert.match(markup, /data-id="ripe"[\s\S]*class="edit-task-btn"/)
-  assert.match(markup, /data-id="ripe"[\s\S]*class="archive-btn"/)
+  assert.match(markup, /data-id="ripe"[\s\S]*class="[^"]*edit-task-btn"/)
+  assert.match(markup, /data-id="ripe"[\s\S]*class="[^"]*archive-btn"/)
 })
 
 test('active task group renderer has a factual empty state', () => {
@@ -287,6 +287,16 @@ test('active task renderer receives editing state without global coordinator sta
 
   assert.match(markup, /class="task-edit-form"/)
   assert.match(markup, /Choose a schedule/)
-  assert.match(markup, /class="save-task-edit-btn"/)
-  assert.match(markup, /class="cancel-task-edit-btn"/)
+  assert.match(markup, /class="[^"]*save-task-edit-btn"/)
+  assert.match(markup, /class="[^"]*cancel-task-edit-btn"/)
+})
+
+test('the inbox and chores eyebrows count without judging', () => {
+  assert.equal(tasksView.buildInboxCountLine(0), 'Inbox · clear')
+  assert.equal(tasksView.buildInboxCountLine(1), 'Inbox · 1 waiting')
+  assert.equal(tasksView.buildInboxCountLine(4), 'Inbox · 4 waiting')
+
+  assert.equal(tasksView.buildChoresCountLine(0), 'Chores · none yet')
+  assert.equal(tasksView.buildChoresCountLine(1), 'Chores · 1 active')
+  assert.equal(tasksView.buildChoresCountLine(9), 'Chores · 9 active')
 })

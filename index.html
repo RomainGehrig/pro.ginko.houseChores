@@ -68,7 +68,10 @@
   </section>
 
   <section id="view-chores" class="view" style="display:none">
-    <h1 class="route-heading" tabindex="-1">Chores</h1>
+    <header class="screen-head">
+      <p class="eyebrow"><span id="choresCountLine">Chores</span></p>
+      <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">Chores. </span>Everything you look after</h1>
+    </header>
     <div id="choresStatus" role="status"></div>
     <div class="task-section">
       <div class="task-cards" id="activeCards"></div>
@@ -80,8 +83,11 @@
   </section>
 
   <section id="view-archive" class="view" style="display:none">
-    <h1 class="route-heading" tabindex="-1">Archive</h1>
     <a class="back-link" href="#/chores">‹ CHORES</a>
+    <header class="screen-head">
+      <p class="eyebrow">Archive</p>
+      <h1 class="route-heading display" tabindex="-1">Put aside for now</h1>
+    </header>
     <div id="archiveStatus" role="status"></div>
     <div class="task-section">
       <div class="task-cards" id="archivedCards"></div>
@@ -89,8 +95,10 @@
   </section>
 
   <section id="view-setup" class="view" style="display:none">
-    <h1 class="route-heading" tabindex="-1">Setup</h1>
     <a class="back-link" href="#/chores">‹ CHORES</a>
+    <header class="screen-head">
+      <h1 class="route-heading display" tabindex="-1">Setup</h1>
+    </header>
     <details id="referenceManager" class="reference-manager">
       <summary>Categories &amp; locations</summary>
       <div id="referenceManagerStatus" class="inline-status" role="status"></div>
@@ -99,7 +107,7 @@
           <h3 id="categoriesHeading">Categories</h3>
           <form id="addCategoryForm" class="reference-add-form">
             <input id="newCategoryName" aria-label="New category name" autocomplete="off">
-            <button type="submit">Add</button>
+            <button type="submit" class="btn btn-sage">Add</button>
           </form>
           <div id="categoryManagerList"></div>
         </section>
@@ -107,7 +115,7 @@
           <h3 id="locationsHeading">Locations</h3>
           <form id="addLocationForm" class="reference-add-form">
             <input id="newLocationName" aria-label="New location name" autocomplete="off">
-            <button type="submit">Add</button>
+            <button type="submit" class="btn btn-sage">Add</button>
           </form>
           <div id="locationManagerList"></div>
         </section>
@@ -140,7 +148,10 @@
   </section>
 
   <section id="view-log" class="view" style="display:none">
-    <h1 class="route-heading" tabindex="-1">Session History</h1>
+    <header class="screen-head">
+      <p class="eyebrow"><span id="logCountLine">Log</span></p>
+      <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">Log. </span>What the sessions measured</h1>
+    </header>
     <div id="historyList"></div>
   </section>
 </div>

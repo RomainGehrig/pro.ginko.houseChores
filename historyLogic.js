@@ -2,7 +2,7 @@
 // ABOUTME: read-only history view models, newest session first.
 
 const OUTCOME_KEYS = ['done', 'already_done', 'cancelled']
-const OUTCOME_LABELS = { done: 'done', already_done: 'already done', cancelled: 'cancelled' }
+const OUTCOME_LABELS = { done: 'done', already_done: 'already done', cancelled: 'skipped' }
 const STATUS_LABELS = {
   active: 'in progress',
   paused: 'paused',
@@ -66,4 +66,18 @@ function summariseSession (session, executions, taskNameById) {
     totalActualMinutes: entries.reduce((sum, e) => sum + (e.actualDuration || 0), 0),
     entries
   }
+}
+
+// The model keeps precise minutes; the log reads them whole. Any measured time
+// at all counts as a minute rather than rounding a real chore down to nothing.
+export function displayMinutes (minutes) {
+  const value = Number(minutes)
+  if (!Number.isFinite(value) || value <= 0) return 0
+  return Math.max(1, Math.round(value))
+}
+
+export function buildLogCountLine (sessionCount) {
+  const count = Number(sessionCount) || 0
+  if (!count) return 'Log · nothing yet'
+  return 'Log · ' + count + ' session' + (count === 1 ? '' : 's')
 }

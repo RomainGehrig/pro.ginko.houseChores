@@ -163,16 +163,17 @@ export function referenceRowHtml (kind, reference, isEditing = false) {
   if (isEditing) {
     return '<div class="reference-edit-row" ' + rowData + '>' +
       '<input class="reference-name-input" aria-label="Rename ' + kind + '" value="' + nameAttribute + '" autocomplete="off">' +
-      '<button type="button" data-action="save">Save</button>' +
-      '<button type="button" data-action="cancel">Cancel</button>' +
+      '<button type="button" class="btn btn-sage" data-action="save">Save</button>' +
+      '<button type="button" class="btn btn-ghost" data-action="cancel">Cancel</button>' +
     '</div>'
   }
 
   return '<div class="' + rowClass + '" ' + rowData + '>' +
     '<span>' + name + '</span>' +
     '<span class="reference-actions">' +
-      '<button type="button" data-action="rename">Rename</button>' +
-      '<button type="button" data-action="' + (archived ? 'restore' : 'archive') + '">' + (archived ? 'Restore' : 'Archive') + '</button>' +
+      '<button type="button" class="btn btn-ghost" data-action="rename">Rename</button>' +
+      '<button type="button" class="btn btn-secondary" data-action="' +
+        (archived ? 'restore' : 'archive') + '">' + (archived ? 'Restore' : 'Archive') + '</button>' +
     '</span>' +
   '</div>'
 }

@@ -12,12 +12,12 @@ let archivedTasks = new Map()
 
 export function archivedTaskCardHtml (task, snapshot) {
   return '<article class="task-card archived" data-id="' + escapeHtml(task._id) + '" aria-busy="false">' +
-    '<div class="task-name">' + formatFactHtml(String(task.name ?? '')) +
-      ' <span class="state-badge stamp">Archived</span></div>' +
+    '<div class="task-name display">' + formatFactHtml(String(task.name ?? '')) +
+      ' <span class="tag tag-neutral">Archived</span></div>' +
     buildActiveTaskDetailsHtml(task, snapshot) +
     '<div class="archive-actions">' +
-      '<button type="button" data-action="restore">Restore</button>' +
-      '<button type="button" class="btn-danger" data-action="delete">Delete permanently</button>' +
+      '<button type="button" class="btn btn-secondary" data-action="restore">Restore</button>' +
+      '<button type="button" class="btn btn-ghost btn-danger" data-action="delete">Delete permanently</button>' +
     '</div>' +
   '</article>'
 }
