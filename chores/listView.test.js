@@ -115,6 +115,8 @@ test('the groups are labelled, counted, and drop the bands that are empty', () =
   assert.match(markup, /Ready<\/span><span class="ledger-count fig">1</)
   assert.match(markup, /Today<\/span><span class="ledger-count fig">2</)
   assert.doesNotMatch(markup, />Someday</)
+  assert.equal((markup.match(/class="ledger-group is-near"/g) || []).length, 2,
+    'the two bands nearest to hand are the stamped ones')
 })
 
 test('the search and the category narrow the same list', () => {

@@ -147,8 +147,10 @@ export function ledgerGroupsHtml (tasks, snapshot, today = localDateFromDate(new
 
   return groups.map(group => {
     const slug = group.key.toLowerCase().replace(/\s+/g, '-')
-    return '<section class="ledger-group" aria-labelledby="ledger-' + slug + '">' +
-      '<h3 id="ledger-' + slug + '" class="ledger-eyebrow' + (bandIsNear(group.key) ? ' stamp' : '') +
+    const near = bandIsNear(group.key)
+    return '<section class="ledger-group' + (near ? ' is-near' : '') +
+      '" aria-labelledby="ledger-' + slug + '">' +
+      '<h3 id="ledger-' + slug + '" class="ledger-eyebrow' + (near ? ' stamp' : '') +
         '"><span>' + escapeHtml(group.label) + '</span>' +
         '<span class="ledger-count fig">' + group.count + '</span></h3>' +
       '<ul class="ledger">' +
