@@ -1465,6 +1465,54 @@ test('Today stacks its head and stands the vessel up on a phone', async () => {
   assert.ok(result.targets.every(height => height >= 44.5), JSON.stringify(result.targets))
 })
 
+const SETUP_BODY =
+  '<main id="app"><section id="view-setup" class="view">' +
+    '<div id="setupScreen" class="setup" data-tab="categories">' +
+      '<header class="screen-head">' +
+        '<p class="eyebrow">Setup</p>' +
+        '<h1 class="route-heading display">Your vocabulary</h1>' +
+        '<p class="muted setup-subline">Categories and locations are your words.</p>' +
+        '<div id="setupTabs" class="seg setup-tabs" role="group"></div>' +
+      '</header>' +
+      '<div id="setupStatus" class="inline-status" role="status"></div>' +
+      '<div class="setup-panes">' +
+        '<section id="categoriesPane" class="setup-pane is-categories">' +
+          '<h2 class="display">Categories</h2></section>' +
+        '<section id="locationsPane" class="setup-pane is-locations">' +
+          '<h2 class="display">Locations</h2></section>' +
+        '<section id="aiPane" class="setup-pane is-ai"><h2 class="display">Suggestions</h2></section>' +
+      '</div>' +
+    '</div>' +
+  '</section></main>'
+
+test('Setup opens on its vocabulary, not on a gap where a message might go', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 1280, height: 900 },
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
+    body: SETUP_BODY,
+    script: `
+      const rect = selector => {
+        const box = document.querySelector(selector).getBoundingClientRect()
+        return { top: Math.round(box.top), bottom: Math.round(box.bottom),
+                 height: Math.round(box.height) }
+      }
+      const result = {
+        subline: rect('.setup-subline'),
+        status: rect('#setupStatus'),
+        panes: rect('.setup-panes'),
+        statusDisplay: getComputedStyle(document.querySelector('#setupStatus')).display
+      }
+    `
+  })
+
+  // The status keeps a line so a message never shoves the screen down, but an
+  // empty one must not read as a hole between the heading and the vocabulary.
+  assert.ok(result.status.height <= 20, JSON.stringify(result))
+  assert.equal(result.statusDisplay, 'block', 'the live region stays in the layout')
+  assert.ok(result.panes.top - result.subline.bottom <= 46,
+    'the vocabulary starts under its heading: ' + JSON.stringify(result))
+})
+
 const LOG_BODY =
   '<main id="app"><section id="view-log" class="view">' +
     '<header class="screen-head log-head">' +

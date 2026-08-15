@@ -689,7 +689,19 @@ label:has(input[type="radio"]) {
 
 .setup {
   display: grid;
-  gap: var(--s3);
+  gap: var(--s2);
+}
+
+/* The status keeps its line so an arriving message never shoves the screen
+   down. It stays close to the heading rather than opening a hole above the
+   vocabulary while it is empty. */
+.setup > #setupStatus {
+  margin-top: 0;
+}
+
+/* The grid's own gap spaces the head; its margin would double it. */
+.setup > .screen-head {
+  margin-bottom: 0;
 }
 
 .setup-subline {
