@@ -1465,6 +1465,89 @@ test('Today stacks its head and stands the vessel up on a phone', async () => {
   assert.ok(result.targets.every(height => height >= 44.5), JSON.stringify(result.targets))
 })
 
+const RECEIPT_BODY =
+  '<main id="app"><section id="view-review" class="view"><div class="receipt">' +
+    '<div class="receipt-main">' +
+      '<header class="receipt-head">' +
+        '<p class="eyebrow">Receipt · Sat, Aug 15</p>' +
+        '<h1 class="route-heading display">5 chores · 36 min recorded</h1>' +
+      '</header>' +
+      '<div class="receipt-list">' +
+        '<article class="receipt-card" data-open="true">' +
+          '<div class="receipt-card-body">' +
+            '<div class="track-row">' +
+              '<span class="track-cap track-cap-actual">Took 8 min</span>' +
+              '<div class="track-controls">' +
+                '<button type="button" class="pill omit-btn">Don’t record</button>' +
+                '<button type="button" class="pill step-btn">−</button>' +
+                '<input class="f-actual input fig" type="number" value="8">' +
+                '<button type="button" class="pill step-btn">+</button>' +
+              '</div>' +
+            '</div>' +
+            '<div class="track-row">' +
+              '<span class="track-cap track-cap-estimate">Estimate 15 min</span>' +
+              '<div class="track-controls">' +
+                '<button type="button" class="btn btn-ghost toggle-estimate">Edit estimate</button>' +
+              '</div>' +
+            '</div>' +
+          '</div>' +
+        '</article>' +
+      '</div>' +
+    '</div>' +
+    '<aside class="receipt-rail"><h2 class="display">Estimates</h2>' +
+      '<p class="muted">The estimate is only a planning number.</p>' +
+      '<div id="durationOffers"></div></aside>' +
+    '<div class="receipt-foot">' +
+      '<button class="btn btn-primary btn-block">File session</button></div>' +
+  '</div></section></main>'
+
+const RECEIPT_SCRIPT = `
+  const box = selector => {
+    const rect = document.querySelector(selector).getBoundingClientRect()
+    return {
+      top: Math.round(rect.top), left: Math.round(rect.left),
+      right: Math.round(rect.right), bottom: Math.round(rect.bottom),
+      width: Math.round(rect.width)
+    }
+  }
+  const result = {
+    cap: box('.track-cap-actual'),
+    controls: box('.receipt-card .track-controls'),
+    main: box('.receipt-main'),
+    rail: box('.receipt-rail'),
+    foot: box('.receipt-foot')
+  }
+`
+
+test('the Receipt sets each caption against its controls on one desktop row', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 1280, height: 900 },
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
+    body: RECEIPT_BODY,
+    script: RECEIPT_SCRIPT
+  })
+
+  assert.ok(result.controls.left >= result.cap.right, JSON.stringify(result))
+  assert.ok(result.controls.top < result.cap.bottom,
+    'the caption and its controls share a row: ' + JSON.stringify(result))
+
+  // The estimates rail keeps its width and File session stays under it.
+  assert.equal(result.rail.width, 320, JSON.stringify(result))
+  assert.ok(result.rail.left >= result.main.right, JSON.stringify(result))
+  assert.equal(result.foot.left, result.rail.left, JSON.stringify(result))
+})
+
+test('the Receipt stacks each caption over its controls on a phone', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 800 },
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
+    body: RECEIPT_BODY,
+    script: RECEIPT_SCRIPT
+  })
+
+  assert.ok(result.controls.top >= result.cap.bottom, JSON.stringify(result))
+})
+
 const INBOX_BODY =
   '<main id="app"><section id="view-inbox" class="view">' +
     '<div class="inbox-left">' +
