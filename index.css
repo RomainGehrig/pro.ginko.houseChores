@@ -525,15 +525,22 @@ label:has(input[type="radio"]) {
   text-decoration: none;
 }
 
+/* Where you are is a filled pill in a heavier weight — never colour on its
+   own, and never a mark the resting destinations also carry. */
 .bottom-nav a.active,
 .bottom-nav a[aria-current="page"] {
-  color: var(--enamel);
-  text-decoration: underline;
-  text-underline-offset: 4px;
+  background: var(--ground);
+  border-radius: var(--r-pill);
+  color: var(--ink);
+  font-weight: 700;
 }
 
 .nav-count {
   margin-left: var(--s1);
+}
+
+.nav-count::before {
+  content: "· ";
 }
 
 @media (min-width: 900px) {
@@ -983,6 +990,12 @@ label:has(input[type="radio"]) {
 .ledger-filters {
   display: grid;
   gap: var(--s2);
+}
+
+.ledger-cats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
 }
 
 .ledger-filters[hidden],

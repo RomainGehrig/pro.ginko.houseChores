@@ -5,6 +5,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   ESTIMATE_PRESETS,
+  ledgerCategoryPillsHtml,
   ledgerViewsHtml,
   ripeMeterHtml,
   ledgerRowHtml,
@@ -37,6 +38,18 @@ test('the view tabs press the one that is showing', () => {
   assert.match(markup, /data-ledger-view="active"[^>]*aria-pressed="false"/)
   assert.match(markup, /data-ledger-view="archive"[^>]*aria-pressed="true"/)
   assert.match(markup, /Unscheduled 2/)
+})
+
+test('the ledger filters by category on pills, All first and pressed by default', () => {
+  const markup = ledgerCategoryPillsHtml(SNAPSHOT.categories, '')
+  assert.match(markup, /^<button type="button" class="pill" data-category-id=""[^>]*>All<\/button>/)
+  assert.match(markup, /data-category-id=""[^>]*aria-pressed="true"/)
+  assert.match(markup, /data-category-id="cat-1"[^>]*aria-pressed="false"[^>]*>Cleaning</)
+  assert.doesNotMatch(markup, /cat-tab/, 'the ledger filter is pills, not the pool tabs')
+
+  const chosen = ledgerCategoryPillsHtml(SNAPSHOT.categories, 'cat-2')
+  assert.match(chosen, /data-category-id=""[^>]*aria-pressed="false"/)
+  assert.match(chosen, /data-category-id="cat-2"[^>]*aria-pressed="true"/)
 })
 
 test('the ripeness meter is a fill, a due tick and a fact — no colour of alarm', () => {

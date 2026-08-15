@@ -34,6 +34,18 @@ export function ledgerViewsHtml (unscheduledCount, activeView = 'active') {
   ).join('')
 }
 
+// The pool's underlined tabs were reused here early on; the ledger's own filter
+// is a wrapping row of pills, which is what a set of equal choices looks like
+// everywhere else in this app.
+export function ledgerCategoryPillsHtml (categories, selectedId) {
+  return [{ _id: '', name: 'All' }].concat(categories || []).map(category => {
+    const on = (category._id || '') === (selectedId || '')
+    return '<button type="button" class="pill" data-category-id="' +
+      escapeAttribute(category._id || '') + '" aria-pressed="' + (on ? 'true' : 'false') + '">' +
+      escapeHtml(String(category.name ?? '')) + '</button>'
+  }).join('')
+}
+
 export function ripeMeterHtml (task, today) {
   const progress = cadenceProgress(task, today)
   if (progress === null) return ''

@@ -659,12 +659,52 @@ const PRIMARY_NAV_BODY =
   '<main id="app"><section id="content">Chores</section></main>' +
   '<nav class="bottom-nav" aria-label="Primary">' +
     '<p class="nav-wordmark display">Chore Planner</p>' +
-    '<a data-route="today" href="#/today">TODAY</a>' +
-    '<a data-route="inbox" href="#/inbox">INBOX <span class="nav-count fig">12</span></a>' +
-    '<a data-route="chores" href="#/chores">CHORES</a>' +
-    '<a data-route="log" href="#/log" aria-current="page">LOG</a>' +
-    '<a data-route="setup" href="#/setup">SETUP</a>' +
+    '<a data-route="today" href="#/today">Today</a>' +
+    '<a data-route="inbox" href="#/inbox">Inbox <span class="nav-count fig">12</span></a>' +
+    '<a data-route="chores" href="#/chores">Chores</a>' +
+    '<a data-route="log" href="#/log" aria-current="page">Log</a>' +
+    '<a data-route="setup" href="#/setup">Setup</a>' +
   '</nav>'
+
+test('the navigation names destinations as the design writes them and marks the one you are on', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 640 },
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
+    body: PRIMARY_NAV_BODY,
+    script: `
+      const here = document.querySelector('[aria-current="page"]')
+      const resting = document.querySelector('[data-route="today"]')
+      const hereStyle = getComputedStyle(here)
+      const result = {
+        labels: [...document.querySelectorAll('.bottom-nav a')].map(a => a.firstChild.textContent.trim()),
+        transform: [...document.querySelectorAll('.bottom-nav a')]
+          .map(a => getComputedStyle(a).textTransform),
+        // The result crosses back as Latin-1, so the separator travels as its
+        // code point rather than as the character itself.
+        countBefore: [...getComputedStyle(document.querySelector('.nav-count'), '::before').content]
+          .map(character => character.codePointAt(0)),
+        hereBackground: hereStyle.backgroundColor,
+        hereWeight: hereStyle.fontWeight,
+        hereRadius: hereStyle.borderRadius,
+        restingBackground: getComputedStyle(resting).backgroundColor,
+        restingWeight: getComputedStyle(resting).fontWeight
+      }
+    `
+  })
+
+  assert.deepEqual(result.labels, ['Today', 'Inbox', 'Chores', 'Log', 'Setup'])
+  assert.ok(result.transform.every(value => value === 'none'), JSON.stringify(result.transform))
+  assert.deepEqual(result.countBefore, [0x22, 0xb7, 0x20, 0x22],
+    'the inbox count reads "Inbox · 12", as in the doc')
+
+  // Where you are is a filled pill and a heavier weight, so it does not rest on
+  // colour alone to say it.
+  assert.equal(result.hereBackground, 'rgb(245, 234, 216)')
+  assert.equal(result.hereWeight, '700')
+  assert.equal(result.hereRadius, '999px')
+  assert.equal(result.restingBackground, 'rgba(0, 0, 0, 0)')
+  assert.notEqual(result.restingWeight, '700')
+})
 
 test('bottom primary navigation has phone-sized targets, fixed safe-area placement, and no horizontal overflow', async () => {
   const result = await runBrowserScenario({

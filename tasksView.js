@@ -20,6 +20,7 @@ import {
 } from './scheduleEditor.js'
 import {
   archiveListHtml,
+  ledgerCategoryPillsHtml,
   ledgerGroupsHtml,
   ledgerViewsHtml,
   rowSummaryHtml,
@@ -27,7 +28,6 @@ import {
 } from './chores/listView.js'
 import { categoryPillsHtml, locationPillsHtml, referenceStateSuffix } from './chores/fieldPills.js'
 import { unscheduledTasks } from './chores/ledgerLogic.js'
-import { buildCategoryTabsHtml } from './vesselPresentation.js'
 import { optimisticArchive, pendingUndo } from './undoToast.js'
 import { runArchiveAction } from './archiveView.js'
 
@@ -475,7 +475,7 @@ function renderLedger (snapshot = categoryLocationStore.getSnapshot()) {
   const countLine = document.getElementById('choresCountLine')
   if (countLine) countLine.textContent = buildChoresCountLine(active.length)
   document.getElementById('choresViews').innerHTML = ledgerViewsHtml(looseCount, ledger.view)
-  document.getElementById('choreCategoryFilter').innerHTML = buildCategoryTabsHtml(
+  document.getElementById('choreCategoryFilter').innerHTML = ledgerCategoryPillsHtml(
     selectableReferences(snapshot.categories), ledger.categoryId)
   document.getElementById('choresFilters').hidden = ledger.view === 'archive'
 
