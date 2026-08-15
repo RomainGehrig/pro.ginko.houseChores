@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { hasRequestedRoute, initRouter, parseRoute, setNavVisible, showView } from './router.js'
 
 const screenNames = ['today', 'inbox', 'chores', 'setup', 'doing', 'review', 'log']
-const primaryRoutes = ['today', 'inbox', 'chores', 'log']
+const primaryRoutes = ['today', 'inbox', 'chores', 'log', 'setup']
 
 function installRouterDom (hash = '') {
   const views = new Map(screenNames.map(name => {
@@ -120,7 +120,7 @@ test('each final route shows its Stage 3 screen, focuses its heading, and canoni
 test('primary navigation maps routes to the sole factual current destination', () => {
   const expectedPrimary = {
     today: 'today', inbox: 'inbox', chores: 'chores', chore: 'chores', archive: 'chores',
-    setup: 'chores', log: 'log', doing: null, receipt: null
+    setup: 'setup', log: 'log', doing: null, receipt: null
   }
 
   for (const [route, primary] of Object.entries(expectedPrimary)) {

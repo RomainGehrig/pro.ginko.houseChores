@@ -21,7 +21,7 @@ const PRIMARY_ROUTE_BY_ROUTE = {
   chores: 'chores',
   chore: 'chores',
   archive: 'chores',
-  setup: 'chores',
+  setup: 'setup',
   log: 'log'
 }
 const LEGACY_ROUTES = {
@@ -79,7 +79,7 @@ function routeForView (name, param) {
 function navigationItems () {
   if (typeof document === 'undefined') return []
   if (typeof document.querySelectorAll === 'function') return [...document.querySelectorAll('.bottom-nav [data-route]')]
-  return ['today', 'inbox', 'chores', 'log']
+  return ['today', 'inbox', 'chores', 'log', 'setup']
     .map(name => document.querySelector?.('.bottom-nav [data-route="' + name + '"]'))
     .filter(Boolean)
 }

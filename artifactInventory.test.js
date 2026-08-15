@@ -71,7 +71,8 @@ test('route shell declares four primary canonical anchors, seven focus headings,
     ['today', '#/today'],
     ['inbox', '#/inbox'],
     ['chores', '#/chores'],
-    ['log', '#/log']
+    ['log', '#/log'],
+    ['setup', '#/setup']
   ])
   const inboxAnchor = navMarkup.match(/<a[^>]*id="inboxNav"[^>]*>/)?.[0] || ''
   assert.doesNotMatch(inboxAnchor, /\shidden(?:\s|>)/)
