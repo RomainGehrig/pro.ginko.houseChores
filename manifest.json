@@ -286,14 +286,6 @@
       "Description": "Node tests covering idempotent reference initialization and degraded data loading."
     },
     {
-      "path": "categoryLocationView.js",
-      "Description": "Renders category/location management and queues successful archive mutations for factual undo."
-    },
-    {
-      "path": "categoryLocationView.test.js",
-      "Description": "Node tests covering reference-list helpers, archive feedback, and queued restore behavior."
-    },
-    {
       "path": "artifactInventory.test.js",
       "Description": "Node tests enforcing JavaScript inventory, route and overlay markup, control geometry, and zero native dialogs."
     },
@@ -332,6 +324,30 @@
     {
       "path": "chores/listView.test.js",
       "Description": "Tests the Chores ledger markup \u2014 bands, rows, the inline editor and the archive."
+    },
+    {
+      "path": "settingsData.js",
+      "Description": "Reads and writes the single app-settings record behind the Setup switches."
+    },
+    {
+      "path": "settingsData.test.js",
+      "Description": "Tests the single app-settings record behind the Setup switches."
+    },
+    {
+      "path": "setup/vocabularyLogic.js",
+      "Description": "Pure view model for Setup \u2014 the vocabulary tabs, usage counts and switch copy."
+    },
+    {
+      "path": "setup/vocabularyLogic.test.js",
+      "Description": "Tests the Setup screen's vocabulary arithmetic and copy."
+    },
+    {
+      "path": "setup/setupView.js",
+      "Description": "Renders and wires Setup \u2014 the vocabulary of categories and locations, and the AI switch."
+    },
+    {
+      "path": "setup/setupView.test.js",
+      "Description": "Tests the Setup screen markup \u2014 the vocabulary tabs, term rows and the AI switch."
     }
   ],
   "app_tables": {
@@ -565,6 +581,15 @@
         "status": {
           "type": "String",
           "description": "One of: active, paused, completed, or interrupted."
+        }
+      }
+    },
+    "settings": {
+      "description": "One record holding the app-wide switches the user sets in Setup.",
+      "schema": {
+        "aiSuggestions": {
+          "type": "String",
+          "description": "True when the user has turned Inbox suggestions on (boolean). Off by default."
         }
       }
     }

@@ -254,3 +254,9 @@ test('the inbox and chores eyebrows count without judging', () => {
   assert.equal(tasksView.buildChoresCountLine(1), 'Chores · 1 active')
   assert.equal(tasksView.buildChoresCountLine(9), 'Chores · 9 active')
 })
+
+test('the suggestion control is absent, not refusing, when suggestions are off', () => {
+  assert.equal(tasksView.suggestionControlHtml('Mop', false), '')
+  assert.match(tasksView.suggestionControlHtml('Mop', true), /class="pill-icon enrich-one-btn"/)
+  assert.match(tasksView.suggestionControlHtml('Mop', true), /aria-label="Suggest details for Mop"/)
+})

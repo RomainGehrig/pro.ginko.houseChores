@@ -27,6 +27,10 @@ export function escapeHtml(str) {
   })[character])
 }
 
+// The same escaping, under the name that marks an attribute context at the call
+// site. Keeping the two names apart is what lets either one change alone.
+export const escapeAttribute = escapeHtml
+
 export function formatFactHtml(value) {
   const text = String(value)
   const figures = /\d+(?::\d+)*(?:\.\d+)?/g

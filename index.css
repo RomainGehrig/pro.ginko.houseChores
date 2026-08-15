@@ -561,20 +561,6 @@ label:has(input[type="radio"]) {
 }
 
 
-.back-link {
-  align-items: center;
-  color: var(--enamel);
-  display: inline-flex;
-  min-height: 45px;
-}
-
-.back-link {
-  font-family: var(--face-stamp);
-  font-size: var(--t-stamp);
-  letter-spacing: .04em;
-  text-decoration: none;
-}
-
 .plate {
   background: var(--plate);
   border: 1px solid var(--rule);
@@ -598,78 +584,230 @@ label:has(input[type="radio"]) {
   margin-bottom: 8px;
 }
 
-.reference-manager {
-  margin-bottom: var(--s4);
-  border: 1px solid var(--edge);
-  border-radius: var(--r-plate);
-  background: var(--plate);
-  padding: var(--s2) var(--s3);
-  box-shadow: var(--lift);
-}
+/* ── Setup: your vocabulary ── */
 
-.reference-manager summary {
-  align-items: center;
-  display: flex;
-  cursor: pointer;
-  font-weight: 600;
-}
-
-.reference-columns {
+.setup {
   display: grid;
-  grid-template-columns: 1fr;
-  gap: 20px;
-  margin-top: 14px;
-}
-
-.reference-columns h3 {
-  margin: 0 0 8px;
-  font-size: 16px;
-}
-
-.reference-add-form {
-  display: flex;
   gap: var(--s3);
-  margin-bottom: 10px;
 }
 
-.reference-add-form input {
-  min-width: 0;
-  flex: 1;
+.setup-subline {
+  font-size: var(--t-note);
+  margin: var(--s2) 0 0;
 }
 
-.reference-row,
-.reference-edit-row {
+.setup-tabs {
+  margin-top: var(--s3);
+  overflow-x: auto;
+}
+
+.setup-panes {
+  display: grid;
+  gap: var(--s5);
+}
+
+.setup-pane {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  padding: var(--s2) 0;
-  border-top: 1px solid var(--rule);
+  flex-direction: column;
+  gap: var(--s3);
 }
 
-.reference-row > span:first-child {
+.setup-pane-title {
+  font-size: 20px;
+  margin: 0;
+}
+
+.vocabulary-note {
+  font-size: var(--t-note);
+  margin: 0;
+}
+
+.term-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.term-row {
+  align-items: center;
+  background: var(--plate);
+  border: 1px solid transparent;
+  border-radius: var(--r-chip);
+  display: flex;
+  gap: var(--s2);
+  min-height: 56px;
+  padding: var(--s2) var(--s3);
+}
+
+/* An archived word is set aside, not spent: the dashed outline says "still
+   here, still carried by whatever already used it". */
+.term-row.is-archived {
+  background: transparent;
+  border: 1px dashed var(--edge);
+}
+
+.term-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 2px;
   min-width: 0;
   overflow-wrap: anywhere;
 }
 
-.reference-actions {
+.term-name {
+  font-size: var(--t-name);
+  font-weight: 600;
+}
+
+.term-note {
+  font-size: var(--t-note);
+}
+
+.term-row .btn {
+  flex: none;
+  font-size: 12px;
+  padding: var(--s2) var(--s3);
+}
+
+.term-archive {
+  color: var(--stamp);
+}
+
+.term-row .term-name-input,
+.term-add-input {
+  flex: 1;
+  min-width: 0;
+}
+
+.vocabulary-archived {
+  border-top: 1px solid var(--rule);
   display: flex;
-  flex-shrink: 0;
+  flex-direction: column;
+  gap: var(--s2);
+  padding-top: var(--s3);
+}
+
+.ai-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+  padding: var(--s4);
+}
+
+.ai-card-head {
+  align-items: center;
+  display: flex;
   gap: var(--s3);
 }
 
-.reference-edit-row .reference-name-input {
-  min-width: 0;
+.ai-card-title {
   flex: 1;
+  min-width: 0;
 }
 
-.reference-archived {
-  margin-top: 8px;
+.ai-card-title p {
+  margin: 0;
 }
 
-.reference-archived summary {
+.ai-title {
+  font-size: 19px;
+}
+
+.ai-card-body {
+  font-size: var(--t-note);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.ai-switch-group {
+  align-items: center;
+  display: flex;
+  flex: none;
+  gap: var(--s2);
+}
+
+.ai-switch-state {
+  font-size: var(--t-note);
+  width: 22px;
+}
+
+.ai-switch {
+  align-items: center;
+  background: color-mix(in srgb, var(--ink) 14%, transparent);
+  border: 0;
+  border-radius: var(--r-pill);
   cursor: pointer;
-  color: var(--graphite);
+  display: flex;
+  flex: none;
+  height: 32px;
+  justify-content: flex-start;
+  padding: 3px;
+  transition: background .2s ease, justify-content 0s;
+  width: 54px;
+}
+
+.ai-switch[aria-checked="true"] {
+  background: var(--sage);
+  justify-content: flex-end;
+}
+
+.ai-switch-knob {
+  background: var(--ground);
+  border-radius: var(--r-pill);
+  box-shadow: 0 1px 3px rgba(46, 43, 37, .3);
+  display: block;
+  height: 26px;
+  width: 26px;
+}
+
+.ai-data {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+.ai-data p {
+  font-size: var(--t-note);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* On a phone the tabs choose the pane; the pane title would only repeat the
+   tab, so it is left for assistive tech alone. */
+@media (max-width: 899px) {
+  .setup[data-tab="categories"] .setup-pane:not(.is-categories),
+  .setup[data-tab="locations"] .setup-pane:not(.is-locations),
+  .setup[data-tab="ai"] .setup-pane:not(.is-ai) {
+    display: none;
+  }
+
+  .setup-pane-title {
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+}
+
+@media (min-width: 900px) {
+  .setup .setup-tabs {
+    display: none;
+  }
+
+  .setup-panes {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .setup-pane.is-ai {
+    grid-column: 1 / -1;
+  }
 }
 
 .inline-status {
@@ -695,23 +833,6 @@ label:has(input[type="radio"]) {
 
 .is-archived {
   color: var(--graphite);
-}
-
-.reference-manager.is-busy {
-  background: var(--sunk);
-}
-
-.reference-manager.is-busy button,
-.reference-manager.is-busy input,
-.reference-manager button:disabled,
-.reference-manager input:disabled {
-  cursor: wait;
-}
-
-@media (min-width: 560px) {
-  .reference-columns {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 }
 
 .task-section {
@@ -2860,28 +2981,6 @@ textarea {
 }
 
 .ledger-row-actions .btn {
-  font-size: 13px;
-  padding: var(--s2) var(--s3);
-}
-
-.reference-manager {
-  background: var(--plate);
-  border: 1px solid var(--edge);
-  border-radius: var(--r-plate);
-  padding: var(--s3) var(--s4);
-}
-
-.reference-manager summary {
-  font-family: var(--face-display);
-  font-weight: 400;
-}
-
-.reference-add-form .btn,
-.reference-add-form button {
-  border-radius: var(--r-control);
-}
-
-.reference-actions .btn {
   font-size: 13px;
   padding: var(--s2) var(--s3);
 }

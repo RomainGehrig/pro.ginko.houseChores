@@ -1237,3 +1237,115 @@ test('the receipt gauge draws both tracks, its history and its suggestion', asyn
   assert.equal(result.hasDifficulty, false)
   assert.ok(result.scrollWidth <= result.viewportWidth, JSON.stringify(result))
 })
+
+test('Setup shows one vocabulary at a time on a phone and both side by side on a desktop', async () => {
+  const body = '<main id="app"><div id="setupScreen" class="setup" data-tab="categories">' +
+      '<div id="setupTabs" class="seg setup-tabs"><button class="seg-opt" aria-pressed="true">Categories</button>' +
+        '<button class="seg-opt" aria-pressed="false">Locations</button>' +
+        '<button class="seg-opt" aria-pressed="false">AI</button></div>' +
+      '<div class="setup-panes">' +
+        '<section id="categoriesPane" class="setup-pane is-categories">' +
+          '<h2 class="display setup-pane-title">Categories</h2>' +
+          '<ul class="term-list"><li class="term-row" id="activeTerm">' +
+            '<span class="term-main"><span class="term-name">Cleaning</span>' +
+            '<span class="term-note muted">2 chores</span></span>' +
+            '<button class="btn btn-ghost">Rename</button>' +
+            '<button class="btn btn-ghost term-archive">Archive</button></li>' +
+            '<li class="term-row is-archived" id="archivedTerm">' +
+            '<span class="term-main"><span class="term-name">Galley</span>' +
+            '<span class="term-note muted">1 chore still carries it</span></span>' +
+            '<button class="btn btn-ghost">Restore</button></li></ul>' +
+        '</section>' +
+        '<section id="locationsPane" class="setup-pane is-locations"><h2 class="display setup-pane-title">Locations</h2></section>' +
+        '<section id="aiPane" class="setup-pane is-ai"><div class="card ai-card"><div class="ai-card-head">' +
+          '<div class="ai-card-title"><p class="display ai-title">Suggestions</p></div>' +
+          '<div class="ai-switch-group"><span class="muted ai-switch-state" id="aiSwitchLabel">Off</span>' +
+          '<button class="ai-switch" id="aiSwitch" role="switch" aria-checked="false">' +
+          '<span class="ai-switch-knob" id="aiKnob"></span></button></div></div></div></section>' +
+      '</div></div></main>'
+  const phone = await runBrowserScenario({
+    viewport: { width: 390, height: 780 },
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
+    body,
+    script: `
+      const shown = id => getComputedStyle(document.getElementById(id)).display
+      const rect = id => { const b = document.getElementById(id).getBoundingClientRect(); return { left: Math.round(b.left), width: Math.round(b.width), height: Math.round(b.height) } }
+      const track = document.getElementById('aiSwitch')
+      const switchOffJustify = getComputedStyle(track).justifyContent
+      track.setAttribute('aria-checked', 'true')
+      const result = {
+        tabs: shown('setupTabs'),
+        categories: shown('categoriesPane'),
+        locations: shown('locationsPane'),
+        ai: shown('aiPane'),
+        titleVisible: getComputedStyle(document.querySelector('.setup-pane-title')).position !== 'absolute',
+        activeTermHeight: rect('activeTerm').height,
+        archivedBorder: getComputedStyle(document.getElementById('archivedTerm')).borderTopStyle,
+        activeBorder: getComputedStyle(document.getElementById('activeTerm')).borderTopStyle,
+        switchOnBackground: getComputedStyle(track).backgroundColor,
+        switchOffJustify,
+        switchOnJustify: getComputedStyle(track).justifyContent,
+        knobSize: (() => {
+          const knob = rect('aiKnob')
+          return { offset: knob.left - rect('aiSwitch').left, width: knob.width, height: knob.height }
+        })(),
+        docScroll: document.documentElement.scrollWidth,
+        viewport: window.innerWidth
+      }
+`
+  })
+
+  assert.equal(phone.tabs, 'flex', 'the tabs are how a phone chooses a pane')
+  assert.equal(phone.categories, 'flex')
+  assert.equal(phone.locations, 'none')
+  assert.equal(phone.ai, 'none')
+  assert.equal(phone.titleVisible, false, 'the title would only repeat the tab')
+  assert.ok(phone.activeTermHeight >= 56, JSON.stringify(phone))
+  assert.equal(phone.activeBorder, 'solid')
+  assert.equal(phone.archivedBorder, 'dashed', 'set aside, not spent')
+  assert.equal(phone.switchOnBackground, 'rgb(122, 138, 94)', 'the switch reads in sage, never in alarm')
+  assert.equal(phone.switchOffJustify, 'flex-start')
+  assert.equal(phone.switchOnJustify, 'flex-end', 'the knob travels with the switch position')
+  assert.ok(phone.docScroll <= phone.viewport, JSON.stringify(phone))
+
+  const desktop = await runBrowserScenario({
+    viewport: { width: 1020, height: 800 },
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
+    body,
+    script: `
+      const shown = id => getComputedStyle(document.getElementById(id)).display
+      const rect = id => { const b = document.getElementById(id).getBoundingClientRect(); return { left: Math.round(b.left), width: Math.round(b.width), height: Math.round(b.height) } }
+      const track = document.getElementById('aiSwitch')
+      const switchOffJustify = getComputedStyle(track).justifyContent
+      track.setAttribute('aria-checked', 'true')
+      const result = {
+        tabs: shown('setupTabs'),
+        categories: shown('categoriesPane'),
+        locations: shown('locationsPane'),
+        ai: shown('aiPane'),
+        titleVisible: getComputedStyle(document.querySelector('.setup-pane-title')).position !== 'absolute',
+        activeTermHeight: rect('activeTerm').height,
+        archivedBorder: getComputedStyle(document.getElementById('archivedTerm')).borderTopStyle,
+        activeBorder: getComputedStyle(document.getElementById('activeTerm')).borderTopStyle,
+        switchOnBackground: getComputedStyle(track).backgroundColor,
+        switchOffJustify,
+        switchOnJustify: getComputedStyle(track).justifyContent,
+        knobSize: (() => {
+          const knob = rect('aiKnob')
+          return { offset: knob.left - rect('aiSwitch').left, width: knob.width, height: knob.height }
+        })(),
+        docScroll: document.documentElement.scrollWidth,
+        viewport: window.innerWidth
+      }
+`
+  })
+
+  assert.equal(desktop.tabs, 'none', 'both panes are on screen, so there is nothing to choose')
+  assert.equal(desktop.categories, 'flex')
+  assert.equal(desktop.locations, 'flex')
+  assert.equal(desktop.ai, 'flex')
+  assert.equal(desktop.titleVisible, true)
+  assert.deepEqual(desktop.knobSize, { offset: 25, width: 26, height: 26 },
+    'the switch reads its own position at a glance')
+  assert.ok(desktop.docScroll <= desktop.viewport, JSON.stringify(desktop))
+})

@@ -1,8 +1,7 @@
 // ABOUTME: The category and location pill groups shared by the Inbox card and the Chores ledger.
 // ABOUTME: Pills are what you touch; the hidden field and the checkboxes stay the values the app reads.
 
-import { escapeAttribute } from '../categoryLocationView.js'
-import { escapeHtml } from '../helpers.js'
+import { escapeAttribute, escapeHtml } from '../helpers.js'
 
 export function referenceStateSuffix (reference) {
   if (reference.status === 'archived') return ' (Archived)'

@@ -87,32 +87,20 @@
   </section>
 
   <section id="view-setup" class="view" style="display:none">
-    <a class="back-link" href="#/chores">‹ CHORES</a>
-    <header class="screen-head">
-      <h1 class="route-heading display" tabindex="-1">Setup</h1>
-    </header>
-    <details id="referenceManager" class="reference-manager">
-      <summary>Categories &amp; locations</summary>
-      <div id="referenceManagerStatus" class="inline-status" role="status"></div>
-      <div class="reference-columns">
-        <section aria-labelledby="categoriesHeading">
-          <h3 id="categoriesHeading">Categories</h3>
-          <form id="addCategoryForm" class="reference-add-form">
-            <input id="newCategoryName" aria-label="New category name" autocomplete="off">
-            <button type="submit" class="btn btn-sage">Add</button>
-          </form>
-          <div id="categoryManagerList"></div>
-        </section>
-        <section aria-labelledby="locationsHeading">
-          <h3 id="locationsHeading">Locations</h3>
-          <form id="addLocationForm" class="reference-add-form">
-            <input id="newLocationName" aria-label="New location name" autocomplete="off">
-            <button type="submit" class="btn btn-sage">Add</button>
-          </form>
-          <div id="locationManagerList"></div>
-        </section>
+    <div id="setupScreen" class="setup" data-tab="categories">
+      <header class="screen-head">
+        <p class="eyebrow">Setup</p>
+        <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">Setup. </span>Your vocabulary</h1>
+        <p class="muted setup-subline">Categories and locations are your words. Archiving one keeps every existing assignment intact.</p>
+        <div id="setupTabs" class="seg setup-tabs" role="group" aria-label="Which vocabulary"></div>
+      </header>
+      <div id="setupStatus" class="inline-status" role="status"></div>
+      <div class="setup-panes">
+        <section id="categoriesPane" class="setup-pane is-categories" aria-labelledby="categoriesHeading"></section>
+        <section id="locationsPane" class="setup-pane is-locations" aria-labelledby="locationsHeading"></section>
+        <section id="aiPane" class="setup-pane is-ai" aria-label="Suggestions"></section>
       </div>
-    </details>
+    </div>
   </section>
 
   <section id="view-doing" class="view" style="display:none" aria-label="Active chore session">

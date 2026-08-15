@@ -1,7 +1,7 @@
 // ABOUTME: Renders and reads the reusable task schedule controls as pills and grids.
 // ABOUTME: Keeps schedule form state separate from task view wiring and persistence.
 
-import { escapeAttribute } from './categoryLocationView.js'
+import { escapeAttribute } from './helpers.js'
 import { formatFactHtml } from './helpers.js'
 import {
   localDateFromDate,

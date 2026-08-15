@@ -7,8 +7,7 @@ import {
   sanitizeLocationIds,
   selectableReferences
 } from './categoryLocationLogic.js'
-import { escapeAttribute } from './categoryLocationView.js'
-import { escapeHtml, formatDuration } from './helpers.js'
+import { escapeAttribute, escapeHtml, formatDuration } from './helpers.js'
 import { buildEnrichmentAvailability } from './taskPresentationLogic.js'
 import { localDateFromDate, taskUpdateForOutcome } from './scheduleLogic.js'
 import { saveTaskWithRefresh } from './taskSaveLogic.js'
@@ -34,6 +33,10 @@ import { runArchiveAction } from './archiveView.js'
 
 let tasksCache = []
 const pendingTaskArchives = new Map()
+
+// Suggestions are one optional permission, owned by Setup. Off is the default,
+// and off means the control is not there at all — not there and refusing.
+let suggestionsOn = false
 
 // The Chores screen is one ledger with three views. Everything the user is part
 // way through — which row is open, which button has been asked once — lives
@@ -82,6 +85,13 @@ export async function initTasksView() {
 
   categoryLocationStore.subscribe(renderTasksAfterReferencePublication)
   await refreshTasksView()
+}
+
+export function setSuggestionsEnabled (enabled) {
+  const next = enabled === true
+  if (suggestionsOn === next) return
+  suggestionsOn = next
+  if (typeof document !== 'undefined' && document.getElementById('proposedCards')) renderTasks()
 }
 
 // The router owns which view the Chores screen opens on, so #/archive is a
@@ -347,6 +357,13 @@ const durationPillsHtml = duration => {
     '</div>'
 }
 
+// The ✦ appears only where suggestions are turned on. A control the user has
+// switched off should not be present to be pressed and refused.
+export const suggestionControlHtml = (name, enabled) => enabled
+  ? '<button type="button" class="pill-icon enrich-one-btn" aria-label="Suggest details for ' +
+    name + '">\u2726</button>'
+  : ''
+
 function proposedCardHtml(task, snapshot) {
   const model = buildProposedTaskEditorModel(task, snapshot)
   const duration = task.suggestedDuration || task.estimatedDuration || ''
@@ -361,8 +378,7 @@ function proposedCardHtml(task, snapshot) {
           '<p class="inbox-meta muted">' + escapeHtml(inboxMetaLine(task, model)) + '</p>' +
         '</div>' +
         '<div class="inbox-card-tools">' +
-          '<button type="button" class="pill-icon enrich-one-btn" aria-label="Suggest details for ' +
-            name + '">\u2726</button>' +
+          suggestionControlHtml(name, suggestionsOn) +
           '<button type="button" class="pill-icon discard-btn" aria-label="Discard ' +
             name + '">\u00d7</button>' +
           '<button type="button" class="btn btn-sage approve-btn">Confirm</button>' +
@@ -623,7 +639,12 @@ function syncEnrichmentAvailability() {
   const availability = buildEnrichmentAvailability(categories)
   const button = document.getElementById('enrichBtn')
   const status = document.getElementById('enrichStatus')
+  button.hidden = !suggestionsOn
   button.disabled = availability.disabled
+  if (!suggestionsOn) {
+    if (status.textContent === availability.message) status.textContent = ''
+    return
+  }
   if (availability.disabled) status.textContent = availability.message
   else if (status.textContent === availability.message) status.textContent = ''
 }

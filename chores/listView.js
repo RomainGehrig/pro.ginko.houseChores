@@ -2,8 +2,7 @@
 // ABOUTME: A row states facts only: no overdue figure, no red, nothing counting how far behind you are.
 
 import { buildTaskEditorModel } from '../categoryLocationLogic.js'
-import { escapeAttribute } from '../categoryLocationView.js'
-import { escapeHtml, formatDuration } from '../helpers.js'
+import { escapeAttribute, escapeHtml, formatDuration } from '../helpers.js'
 import { buildChoreNoteHtml } from '../taskPresentationLogic.js'
 import { dueGroup } from '../slip.js'
 import { scheduleSummary, localDateFromDate } from '../scheduleLogic.js'

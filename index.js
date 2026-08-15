@@ -1,14 +1,14 @@
-import { initTasksView, selectLedgerView } from './tasksView.js'
+import { initTasksView, selectLedgerView, setSuggestionsEnabled } from './tasksView.js'
 import { initSessionView } from './sessionView.js'
 import { initDoingView, startDoing } from './doingView.js'
 import { initReviewView, startReview } from './reviewView.js'
 import { initHistoryView, refreshHistoryView } from './historyView.js'
 import { hasRequestedRoute, initRouter, showView, setNavVisible } from './router.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
-import { initCategoryLocationView } from './categoryLocationView.js'
 import { sessionStore } from './sessionStore.js'
 import { setCurrentSessionAggregate } from './state.js'
 import { escapeHtml } from './helpers.js'
+import { initSetupView } from './setup/setupView.js'
 import { initSheet } from './sheet.js'
 import { initUndoToast } from './undoToast.js'
 
@@ -36,8 +36,8 @@ async function init () {
   await categoryLocationStore.initialize()
   initSheet()
   initUndoToast()
-  initCategoryLocationView()
   await initTasksView()
+  await initSetupView({ onSuggestionsChange: setSuggestionsEnabled })
   initSessionView()
   initDoingView()
   initReviewView()
