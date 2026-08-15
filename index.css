@@ -2406,6 +2406,19 @@ textarea {
   flex: 1;
 }
 
+.inbox-waiting-title {
+  margin: 0;
+}
+
+.inbox-suggest-note {
+  font-size: var(--t-note);
+  margin: 0 0 var(--s2);
+}
+
+.inbox-suggest-note:empty {
+  display: none;
+}
+
 .inbox-card {
   background: var(--plate);
   border: 0;
@@ -2561,23 +2574,52 @@ textarea {
   font-size: var(--t-note);
 }
 
+/* Capture takes a column of its own, separated by a rule, and what is waiting
+   sits beside it rather than below a screen's worth of empty box. */
 @media (min-width: 900px) {
-  .inbox-head h1 {
-    font-size: var(--t-total);
+  #view-inbox {
+    align-items: start;
+    column-gap: 30px;
+    display: grid;
+    grid-template-columns: 330px minmax(0, 1fr);
   }
 
-  .capture {
-    flex-direction: row;
-    align-items: flex-end;
+  .inbox-left {
+    align-self: stretch;
+    border-right: 1px solid var(--rule);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding-right: 26px;
+  }
+
+  .inbox-head h1 {
+    font-size: 36px;
+    line-height: 1.04;
+    margin: 0;
   }
 
   .capture textarea {
-    flex: 1;
+    min-height: 148px;
   }
 
-  .capture .btn-block {
-    flex: none;
-    width: auto;
+  /* The last note falls to the foot of the column, where it describes what
+     happens next rather than interrupting the box above it. */
+  .capture-foot {
+    margin-top: auto;
+  }
+
+  .inbox-waiting-head {
+    align-items: baseline;
+    margin-top: 0;
+  }
+
+  .inbox-waiting-title {
+    color: var(--ink);
+    font-family: var(--face-display);
+    font-size: 22px;
+    letter-spacing: normal;
+    text-transform: none;
   }
 }
 

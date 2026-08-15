@@ -49,24 +49,31 @@
   </section>
 
   <section id="view-inbox" class="view" style="display:none">
-    <header class="inbox-head">
-      <p class="eyebrow"><span id="inboxCountLine">Inbox</span></p>
-      <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">Inbox. </span>Get it out of your head</h1>
-    </header>
+    <div class="inbox-left">
+      <header class="inbox-head">
+        <p class="eyebrow"><span id="inboxCountLine">Inbox</span></p>
+        <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">Inbox. </span>Get it out of your head</h1>
+      </header>
 
-    <div class="capture">
-      <textarea id="newTaskInput" class="input" rows="3" placeholder="One task per line"></textarea>
-      <button id="addTasksBtn" class="btn btn-sage btn-block" type="button">Add</button>
+      <div class="capture">
+        <p class="muted capture-note wide-only">One task per line. No category, no duration, no date needed &mdash; none of it is checked here.</p>
+        <textarea id="newTaskInput" class="input" rows="3" placeholder="One task per line"></textarea>
+        <button id="addTasksBtn" class="btn btn-sage btn-block" type="button">Add</button>
+        <p class="muted capture-foot wide-only">Captured tasks wait beside this until you confirm them. Nothing here is scheduled yet.</p>
+      </div>
     </div>
 
-    <div class="inbox-waiting-head">
-      <p class="eyebrow eyebrow-quiet">Waiting to confirm</p>
-      <button id="enrichBtn" class="btn btn-ghost" type="button">Suggest details</button>
-    </div>
-    <div id="enrichStatus" class="inline-status" role="status"></div>
+    <div class="inbox-waiting">
+      <div class="inbox-waiting-head">
+        <h2 class="eyebrow eyebrow-quiet inbox-waiting-title">Waiting to confirm</h2>
+        <button id="enrichBtn" class="btn btn-ghost" type="button">Suggest details</button>
+      </div>
+      <p id="enrichNote" class="muted inbox-suggest-note"></p>
+      <div id="enrichStatus" class="inline-status" role="status"></div>
 
-    <div class="task-section">
-      <div class="task-cards" id="proposedCards"></div>
+      <div class="task-section">
+        <div class="task-cards" id="proposedCards"></div>
+      </div>
     </div>
   </section>
 

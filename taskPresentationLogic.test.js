@@ -12,7 +12,8 @@ import {
   buildContinuationSuggestionsHtml,
   buildChoreNoteHtml,
   buildDoingSessionHtml,
-  buildEnrichmentAvailability
+  buildEnrichmentAvailability,
+  suggestionsNote
 } from './taskPresentationLogic.js'
 
 test('fact markup keeps words in reading type while safely isolating every number', () => {
@@ -306,4 +307,14 @@ test('an unresolved chore has nothing to reopen', () => {
   )
 
   assert.doesNotMatch(markup, /data-reopen-execution-id/)
+})
+
+test('the Inbox says what suggestions will and will not do, on or off', () => {
+  const on = suggestionsNote(true)
+  assert.match(on, /never pick the date/)
+  assert.match(on, /editable/)
+
+  const off = suggestionsNote(false)
+  assert.match(off, /off/)
+  assert.match(off, /Setup/)
 })

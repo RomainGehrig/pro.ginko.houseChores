@@ -1465,6 +1465,101 @@ test('Today stacks its head and stands the vessel up on a phone', async () => {
   assert.ok(result.targets.every(height => height >= 44.5), JSON.stringify(result.targets))
 })
 
+const INBOX_BODY =
+  '<main id="app"><section id="view-inbox" class="view">' +
+    '<div class="inbox-left">' +
+      '<header class="inbox-head">' +
+        '<p class="eyebrow"><span id="inboxCountLine">Inbox · 2 waiting</span></p>' +
+        '<h1 class="route-heading display">Get it out of your head</h1>' +
+      '</header>' +
+      '<div class="capture">' +
+        '<p class="muted capture-note wide-only">One task per line. No category, ' +
+          'no duration, no date needed — none of it is checked here.</p>' +
+        '<textarea id="newTaskInput" class="input" rows="3" ' +
+          'placeholder="One task per line"></textarea>' +
+        '<button id="addTasksBtn" class="btn btn-sage btn-block" type="button">Add</button>' +
+        '<p class="muted capture-foot wide-only">Captured tasks wait beside this ' +
+          'until you confirm them. Nothing here is scheduled yet.</p>' +
+      '</div>' +
+    '</div>' +
+    '<div class="inbox-waiting">' +
+      '<div class="inbox-waiting-head">' +
+        '<h2 class="eyebrow eyebrow-quiet inbox-waiting-title">Waiting to confirm</h2>' +
+        '<button id="enrichBtn" class="btn btn-ghost" type="button">Suggest details</button>' +
+      '</div>' +
+      '<p id="enrichNote" class="muted inbox-suggest-note">Suggestions are off.</p>' +
+      '<div id="enrichStatus" class="inline-status" role="status"></div>' +
+      '<div class="task-section"><div class="task-cards" id="proposedCards">' +
+        '<article class="inbox-card"><div class="inbox-card-head">' +
+          '<div class="inbox-card-title"><div class="task-name display">Descale the kettle</div>' +
+          '<div class="inbox-meta">No category · No estimate</div></div></div></article>' +
+      '</div></div>' +
+    '</div>' +
+  '</section></main>'
+
+const INBOX_SCRIPT = `
+  const box = selector => {
+    const rect = document.querySelector(selector).getBoundingClientRect()
+    return {
+      top: Math.round(rect.top), left: Math.round(rect.left),
+      right: Math.round(rect.right), bottom: Math.round(rect.bottom),
+      width: Math.round(rect.width)
+    }
+  }
+  const left = document.querySelector('.inbox-left')
+  const result = {
+    left: box('.inbox-left'),
+    capture: box('.capture'),
+    waiting: box('.inbox-waiting'),
+    waitingTitle: box('.inbox-waiting-title'),
+    cards: box('#proposedCards'),
+    leftBorderRight: getComputedStyle(left).borderRightWidth,
+    noteDisplay: getComputedStyle(document.querySelector('.capture-note')).display,
+    titleFont: getComputedStyle(document.querySelector('.inbox-waiting-title')).fontFamily,
+    titleSize: getComputedStyle(document.querySelector('.inbox-waiting-title')).fontSize,
+    titleTransform: getComputedStyle(document.querySelector('.inbox-waiting-title')).textTransform,
+    addWidth: Math.round(document.querySelector('#addTasksBtn').getBoundingClientRect().width)
+  }
+`
+
+test('the Inbox keeps capture in its own column beside the waiting list on a desktop', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 1280, height: 900 },
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
+    body: INBOX_BODY,
+    script: INBOX_SCRIPT
+  })
+
+  assert.equal(result.left.width, 330, JSON.stringify(result))
+  assert.ok(result.waiting.left >= result.left.right, JSON.stringify(result))
+  assert.equal(result.waiting.top, result.left.top, JSON.stringify(result))
+  assert.notEqual(result.leftBorderRight, '0px', 'a rule separates capture from what is waiting')
+
+  // Capture explains itself where there is room to.
+  assert.notEqual(result.noteDisplay, 'none')
+
+  // What is waiting gets a heading, not a label.
+  assert.match(result.titleFont, /Caprasimo/)
+  assert.equal(result.titleSize, '22px')
+  assert.equal(result.titleTransform, 'none')
+})
+
+test('the Inbox stacks capture over the waiting list on a phone', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 800 },
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
+    body: INBOX_BODY,
+    script: INBOX_SCRIPT
+  })
+
+  assert.ok(result.waiting.top >= result.left.bottom, JSON.stringify(result))
+  assert.ok(result.left.width > 330, 'capture takes the column on a phone')
+  assert.equal(result.leftBorderRight, '0px', 'nothing to separate when nothing is beside it')
+  assert.equal(result.noteDisplay, 'none', 'a phone has no room to explain the obvious')
+  assert.equal(result.titleTransform, 'uppercase', 'the phone keeps it a label')
+  assert.ok(result.addWidth > 300, 'Add stays a full-width control')
+})
+
 const DOING_BODY =
   '<main id="app"><div class="doing-layout">' +
     '<div class="doing-main">' +

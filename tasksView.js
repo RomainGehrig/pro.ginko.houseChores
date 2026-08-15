@@ -8,7 +8,7 @@ import {
   selectableReferences
 } from './categoryLocationLogic.js'
 import { escapeAttribute, escapeHtml, formatDuration } from './helpers.js'
-import { buildEnrichmentAvailability } from './taskPresentationLogic.js'
+import { buildEnrichmentAvailability, suggestionsNote } from './taskPresentationLogic.js'
 import { localDateFromDate, taskUpdateForOutcome } from './scheduleLogic.js'
 import { saveTaskWithRefresh } from './taskSaveLogic.js'
 import {
@@ -288,7 +288,7 @@ function renderProposed() {
   container.innerHTML = proposed.length
     ? proposed.map(task => proposedCardHtml(task, snapshot)).join('')
     : '<div class="inbox-clear card"><p class="display inbox-clear-title">Inbox clear</p>' +
-      '<p class="muted">Nothing waiting to confirm. Anything you capture above lands here first.</p></div>'
+      '<p class="muted">Nothing waiting to confirm. Anything you capture lands here first.</p></div>'
 }
 
 export function buildInboxCountLine (proposedCount) {
@@ -639,7 +639,9 @@ function syncEnrichmentAvailability() {
   const availability = buildEnrichmentAvailability(categories)
   const button = document.getElementById('enrichBtn')
   const status = document.getElementById('enrichStatus')
+  const note = document.getElementById('enrichNote')
   button.hidden = !suggestionsOn
+  if (note) note.textContent = suggestionsNote(suggestionsOn)
   button.disabled = availability.disabled
   if (!suggestionsOn) {
     if (status.textContent === availability.message) status.textContent = ''

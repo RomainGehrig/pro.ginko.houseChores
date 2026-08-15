@@ -15,6 +15,16 @@ const SHORT_MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
 ]
+// Suggestions are a permission, not a feature that happens to you. Whichever
+// way the switch is set, the Inbox says what that means before you use it.
+export function suggestionsNote (on) {
+  return on
+    ? 'Suggestions propose a category, estimate and schedule rule for anything ' +
+      'untouched. They never pick the date, and every one stays editable.'
+    : 'Suggestions are off. Turn them on in Setup if you want the app to ' +
+      'propose a category, estimate and schedule.'
+}
+
 export function buildEnrichmentAvailability (categories) {
   return {
     disabled: categories.length === 0,
