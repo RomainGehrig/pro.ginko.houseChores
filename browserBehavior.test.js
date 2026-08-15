@@ -1309,6 +1309,113 @@ test('active chores render as rounded cards that take an edge and a fill when op
   assert.equal(result.ripeDueLeft, 26, 'the cadence itself sits at the halfway tick')
 })
 
+const DOING_BODY =
+  '<main id="app"><div class="doing-layout">' +
+    '<div class="doing-main">' +
+      '<div class="doing-session-head">' +
+        '<div class="doing-head-lines">' +
+          '<p class="eyebrow">Doing</p>' +
+          '<div class="timer" id="sessionTimerDisplay">12:04</div>' +
+          '<p class="doing-status">Paused — the clock is stopped</p>' +
+        '</div>' +
+        '<div class="doing-head-actions">' +
+          '<button id="concludeSessionBtn" class="btn btn-secondary">Conclude</button>' +
+          '<button id="pauseSessionBtn" class="btn btn-primary">Resume</button>' +
+        '</div>' +
+      '</div>' +
+      '<p class="doing-progress">1 of 3 resolved · About 18 min left</p>' +
+      '<p class="doing-spent" id="doingSpent">Time allocated to chores: 7 min</p>' +
+      '<div id="doingTaskList">' +
+        '<article class="doing-task"><div class="doing-task-line">' +
+          '<div class="doing-task-title"><div class="task-name display">Vacuum bedroom</div>' +
+          '<div class="task-meta">Clean · estimate 15 min</div></div></div></article>' +
+        '<article class="doing-task is-resolved"><div class="doing-task-line">' +
+          '<div class="doing-task-title"><div class="task-name display">Water the plants</div>' +
+          '<div class="task-meta">Clean · estimate 5 min</div></div>' +
+          '<span class="tag tag-sage">Done</span></div></article>' +
+      '</div>' +
+    '</div>' +
+    '<aside id="doingContinuePanel" class="doing-add" aria-label="Add to the session">' +
+      '<h2 class="display doing-add-title">Add to the session</h2>' +
+      '<p class="muted doing-add-note" id="continueRemaining">About 18 min left</p>' +
+      '<p class="eyebrow eyebrow-quiet doing-add-fits">Fits what’s left</p>' +
+      '<div id="continueSuggestions" class="continue-rows">' +
+        '<label class="continue-row"><input type="checkbox" checked>' +
+          '<span class="continue-row-name">Wipe the sills</span>' +
+          '<span class="continue-row-est fig">5 min</span></label>' +
+        '<label class="continue-row"><input type="checkbox">' +
+          '<span class="continue-row-name">Sort the post</span>' +
+          '<span class="continue-row-est fig">10 min</span></label>' +
+      '</div>' +
+      '<input id="continueSearchInput" class="input doing-add-search" type="search">' +
+    '</aside>' +
+  '</div></main>'
+
+const DOING_SCRIPT = `
+  const box = selector => {
+    const rect = document.querySelector(selector).getBoundingClientRect()
+    return { top: Math.round(rect.top), left: Math.round(rect.left),
+      right: Math.round(rect.right), width: Math.round(rect.width) }
+  }
+  const [openRow, doneRow] = document.querySelectorAll('.doing-task')
+  const [checked, unchecked] = document.querySelectorAll('.continue-row')
+  const result = {
+    main: box('.doing-main'),
+    panel: box('.doing-add'),
+    head: box('.doing-session-head'),
+    actions: box('.doing-head-actions'),
+    openBackground: getComputedStyle(openRow).backgroundColor,
+    openRadius: getComputedStyle(openRow).borderRadius,
+    doneBackground: getComputedStyle(doneRow).backgroundColor,
+    doneBorder: getComputedStyle(doneRow).borderTopColor,
+    rowInputOpacity: getComputedStyle(checked.querySelector('input')).opacity,
+    checkedBackground: getComputedStyle(checked).backgroundColor,
+    uncheckedBackground: getComputedStyle(unchecked).backgroundColor,
+    searchRadius: getComputedStyle(document.getElementById('continueSearchInput')).borderRadius,
+    targets: [...document.querySelectorAll('.doing-head-actions button, .continue-row')]
+      .map(el => Math.round(el.getBoundingClientRect().height))
+  }
+`
+
+test('Doing sets its add panel beside the session on a desktop', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 1280, height: 900 },
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
+    body: DOING_BODY,
+    script: DOING_SCRIPT
+  })
+
+  assert.equal(result.panel.width, 330, JSON.stringify(result))
+  assert.ok(result.panel.left >= result.main.right, JSON.stringify(result))
+  assert.equal(result.panel.top, result.main.top, JSON.stringify(result))
+
+  // A chore still waiting keeps its plate; a finished one gives it up.
+  assert.equal(result.openBackground, 'rgb(235, 221, 197)')
+  assert.equal(result.openRadius, '26px')
+  assert.equal(result.doneBackground, 'rgba(0, 0, 0, 0)')
+  assert.equal(result.doneBorder, 'color(srgb 0.12549 0.117647 0.113725 / 0.12)')
+
+  assert.equal(result.rowInputOpacity, '0', 'the suggestion row is the checkbox')
+  assert.equal(result.checkedBackground, 'rgb(122, 138, 94)')
+  assert.equal(result.uncheckedBackground, 'rgb(245, 234, 216)')
+  assert.equal(result.searchRadius, '999px')
+  assert.ok(result.targets.every(height => height >= 44.5), JSON.stringify(result.targets))
+})
+
+test('Doing stacks its add panel under the session on a phone', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 800 },
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
+    body: DOING_BODY,
+    script: DOING_SCRIPT
+  })
+
+  assert.equal(result.panel.left, result.main.left, JSON.stringify(result))
+  assert.ok(result.panel.width > 330, 'the panel takes the column on a phone')
+  assert.ok(result.actions.right <= result.head.right, JSON.stringify(result))
+  assert.ok(result.targets.every(height => height >= 44.5), JSON.stringify(result.targets))
+})
+
 test('the Where pills read as pills while staying real checkboxes', async () => {
   const result = await runBrowserScenario({
     viewport: { width: 390, height: 640 },

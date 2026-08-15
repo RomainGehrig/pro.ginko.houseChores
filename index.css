@@ -1596,132 +1596,6 @@ textarea {
   margin: 20px 0;
 }
 
-.doing-session-head {
-  align-items: center;
-  background: color-mix(in srgb, var(--ground) 94%, transparent);
-  backdrop-filter: blur(8px);
-  display: flex;
-  gap: 16px;
-  justify-content: space-between;
-  padding: 8px 56px 12px 0;
-  position: sticky;
-  top: 0;
-  z-index: 1;
-}
-
-.doing-session-head .timer {
-  margin: 4px 0;
-  text-align: left;
-}
-
-.doing-session button {
-  min-height: 45px;
-}
-
-.doing-progress {
-  color: var(--graphite);
-  font-size: var(--t-fig);
-  margin-bottom: 4px;
-}
-
-#doingTaskList {
-  display: grid;
-  gap: 12px;
-  margin: 16px 0;
-}
-
-.doing-task {
-  background: var(--plate);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-plate);
-  box-shadow: var(--lift);
-  padding: var(--s3);
-}
-
-.doing-task.is-resolved {
-  background: var(--sunk);
-  color: var(--graphite);
-}
-
-.doing-task-actions,
-#doingDecisionPanel {
-  display: flex;
-  gap: var(--s3);
-  flex-wrap: wrap;
-}
-
-.doing-task-actions {
-  margin-top: 10px;
-}
-
-#doingDecisionPanel {
-  align-items: center;
-  background: var(--plate);
-  border: 1px solid var(--edge);
-  border-radius: var(--r-plate);
-  padding: var(--s3);
-}
-
-#doingDecisionPanel p {
-  flex-basis: 100%;
-  margin: 0;
-}
-
-#doingContinuePanel {
-  background: var(--plate);
-  border: 1px solid var(--edge);
-  border-radius: var(--r-plate);
-  display: grid;
-  gap: 12px;
-  margin-top: 12px;
-  padding: 12px;
-}
-
-#doingContinuePanel h2,
-#doingContinuePanel p {
-  margin: 0;
-}
-
-#doingContinuePanel > label {
-  display: grid;
-  gap: 6px;
-}
-
-#doingContinuePanel input[type="search"],
-#doingContinuePanel input:not([type]) {
-  box-sizing: border-box;
-  min-height: 45px;
-  padding: 6px 8px;
-  width: 100%;
-}
-
-#continueSuggestions,
-#continueSearchResults {
-  display: grid;
-  gap: 8px;
-}
-
-.continue-option {
-  align-items: center;
-  border: 1px solid var(--edge);
-  border-radius: var(--r-chip);
-  display: grid;
-  gap: 8px;
-  grid-template-columns: auto 1fr auto;
-  padding: 8px;
-}
-
-.continue-option input {
-  height: 20px;
-  margin: 0;
-  width: 20px;
-}
-
-#continueSearchResults button {
-  text-align: left;
-  width: 100%;
-}
-
 /* ── Log — what the sessions measured ───────────────────────────────────────
    Bars scale to the tallest session in view, not to a target. Nothing here
    counts down, and nothing turns red for taking longer than it was guessed. */
@@ -2618,11 +2492,27 @@ textarea {
 }
 
 .doing-head-lines {
+  flex: 1;
   min-width: 0;
 }
 
 .doing-head-lines .eyebrow {
   margin: 0;
+}
+
+.doing-status {
+  color: var(--graphite);
+  font-size: var(--t-fig);
+  margin: 0;
+}
+
+/* Conclude and Pause stack on a phone and sit side by side once there is room,
+   so neither ever squeezes the clock. */
+.doing-head-actions {
+  display: flex;
+  flex-direction: column;
+  flex: none;
+  gap: 7px;
 }
 
 .doing-session-head .timer {
@@ -2641,7 +2531,13 @@ textarea {
 .doing-progress {
   color: var(--graphite);
   font-size: var(--t-note);
-  margin: 0 0 var(--s3);
+  margin: 0;
+}
+
+.doing-spent {
+  color: var(--graphite);
+  font-size: var(--t-fig);
+  margin: var(--s1) 0 var(--s3);
 }
 
 #doingTaskList {
@@ -2652,18 +2548,22 @@ textarea {
 
 .doing-task {
   background: var(--plate);
-  border: 0;
-  border-radius: var(--r-plate);
+  border: 1px solid transparent;
+  border-radius: 26px;
   box-shadow: none;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  padding: var(--s4);
+  padding: 14px 16px;
 }
 
+/* A chore that is finished with steps back: it gives up its plate and keeps
+   only an outline, so the ones still waiting are what the eye lands on. */
 .doing-task.is-resolved {
-  background: color-mix(in srgb, var(--plate) 55%, var(--ground));
+  background: transparent;
+  border-color: color-mix(in srgb, var(--ink) 12%, transparent);
   color: var(--graphite);
+  padding: var(--s3) 16px;
 }
 
 .doing-task-line {
@@ -2717,63 +2617,137 @@ textarea {
   flex: 1;
 }
 
-#doingDecisionPanel {
-  align-items: center;
+/* Everything resolved, and the session stopped its own clock. The note says
+   which, and offers both ways on rather than deciding for you. */
+.doing-auto-note {
   background: var(--sage-soft);
-  border: 0;
-  border-radius: var(--r-plate);
   color: var(--on-sage-soft);
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
-  padding: var(--s4);
-}
-
-#doingDecisionPanel p {
-  flex-basis: 100%;
   font-size: var(--t-note);
-  margin: 0 0 var(--s2);
+  margin: 0 0 var(--s3);
 }
 
-#doingContinuePanel {
+/* Add to the session — a panel under the list on a phone, a rail beside it on
+   a desktop. Its one field searches what you have and offers what you type. */
+.doing-add {
   background: var(--plate);
-  border: 0;
   border-radius: var(--r-plate);
-  display: grid;
+  display: flex;
+  flex-direction: column;
   gap: var(--s3);
-  margin-top: var(--s3);
   padding: var(--s4);
 }
 
-#doingContinuePanel h2 {
-  font-size: 19px;
+.doing-add[hidden] {
+  display: none;
 }
 
-.continue-option {
+.doing-add-title {
+  font-size: 19px;
+  margin: 0;
+}
+
+.doing-add-note,
+.doing-add-foot {
+  font-size: var(--t-fig);
+  margin: 0;
+}
+
+.doing-add-fits {
+  margin: 0;
+}
+
+.doing-add-foot {
+  margin-top: auto;
+}
+
+.doing-add-search {
+  border-radius: var(--r-pill);
+  font-size: 13.5px;
+}
+
+.continue-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+/* A row is a row whether a checkbox or a button drives it, so both wear the
+   same face. The checkbox covers its row and takes the press. */
+.continue-row {
   align-items: center;
   background: var(--ground);
   border: 0;
   border-radius: var(--r-pill);
-  display: grid;
-  gap: var(--s2);
-  grid-template-columns: auto 1fr auto;
-  min-height: 45px;
-  padding: var(--s2) var(--s4);
-}
-
-#continueSearchResults button {
-  background: var(--ground);
-  border: 0;
-  border-radius: var(--r-pill);
+  color: inherit;
+  cursor: pointer;
   display: flex;
+  font: inherit;
+  gap: var(--s2);
   justify-content: space-between;
   min-height: 45px;
   padding: var(--s2) var(--s4);
+  position: relative;
   text-align: left;
   width: 100%;
 }
 
+.continue-row input {
+  cursor: inherit;
+  height: 100%;
+  left: 0;
+  margin: 0;
+  opacity: 0;
+  position: absolute;
+  top: 0;
+  width: 100%;
+}
+
+.continue-row:has(input:checked) {
+  background: var(--sage);
+  color: var(--on-sage);
+}
+
+.continue-row:has(input:focus-visible) {
+  outline: 2px solid var(--enamel);
+  outline-offset: 2px;
+}
+
+.continue-row-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.continue-row-est {
+  color: var(--graphite);
+  flex: none;
+}
+
+.continue-row:has(input:checked) .continue-row-est {
+  color: inherit;
+}
+
+.continue-empty {
+  font-size: var(--t-note);
+  margin: 0;
+}
+
+.doing-add-quick {
+  text-align: left;
+}
+
 @media (min-width: 900px) {
+  .doing-layout {
+    align-items: start;
+    display: grid;
+    gap: var(--s4);
+    grid-template-columns: minmax(0, 1fr) 330px;
+  }
+
+  .doing-add {
+    position: sticky;
+    top: var(--s4);
+  }
+
   .doing-task-line {
     align-items: center;
   }
