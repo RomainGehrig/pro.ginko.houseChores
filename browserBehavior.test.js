@@ -1101,7 +1101,7 @@ test('active chores render as ruled ledger rows instead of bordered cards', asyn
   assert.equal(result.rowRadius, '0px')
   assert.equal(result.summaryDisplay, 'grid')
   assert.match(result.summaryColumns, /^56px /)
-  assert.equal(result.stampColor, 'rgb(90, 84, 77)')
+  assert.equal(result.stampColor, 'rgb(100, 92, 80)')
   assert.equal(result.todayBackground, 'rgb(198, 113, 57)')
   assert.equal(result.todayColor, 'rgb(245, 234, 216)')
 })

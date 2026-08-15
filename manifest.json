@@ -290,6 +290,10 @@
       "Description": "Unit tests for the ripeness fraction, colour ramp and pool order."
     },
     {
+      "path": "palette.test.js",
+      "Description": "Pins the colour tokens to the Organic design system's tonal ramp."
+    },
+    {
       "path": "pickingLogic.js",
       "Description": "Hand-picking chores into a bundle, with the total, fit and vessel geometry readouts."
     },

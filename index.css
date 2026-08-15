@@ -53,19 +53,20 @@
   --sunk: #DCD3C4;
 
   --ink: #201E1D;
-  --graphite: #5A544D;
+  --graphite: #645C50;
   --rule: #D9CDB6;
   --edge: color-mix(in srgb, var(--ink) 22%, transparent);
 
   --enamel: #C67139;
   --on-enamel: #F5EAD8;
-  --stamp: #9C3520;
+  --stamp: #8C491A;
 
   /* Sage — the app's second voice: things settled, filed, or freshly done. */
   --sage: #7A8A5E;
   --on-sage: #F5EAD8;
-  --sage-soft: #DFE6CF;
-  --sage-ink: #3D4A2C;
+  --sage-soft: #E1EECC;
+  --sage-ink: #56633F;
+  --on-sage-soft: #3D472B;
 
   /* Ripeness ramp — cool and settled through to warm and ready. Never red:
      a chore that has waited is riper, not late. */
@@ -129,12 +130,13 @@
     --rule: #474238;
     --enamel: #F6A06B;
     --on-enamel: #402310;
-    --stamp: #E0836A;
+    --stamp: #FFC6A5;
 
     --sage: #AEBF92;
     --on-sage: #272E1B;
     --sage-soft: #3D472B;
-    --sage-ink: #E1EECC;
+    --sage-ink: #CCDBB2;
+    --on-sage-soft: #E1EECC;
 
     --ripe-cold: #4A5836;
     --ripe-warm: #C97A3E;
@@ -359,7 +361,7 @@ label:has(input[type="radio"]) {
 
 .tag-sage {
   background: var(--sage-soft);
-  color: var(--sage-ink);
+  color: var(--on-sage-soft);
 }
 
 .tag-neutral {
@@ -379,7 +381,7 @@ label:has(input[type="radio"]) {
 }
 
 .eyebrow {
-  color: var(--enamel);
+  color: var(--stamp);
   font-size: var(--t-stamp);
   font-weight: 600;
   letter-spacing: .1em;
@@ -2055,7 +2057,7 @@ textarea {
   background: var(--sage-soft);
   border: 0;
   border-radius: var(--r-plate);
-  color: var(--sage-ink);
+  color: var(--on-sage-soft);
   display: flex;
   flex-wrap: wrap;
   gap: var(--s2);
@@ -2301,7 +2303,7 @@ textarea {
 
 .duration-offer {
   background: var(--sage-soft);
-  color: var(--sage-ink);
+  color: var(--on-sage-soft);
   border-radius: 24px;
   padding: 16px;
   display: flex;
