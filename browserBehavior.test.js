@@ -1465,6 +1465,73 @@ test('Today stacks its head and stands the vessel up on a phone', async () => {
   assert.ok(result.targets.every(height => height >= 44.5), JSON.stringify(result.targets))
 })
 
+const LOG_BODY =
+  '<main id="app"><section id="view-log" class="view">' +
+    '<header class="screen-head log-head">' +
+      '<p class="eyebrow">Log</p>' +
+      '<h1 class="route-heading display"><span id="logHeadline">3 sessions · 11 chores · 42h 15m</span></h1>' +
+      '<p class="muted log-subline">What actually happened. Nothing here is a score.</p>' +
+      '<div id="logRanges" class="seg" role="group" aria-label="How far back to read">' +
+        '<button type="button" class="seg-btn" aria-pressed="true">Last 7 days</button>' +
+        '<button type="button" class="seg-btn">Last 30 days</button>' +
+        '<button type="button" class="seg-btn">Everything</button>' +
+      '</div>' +
+    '</header>' +
+    '<div class="log-body">' +
+      '<section class="log-chart-card"><h2 class="display log-chart-title">Active time</h2>' +
+        '<div id="logChart" class="log-chart"></div></section>' +
+      '<div class="log-sessions"><article class="log-session"><div class="log-when">Sat, Aug 15</div>' +
+        '<div class="log-summary">4 chores · 30 min recorded</div></article></div>' +
+    '</div>' +
+  '</section></main>'
+
+const LOG_SCRIPT = `
+  const box = selector => {
+    const rect = document.querySelector(selector).getBoundingClientRect()
+    return {
+      top: Math.round(rect.top), left: Math.round(rect.left),
+      right: Math.round(rect.right), bottom: Math.round(rect.bottom),
+      width: Math.round(rect.width)
+    }
+  }
+  const result = {
+    heading: box('.log-head .route-heading'),
+    sub: box('.log-subline'),
+    ranges: box('#logRanges'),
+    chart: box('.log-chart-card'),
+    sessions: box('.log-sessions')
+  }
+`
+
+test('the Log sets how far back beside its heading on a desktop', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 1280, height: 900 },
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
+    body: LOG_BODY,
+    script: LOG_SCRIPT
+  })
+
+  assert.ok(result.ranges.left >= result.heading.right, JSON.stringify(result))
+  assert.ok(result.ranges.bottom <= result.sub.bottom + 2,
+    'the range control sits on the foot of the heading block: ' + JSON.stringify(result))
+
+  // The chart is a card beside the sessions, not a band above them.
+  assert.equal(result.chart.width, 300, JSON.stringify(result))
+  assert.ok(result.chart.left >= result.sessions.right, JSON.stringify(result))
+})
+
+test('the Log stacks how far back under its heading on a phone', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 800 },
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
+    body: LOG_BODY,
+    script: LOG_SCRIPT
+  })
+
+  assert.ok(result.ranges.top >= result.sub.bottom, JSON.stringify(result))
+  assert.ok(result.sessions.top >= result.chart.bottom, JSON.stringify(result))
+})
+
 const RECEIPT_BODY =
   '<main id="app"><section id="view-review" class="view"><div class="receipt">' +
     '<div class="receipt-main">' +

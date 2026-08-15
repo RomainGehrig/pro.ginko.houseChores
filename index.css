@@ -1804,6 +1804,26 @@ textarea {
 }
 
 @media (min-width: 900px) {
+  /* How far back you are reading is a setting on the heading, not a band
+     under it — so it sits at the foot of the title block, on its right. */
+  /* Scoped to the screen because the shared .screen-head flex rule is declared
+     further down the sheet and would otherwise win the display. */
+  #view-log .log-head {
+    align-items: end;
+    column-gap: 18px;
+    display: grid;
+    grid-template-areas:
+      "eyebrow ranges"
+      "title   ranges"
+      "sub     ranges";
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+
+  #view-log .log-head .eyebrow { grid-area: eyebrow; }
+  #view-log .log-head .route-heading { grid-area: title; }
+  #view-log .log-subline { grid-area: sub; }
+  #logRanges { align-self: end; grid-area: ranges; }
+
   .log-body {
     align-items: start;
     display: grid;
