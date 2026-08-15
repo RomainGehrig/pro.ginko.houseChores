@@ -1373,7 +1373,14 @@ const DOING_SCRIPT = `
     uncheckedBackground: getComputedStyle(unchecked).backgroundColor,
     searchRadius: getComputedStyle(document.getElementById('continueSearchInput')).borderRadius,
     targets: [...document.querySelectorAll('.doing-head-actions button, .continue-row')]
-      .map(el => Math.round(el.getBoundingClientRect().height))
+      .map(el => Math.round(el.getBoundingClientRect().height)),
+    mainWidthWithoutPanel: (() => {
+      const panel = document.querySelector('.doing-add')
+      panel.hidden = true
+      const width = Math.round(document.querySelector('.doing-main').getBoundingClientRect().width)
+      panel.hidden = false
+      return width
+    })()
   }
 `
 
@@ -1400,6 +1407,10 @@ test('Doing sets its add panel beside the session on a desktop', async () => {
   assert.equal(result.uncheckedBackground, 'rgb(245, 234, 216)')
   assert.equal(result.searchRadius, '999px')
   assert.ok(result.targets.every(height => height >= 44.5), JSON.stringify(result.targets))
+
+  // A running session has no panel, and must not hold its column open either.
+  assert.ok(result.mainWidthWithoutPanel > result.main.width + 300,
+    'the rail\'s column goes with the rail: ' + JSON.stringify(result))
 })
 
 test('Doing stacks its add panel under the session on a phone', async () => {
