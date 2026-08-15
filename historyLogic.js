@@ -1,6 +1,7 @@
 // ABOUTME: Pure functions that join sessions, executions and tasks into
 // ABOUTME: read-only history view models, newest session first.
 
+const DIFFICULTY_WORDS = ['Easy', 'Light', 'Middling', 'Hard', 'A slog']
 const OUTCOME_KEYS = ['done', 'already_done', 'cancelled']
 const OUTCOME_LABELS = { done: 'done', already_done: 'already done', cancelled: 'skipped' }
 const STATUS_LABELS = {
@@ -16,6 +17,13 @@ const hasRawDuration = value => (typeof value === 'number' ||
 const executionMinutes = execution => hasRawDuration(execution.rawDurationMs)
   ? Number(execution.rawDurationMs) / 60000
   : Number(execution.actualDuration || 0)
+
+// Older records carry a difficulty the Receipt no longer asks for. The Log
+// still reads what was written rather than dropping it on the floor.
+export function difficultyLabel (rating) {
+  const level = Number(rating)
+  return DIFFICULTY_WORDS[level - 1] || 'Not rated'
+}
 
 export function buildHistory (sessions, executions, tasks) {
   const taskNameById = new Map(tasks.map(t => [t._id, t.name]))

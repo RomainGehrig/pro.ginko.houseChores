@@ -4,8 +4,9 @@
 import { listAllSessions } from './sessionData.js'
 import { listAllExecutions } from './executionData.js'
 import { listAllTasks } from './taskData.js'
-import { buildHistory, describeOutcomes, buildLogCountLine, displayMinutes } from './historyLogic.js'
-import { difficultyLabel } from './receiptLogic.js'
+import {
+  buildHistory, describeOutcomes, buildLogCountLine, displayMinutes, difficultyLabel
+} from './historyLogic.js'
 import { formatDateTime, formatDuration, escapeHtml, formatFactHtml } from './helpers.js'
 
 const OUTCOME_TEXT = { done: 'done', already_done: 'already done', cancelled: 'skipped' }

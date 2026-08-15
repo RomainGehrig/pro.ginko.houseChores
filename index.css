@@ -1221,20 +1221,6 @@ textarea {
   width: 100%;
 }
 
-.exec-card {
-  background: var(--plate);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-plate);
-  box-shadow: var(--lift);
-  padding: var(--s3);
-  margin-bottom: 10px;
-}
-
-.exec-card label {
-  display: block;
-  font-size: var(--t-note);
-  margin: 6px 0;
-}
 .history-row {
   background: var(--plate);
   border: 1px solid var(--rule);
@@ -2137,13 +2123,21 @@ textarea {
 
 
 /* ── Receipt ──────────────────────────────────────────────────────────────
-   What the session measured, offered back for correction. Drift from an
-   estimate is a fact in the neutral colour; nothing here scores the user. */
+   One gauge per chore: actual above, estimate below, dots for previous
+   actuals and a marker where the suggestion falls. Drift is a fact in the
+   neutral colour; nothing here scores the user. */
 
 .receipt {
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+.receipt-main {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
 }
 
 .receipt .route-heading {
@@ -2153,8 +2147,14 @@ textarea {
 }
 
 .receipt-subline {
-  margin: 0;
+  margin: 7px 0 0;
   font-size: 12.5px;
+}
+
+.receipt-offers {
+  margin: 5px 0 0;
+  font-size: 12.5px;
+  color: var(--sage-ink);
 }
 
 .receipt-list {
@@ -2163,33 +2163,373 @@ textarea {
   gap: 10px;
 }
 
-.exec-card {
+.receipt-card {
   background: var(--plate);
-  border: 1px solid var(--edge);
+  border: 1px solid transparent;
   border-radius: var(--r-plate);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 14px 16px;
+}
+
+.receipt-card[data-open="true"] {
+  background: var(--ground);
+  border-color: var(--edge);
+  gap: 14px;
   padding: 18px;
+}
+
+.receipt-card[data-skipped="true"] { opacity: .75; }
+
+.receipt-card-head {
+  align-items: flex-start;
+  background: none;
+  border: 0;
+  color: inherit;
+  cursor: pointer;
+  display: flex;
+  gap: 10px;
+  min-height: 0;
+  padding: 0;
+  text-align: left;
+  width: 100%;
+}
+
+.receipt-card[data-open="true"] .receipt-card-head { cursor: default; }
+
+.receipt-card-title {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.receipt-card-head .task-name {
+  font-family: var(--face-display);
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.receipt-card-line { font-size: 11.5px; }
+
+/* The chip carries its own two-bar gauge, so the figure beside it is read
+   rather than deciphered. */
+.drift-chip {
+  align-items: center;
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  border-radius: var(--r-chip);
+  color: var(--graphite);
+  display: flex;
+  flex: none;
+  font-size: 11.5px;
+  font-weight: 600;
+  gap: 6px;
+  padding: 3px 10px;
+  white-space: nowrap;
+}
+
+.drift-mini {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  gap: 2px;
+  width: 54px;
+}
+
+.drift-mini-bar {
+  border-radius: var(--r-chip);
+  height: 4px;
+  min-width: 3px;
+}
+
+.drift-mini-actual { background: var(--enamel); }
+.drift-mini-estimate { background: var(--sage); }
+
+.receipt-card-body {
   display: flex;
   flex-direction: column;
   gap: 14px;
 }
 
-.exec-card-head {
+.gauge-block {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gauge-head {
+  align-items: baseline;
   display: flex;
   gap: 10px;
-  align-items: flex-start;
 }
 
-.exec-card-head .task-name {
-  flex: 1;
-  min-width: 0;
-  font-size: 17px;
-  line-height: 1.2;
+.gauge-head .eyebrow { flex: 1; }
+.past-line { font-size: 11.5px; }
+
+.gauge {
+  align-items: stretch;
+  display: flex;
+  gap: 8px;
 }
 
-.exec-card .card-facts {
-  margin: -8px 0 0;
-  font-size: 11.5px;
+.gauge-legend {
   color: var(--graphite);
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  font-size: 10px;
+  font-weight: 600;
+  gap: 4px;
+  letter-spacing: .07em;
+  padding: 6px 0;
+  text-transform: uppercase;
+  width: 58px;
+}
+
+.gauge-legend span {
+  align-items: center;
+  display: flex;
+  flex: 1;
+}
+
+.gauge-tracks {
+  background: color-mix(in srgb, var(--ink) 6%, transparent);
+  border-radius: 16px;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  height: 46px;
+  min-width: 0;
+  padding: 6px;
+  position: relative;
+}
+
+.gauge-track {
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  border-radius: var(--r-chip);
+  cursor: ew-resize;
+  flex: 1;
+  position: relative;
+  touch-action: none;
+}
+
+/* Until the estimate is opened for editing it is a readout, not a control. */
+.gauge-track-estimate {
+  cursor: default;
+  opacity: .72;
+}
+
+.gauge-track-estimate.is-editing {
+  cursor: ew-resize;
+  opacity: 1;
+}
+
+.gauge-fill {
+  border-radius: var(--r-chip);
+  bottom: 0;
+  left: 0;
+  position: absolute;
+  top: 0;
+  transition: width var(--t-sweep) var(--e-fill);
+}
+
+.gauge-fill-actual { background: var(--enamel); }
+.gauge-fill-actual.is-omitted { background: color-mix(in srgb, var(--ink) 14%, transparent); }
+.gauge-fill-estimate { background: var(--sage); }
+
+.gauge-dot {
+  background: color-mix(in srgb, var(--ink) 32%, transparent);
+  border-radius: var(--r-chip);
+  height: 7px;
+  margin-left: -3.5px;
+  margin-top: -3.5px;
+  position: absolute;
+  top: 50%;
+  width: 7px;
+}
+
+.gauge-pin {
+  border-radius: var(--r-chip);
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1.5;
+  padding: 1px 7px;
+  pointer-events: none;
+  position: absolute;
+  top: 50%;
+  white-space: nowrap;
+  z-index: 2;
+}
+
+.gauge-pin[data-place="before"] { margin-left: -14px; transform: translate(-100%, -50%); }
+.gauge-pin[data-place="after"] { margin-left: 26px; transform: translateY(-50%); }
+
+.gauge-pin-actual { background: var(--stamp); color: var(--on-enamel); }
+.gauge-pin-estimate { background: var(--sage-ink); color: var(--on-sage); }
+
+.gauge-handle {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  bottom: -3px;
+  cursor: ew-resize;
+  display: flex;
+  justify-content: center;
+  min-height: 0;
+  padding: 0;
+  position: absolute;
+  top: -3px;
+  touch-action: none;
+  width: 22px;
+  z-index: 3;
+}
+
+.gauge-grip {
+  border-radius: var(--r-chip);
+  box-shadow: 0 1px 3px color-mix(in srgb, #2E2B25 30%, transparent);
+  height: 100%;
+  width: 10px;
+}
+
+[data-handle="actual"] .gauge-grip { background: var(--stamp); }
+[data-handle="estimate"] .gauge-grip { background: var(--sage-ink); }
+
+.gauge-suggestion {
+  background: var(--on-sage-soft);
+  border-radius: var(--r-chip);
+  bottom: 4px;
+  margin-left: -1px;
+  position: absolute;
+  top: 4px;
+  width: 2px;
+}
+
+.gauge-suggestion.is-taken { opacity: .25; }
+
+.gauge-axis {
+  height: 30px;
+  margin: 0 7px 0 73px;
+  position: relative;
+}
+
+.gauge-tick,
+.gauge-flag {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  position: absolute;
+}
+
+.gauge-tick {
+  gap: 3px;
+  top: 14px;
+  transform: translateX(-50%);
+}
+
+.gauge-tick-mark {
+  background: color-mix(in srgb, var(--ink) 22%, transparent);
+  border-radius: var(--r-chip);
+  height: 5px;
+  width: 1px;
+}
+
+.gauge-tick-label { color: var(--graphite); font-size: 10px; line-height: 1; }
+
+.gauge-flag {
+  gap: 2px;
+  pointer-events: none;
+  top: 0;
+  transform: translateX(-50%);
+}
+
+.gauge-flag.is-taken { opacity: .35; }
+
+.gauge-flag-mark {
+  background: var(--on-sage-soft);
+  border-radius: var(--r-chip);
+  height: 5px;
+  width: 1px;
+}
+
+.gauge-flag-text {
+  color: var(--on-sage-soft);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: .05em;
+  line-height: 1;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.track-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.track-cap {
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.track-cap-actual { color: var(--stamp); }
+.track-cap-estimate { color: var(--sage-ink); }
+
+.track-controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  justify-content: flex-end;
+}
+
+.track-controls .btn { font-size: 12px; min-height: 0; padding: 7px 12px; }
+
+.track-controls .f-actual,
+.track-controls .f-estimate {
+  border-radius: var(--r-control);
+  flex: none;
+  font-size: 13.5px;
+  padding: 8px;
+  text-align: center;
+  width: 74px;
+}
+
+/* Leaving a chore's time out is a choice the user makes, so the control says
+   so plainly and reads as pressed while it holds. */
+.omit-btn {
+  flex: none;
+  font-size: 12px;
+  min-height: 44px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.omit-btn[aria-pressed="true"] {
+  background: var(--stamp);
+  border-color: var(--stamp);
+  color: var(--on-enamel);
+}
+
+.suggestion-chip {
+  background: var(--sage-soft);
+  border-color: transparent;
+  color: var(--on-sage-soft);
+  flex: none;
+  font-size: 12px;
+  min-height: 44px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+.suggestion-chip[aria-pressed="true"] {
+  background: var(--sage);
+  border-color: var(--sage);
+  color: var(--on-sage);
 }
 
 .field-group {
@@ -2198,100 +2538,32 @@ textarea {
   gap: 7px;
 }
 
-.stepper {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
 .pill-icon {
-  width: 44px;
-  height: 44px;
-  min-height: 44px;
-  border-radius: var(--r-control);
-  border: 1px solid var(--edge);
   background: transparent;
+  border: 1px solid var(--edge);
+  border-radius: var(--r-control);
   color: var(--ink);
-  font-size: 16px;
-  line-height: 1;
   cursor: pointer;
+  font-size: 16px;
+  height: 44px;
+  line-height: 1;
+  min-height: 44px;
+  width: 44px;
 }
 
 .pill-icon:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); }
 
-.stepper .f-actual {
-  width: 78px;
-  text-align: center;
-  border-radius: var(--r-control);
-  font-size: 14px;
-  padding: 8px 10px;
-}
-
-.stepper-unit { font-size: 13px; }
-
-.reset-actual {
-  font-size: 12px;
-  padding: 6px 10px;
-  min-height: 0;
-}
-
 .measured-line { font-size: 11.5px; }
 
-.difficulty-set {
-  display: flex;
-  gap: 6px;
-  align-items: center;
-  flex-wrap: wrap;
-}
-
-/* The design draws 34px circles; the app's touch floor is 44px, so the target
-   grows and the circle stays round. */
-.difficulty-set .pill {
-  width: 44px;
-  min-width: 44px;
-  height: 44px;
-  min-height: 44px;
-  padding: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-}
-
-/* A rating reads as a filled scale, so every step up to the chosen one fills. */
-.difficulty-set .pill.is-filled {
-  background: var(--enamel);
-  border-color: var(--enamel);
-  color: var(--on-enamel);
-}
-
-.difficulty-word {
-  font-size: 12px;
-  margin-left: 4px;
-}
-
-.exec-card .f-notes {
-  resize: none;
-  font-size: 13.5px;
+.receipt-card .f-notes {
   border-radius: 20px;
+  font-size: 13.5px;
+  resize: none;
 }
 
-.estimates {
-  background: var(--plate);
-  border-radius: var(--r-plate);
-  padding: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.estimates h2 {
-  font-size: 20px;
-  margin: 0;
-}
-
-.estimates > p { margin: 0; font-size: 12.5px; }
+/* The estimates rail is a desktop restatement of the chip already inside each
+   card, so it never appears twice on a phone. */
+.receipt-rail { display: none; }
 
 #durationOffers {
   display: flex;
@@ -2299,56 +2571,67 @@ textarea {
   gap: 10px;
 }
 
-#durationOffers:empty { display: none; }
-
 .duration-offer {
-  background: var(--sage-soft);
-  color: var(--on-sage-soft);
+  background: var(--ground);
   border-radius: 24px;
-  padding: 16px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  padding: 16px;
 }
 
-.duration-offer .task-name { font-size: 15px; }
+.duration-offer .task-name { font-size: 14px; font-weight: 600; }
 
 .duration-offer .task-meta {
-  margin: 0;
+  color: var(--graphite);
   font-size: 12.5px;
-  color: var(--sage-ink);
-}
-
-.duration-offer-actions { display: flex; gap: 8px; }
-
-.duration-offer-actions .pill[aria-pressed="true"] {
-  background: var(--sage);
-  border-color: var(--sage);
-  color: var(--on-sage);
+  margin: 3px 0 0;
 }
 
 .receipt-foot {
+  align-items: center;
   border-top: 1px solid var(--edge);
+  display: flex;
+  gap: 12px;
   padding-top: 14px;
+}
+
+.receipt-foot .btn-block { flex: 1; }
+
+.receipt-filed {
+  color: var(--sage-ink);
+  flex: 1;
+  font-size: 13px;
+  margin: 0;
 }
 
 @media (min-width: 900px) {
   .receipt {
+    align-items: start;
+    column-gap: 26px;
     display: grid;
     grid-template-columns: minmax(0, 1fr) 320px;
-    grid-template-areas:
-      "head estimates"
-      "list estimates"
-      "list foot";
-    column-gap: 26px;
-    align-items: start;
+    grid-template-rows: minmax(0, 1fr) auto;
   }
 
-  .receipt-head { grid-area: head; }
-  .receipt .route-heading { font-size: 38px; line-height: 1.04; }
-  .receipt-list { grid-area: list; }
-  .estimates { grid-area: estimates; }
-  .receipt-foot { grid-area: foot; border-top: 0; }
+  .receipt-main { grid-column: 1; grid-row: 1 / span 2; }
+  .receipt .route-heading { font-size: 36px; line-height: 1.04; }
+
+  .receipt-rail {
+    background: var(--plate);
+    border-radius: var(--r-plate);
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    grid-column: 2;
+    grid-row: 1;
+    padding: 26px 22px;
+  }
+
+  .receipt-rail h2 { font-size: 22px; margin: 0; }
+  .receipt-rail > p { font-size: 12.5px; margin: 0; }
+
+  .receipt-foot { border-top: 0; grid-column: 2; grid-row: 2; }
 }
 
 

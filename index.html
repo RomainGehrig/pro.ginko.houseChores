@@ -130,19 +130,24 @@
 
   <section id="view-review" class="view" style="display:none">
     <div class="receipt">
-      <header class="receipt-head">
-        <p class="eyebrow" id="receiptEyebrow">Receipt</p>
-        <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">Receipt. </span><span id="receiptHeadline">Nothing recorded yet</span></h1>
-        <p class="muted receipt-subline">Measured by the session. Correct anything that is wrong.</p>
-      </header>
-      <div id="reviewList" class="receipt-list"></div>
-      <section class="estimates" aria-labelledby="estimatesHeading">
+      <div class="receipt-main">
+        <header class="receipt-head">
+          <p class="eyebrow" id="receiptEyebrow">Receipt</p>
+          <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">Receipt. </span><span id="receiptHeadline">Nothing recorded yet</span></h1>
+          <p class="muted receipt-subline" id="receiptSubline">Actuals as the session measured them. Correct anything that is wrong.</p>
+          <p class="receipt-offers" id="receiptOffersLine">No estimates need revising</p>
+        </header>
+        <div id="reviewList" class="receipt-list"></div>
+      </div>
+      <aside class="receipt-rail" aria-labelledby="estimatesHeading">
         <h2 id="estimatesHeading" class="display">Estimates</h2>
-        <p class="muted" id="receiptOffersLine">No estimates need revising</p>
+        <p class="muted" id="receiptRailNote">The estimate is only a planning number. Actuals feed it; nothing is held against you.</p>
         <div id="durationOffers"></div>
-      </section>
+      </aside>
       <div class="receipt-foot">
-        <button id="finishReviewBtn" class="btn btn-sage btn-block">Save corrections</button>
+        <button id="finishReviewBtn" class="btn btn-primary btn-block">File session</button>
+        <p id="receiptFiledLine" class="receipt-filed" hidden>Filed to the log.</p>
+        <button id="reopenReviewBtn" class="btn btn-ghost" type="button" hidden>Edit again</button>
       </div>
     </div>
   </section>

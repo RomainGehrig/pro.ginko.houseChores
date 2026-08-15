@@ -214,6 +214,14 @@
       "Description": "Node tests covering reopen snapshots, checkpoint return, and records saved before snapshots existed."
     },
     {
+      "path": "receiptGauge.js",
+      "Description": "Geometry for the Receipt gauge — scale, ticks and label placement."
+    },
+    {
+      "path": "receiptGauge.test.js",
+      "Description": "Tests the Receipt gauge geometry."
+    },
+    {
       "path": "receiptLogic.js",
       "Description": "Pure Receipt copy: drift from an estimate, difficulty words, headline, offers line and save label."
     },
@@ -476,6 +484,10 @@
         "taskUpdateSnapshot": {
           "type": "Object",
           "description": "Exact task fields intended by this outcome, used for idempotent recovery after an interrupted task update, or null."
+        },
+        "timeOmitted": {
+          "type": "String",
+          "description": "True when the user chose to leave this chore's time out of the log (boolean)."
         }
       }
     },

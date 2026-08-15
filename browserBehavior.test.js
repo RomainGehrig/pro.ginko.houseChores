@@ -1105,3 +1105,116 @@ test('active chores render as ruled ledger rows instead of bordered cards', asyn
   assert.equal(result.todayBackground, 'rgb(198, 113, 57)')
   assert.equal(result.todayColor, 'rgb(245, 234, 216)')
 })
+
+test('the receipt gauge draws both tracks, its history and its suggestion', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 800 },
+    body: applicationMarkup,
+    script: `
+      const executions = [{
+        _id: 'exec-1', taskId: 'task-1', sessionId: 'session-1', outcome: 'done',
+        rawDurationMs: 20 * 60000, actualDuration: 20, endTime: 1
+      }, {
+        _id: 'exec-0', taskId: 'task-1', sessionId: 'session-0', outcome: 'done', actualDuration: 12
+      }, {
+        _id: 'exec--1', taskId: 'task-1', sessionId: 'session--1', outcome: 'done', actualDuration: 10
+      }]
+      globalThis.freezr = {
+        query: async collection => {
+          if (collection === 'taskExecutions') return executions
+          if (collection === 'tasks') return [{ _id: 'task-1', name: 'Mop the hall', estimatedDuration: 15 }]
+          if (collection === 'sessions') return [{ _id: 'session-1', status: 'completed' }]
+          return []
+        },
+        updateFields: async () => ({}),
+        create: async () => ({})
+      }
+      const reviewView = await import(applicationUrl + 'reviewView.js')
+      document.getElementById('view-review').style.display = ''
+      reviewView.initReviewView()
+      await reviewView.startReview({ sessionId: 'session-1' })
+      await new Promise(resolve => setTimeout(resolve, 30))
+
+      const card = document.querySelector('.receipt-card')
+      const closedLine = card.querySelector('.receipt-card-line').textContent
+      const driftChip = card.querySelector('.drift-chip-label').textContent
+      card.querySelector('.receipt-card-head').click()
+
+      const opened = {
+        dotCount: card.querySelectorAll('.gauge-dot').length,
+        tickCount: card.querySelectorAll('.gauge-tick').length,
+        hasSuggestionMarker: !card.querySelector('.gauge-suggestion').hidden,
+        flagText: card.querySelector('.gauge-flag-text').textContent,
+        actualWidth: card.querySelector('.gauge-fill-actual').style.width,
+        estimateWidth: card.querySelector('.gauge-fill-estimate').style.width,
+        estimateHandleHidden: card.querySelector('[data-handle="estimate"]').hidden
+      }
+
+      const track = card.querySelector('[data-track="actual"]')
+      const box = track.getBoundingClientRect()
+      const at = fraction => ({
+        bubbles: true, clientX: box.left + box.width * fraction, clientY: box.top + box.height / 2
+      })
+      track.dispatchEvent(new PointerEvent('pointerdown', at(0.5)))
+      window.dispatchEvent(new PointerEvent('pointermove', at(0.5)))
+      window.dispatchEvent(new PointerEvent('pointerup', at(0.5)))
+      const draggedActual = Number(card.querySelector('.f-actual').value)
+
+      card.querySelector('.omit-btn').click()
+      const omittedCaption = card.querySelector('.track-cap-actual').textContent
+      const omittedNote = card.querySelector('.measured-line').textContent
+      const omittedLine = card.querySelector('.receipt-card-line').textContent
+      card.querySelector('.omit-btn').click()
+
+      card.querySelector('.toggle-estimate').click()
+      const chipBefore = card.querySelector('.receipt-card-body .suggestion-chip').textContent
+      card.querySelector('.receipt-card-body .suggestion-chip').click()
+      const estimateAfter = Number(card.querySelector('.f-estimate').value)
+      const chipAfter = card.querySelector('.receipt-card-body .suggestion-chip').textContent
+      const saveLabel = document.getElementById('finishReviewBtn').textContent
+      card.querySelector('.receipt-card-body .suggestion-chip').click()
+      const estimateBack = Number(card.querySelector('.f-estimate').value)
+
+      const result = Object.assign(opened, {
+        closedLine,
+        driftChip,
+        draggedActual,
+        omittedCaption,
+        omittedNote,
+        omittedLine,
+        chipBefore,
+        chipAfter,
+        estimateAfter,
+        estimateBack,
+        saveLabel,
+        hasDifficulty: card.innerHTML.toLowerCase().includes('difficulty'),
+        scrollWidth: document.documentElement.scrollWidth,
+        viewportWidth: window.innerWidth
+      })
+    `
+  })
+
+  assert.equal(result.closedLine, 'Took 20 min')
+  assert.equal(result.driftChip, '+5 min')
+  assert.equal(result.dotCount, 2, 'the two earlier actuals, not this session')
+  assert.ok(result.tickCount >= 3 && result.tickCount <= 7, JSON.stringify(result))
+  assert.equal(result.hasSuggestionMarker, true)
+  assert.equal(result.flagText, 'suggested')
+  assert.equal(result.actualWidth, '80%')
+  assert.equal(result.estimateWidth, '60%')
+  assert.equal(result.estimateHandleHidden, true, 'the estimate is a readout until it is opened')
+  assert.equal(result.draggedActual, 13, 'half of the 25 minute span')
+  assert.equal(result.omittedCaption, 'Not recorded')
+  assert.equal(result.omittedLine, 'No time recorded')
+  // btoa carries the scenario's result back as Latin-1, so the middot separator
+  // does not survive the trip; the two halves either side of it do.
+  assert.match(result.omittedNote,
+    /^Nothing goes to the log for this one .* the estimate is what future sessions plan with\.$/)
+  assert.equal(result.chipBefore, 'Use suggested 14 min')
+  assert.equal(result.chipAfter, 'Estimate is now 14 min')
+  assert.equal(result.estimateAfter, 14)
+  assert.match(result.saveLabel, /^File session .* update 1 estimate$/)
+  assert.equal(result.estimateBack, 15, 'the suggestion is a toggle, not a one-way door')
+  assert.equal(result.hasDifficulty, false)
+  assert.ok(result.scrollWidth <= result.viewportWidth, JSON.stringify(result))
+})

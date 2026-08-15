@@ -1675,7 +1675,7 @@ test('terminal Review errors cannot invalidate a newer queued Review load', asyn
     await sessionALoad
 
     assert.ok(sessionBLoad)
-    assert.equal(document.control('reviewList').children[0].textContent, 'Loading review…')
+    assert.equal(document.control('reviewList').children[0].textContent, 'Loading receipt…')
     assert.equal(document.control('retryReviewLoadBtn'), null)
     assert.equal(document.control('finishReviewBtn').disabled, true)
 
