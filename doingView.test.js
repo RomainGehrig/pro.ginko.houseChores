@@ -539,7 +539,7 @@ test('stale outcome applies a completed authoritative aggregate without writes',
     assert.equal(persistence.sessionUpdateCalls, 0)
     assert.equal(persistence.session.status, 'completed')
     assert.equal(state.currentSession.status, 'completed')
-    assert.equal(document.control('view-review').style.display, 'block')
+    assert.equal(document.control('view-review').style.display, '')
   })
 })
 
@@ -658,7 +658,7 @@ test('stale Pause applies completed state without a session write', async () => 
 
     assert.equal(persistence.sessionUpdateCalls, 0)
     assert.equal(state.currentSession.status, 'completed')
-    assert.equal(document.control('view-review').style.display, 'block')
+    assert.equal(document.control('view-review').style.display, '')
   })
 })
 
@@ -974,8 +974,10 @@ test('focus refresh does not navigate away from a different active view', async 
     await window.dispatch('focus')
 
     assert.equal(state.currentSession.status, 'completed')
+    // The router hides every screen it is not showing, so a view left visible
+    // is proof it never ran and the user was not moved.
     assert.equal(document.control('view-tasks').style.display, 'block')
-    assert.notEqual(document.control('view-review').style.display, 'block')
+    assert.notEqual(document.control('view-doing').style.display, '')
   })
 })
 
@@ -1542,7 +1544,7 @@ test('conclude stores the unassigned tail and enters Review', async () => {
 
     assert.equal(persistence.session.status, 'completed')
     assert.equal(persistence.session.unassignedDurationMs, 12000)
-    assert.equal(document.control('view-review').style.display, 'block')
+    assert.equal(document.control('view-review').style.display, '')
   })
 })
 
@@ -1571,7 +1573,7 @@ test('terminal Review loading retries without re-entering the active-session ref
     await document.clickControl('concludeSessionBtn')
 
     assert.equal(persistence.session.status, 'completed')
-    assert.equal(document.control('view-review').style.display, 'block')
+    assert.equal(document.control('view-review').style.display, '')
     assert.ok(document.control('retryReviewLoadBtn'))
     assert.equal(document.control('finishReviewBtn').disabled, true)
     assert.equal(document.control('concludeSessionBtn').disabled, false)
@@ -1619,7 +1621,7 @@ test('display retry reapplies a durable conclusion without repeating persistence
       await document.clickControl('retrySessionMutationBtn')
 
       assert.equal(concludeCalls, 1)
-      assert.equal(document.control('view-review').style.display, 'block')
+      assert.equal(document.control('view-review').style.display, '')
     })
   } finally {
     sessionStore.conclude = originalConclude

@@ -6,13 +6,19 @@
 
   <section id="view-today" class="view">
     <header class="today-head">
-      <p class="eyebrow">Today</p>
-      <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">Today. </span>I&#39;ve got <span id="budgetHeadline" class="fig">30</span> min</h1>
+      <div class="today-title">
+        <p class="eyebrow">Today<span id="todayDate" class="today-date wide-only"></span></p>
+        <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">Today. </span>I&#39;ve got <span id="budgetHeadline" class="fig">30</span> min</h1>
+      </div>
       <div class="budget-choices" role="group" aria-label="Time budget">
         <button class="pill time-btn" type="button" data-minutes="5" aria-pressed="false"><span class="fig">5</span> min</button>
         <button class="pill time-btn" type="button" data-minutes="15" aria-pressed="false"><span class="fig">15</span> min</button>
         <button class="pill time-btn" type="button" data-minutes="30" aria-pressed="false"><span class="fig">30</span> min</button>
         <input id="customMinutes" class="pill pill-input fig" type="number" min="1" inputmode="numeric" placeholder="Custom" aria-label="Custom minutes">
+      </div>
+      <div class="today-actions">
+        <button id="proposeBundleBtn" class="btn btn-secondary" type="button">Fill it</button>
+        <button id="startSessionBtn" class="btn btn-primary" type="button">Start<span class="wide-only">doing</span></button>
       </div>
     </header>
 
@@ -21,19 +27,16 @@
         <div id="vesselLine" class="vessel-line" hidden><span id="vesselLineLabel" class="vessel-line-label fig"></span></div>
         <div id="vesselFill" class="vessel-fill"></div>
       </div>
-      <div class="vessel-side">
+      <aside class="vessel-side" aria-label="In this session">
+        <h2 class="vessel-side-title display">In this session</h2>
         <ol id="vesselList" class="vessel-list"></ol>
         <p id="vesselIdle" class="vessel-idle muted">Tap a chore below to drop it in, or let the app fill the session for you.</p>
-      </div>
+      </aside>
     </div>
 
-    <div class="today-readout">
-      <div class="today-readout-lines">
-        <p id="bundleTotalLine" class="today-total">Nothing in yet</p>
-        <p id="bundleFitLine" class="today-fit muted">Nothing picked yet</p>
-      </div>
-      <button id="proposeBundleBtn" class="btn btn-secondary" type="button">Fill it</button>
-      <button id="startSessionBtn" class="btn btn-primary" type="button">Start</button>
+    <div class="today-readout-lines">
+      <p id="bundleTotalLine" class="today-total">Nothing in yet</p>
+      <p id="bundleFitLine" class="today-fit muted">Nothing picked yet</p>
     </div>
 
     <div id="sessionStatus" class="inline-status" role="status"></div>

@@ -1309,6 +1309,162 @@ test('active chores render as rounded cards that take an edge and a fill when op
   assert.equal(result.ripeDueLeft, 26, 'the cadence itself sits at the halfway tick')
 })
 
+const TODAY_BODY =
+  '<main id="app"><section id="view-today" class="view">' +
+    '<header class="today-head">' +
+      '<div class="today-title">' +
+        '<p class="eyebrow">Today<span class="today-date wide-only"> · Thursday 9 Aug</span></p>' +
+        '<h1 class="route-heading display">I’ve got <span class="fig">30</span> min</h1>' +
+      '</div>' +
+      '<div class="budget-choices" role="group" aria-label="Time budget">' +
+        '<button class="pill time-btn" type="button" data-minutes="5">' +
+          '<span class="fig">5</span> min</button>' +
+        '<button class="pill time-btn" type="button" data-minutes="15">' +
+          '<span class="fig">15</span> min</button>' +
+        '<button class="pill time-btn" type="button" data-minutes="30" aria-pressed="true">' +
+          '<span class="fig">30</span> min</button>' +
+        '<input id="customMinutes" class="pill pill-input fig" type="number" placeholder="Custom">' +
+      '</div>' +
+      '<div class="today-actions">' +
+        '<button id="proposeBundleBtn" class="btn btn-secondary" type="button">Fill it</button>' +
+        '<button id="startSessionBtn" class="btn btn-primary" type="button">Start' +
+          '<span class="wide-only">doing</span></button>' +
+      '</div>' +
+    '</header>' +
+    '<div class="vessel">' +
+      '<div id="vesselColumn" class="vessel-column" style="--vessel-fill:1">' +
+        '<div id="vesselFill" class="vessel-fill">' +
+          '<button type="button" class="vessel-block" style="flex:5;background:#c67139">' +
+            '<span class="vessel-block-minutes">5 min</span>' +
+            '<span class="vessel-block-name">Water the plants on the landing</span></button>' +
+          '<button type="button" class="vessel-block" style="flex:60;background:#c67139">' +
+            '<span class="vessel-block-minutes">60 min</span>' +
+            '<span class="vessel-block-name">Vacuum the bedroom</span></button>' +
+        '</div>' +
+      '</div>' +
+      '<aside class="vessel-side" aria-label="In this session">' +
+        '<h2 class="vessel-side-title display">In this session</h2>' +
+        '<ol id="vesselList" class="vessel-list">' +
+          '<li class="vessel-entry"><button type="button" class="vessel-entry-btn">' +
+            '<span class="vessel-entry-name display">Vacuum the bedroom</span>' +
+            '<span class="vessel-entry-note muted">Last done 9 d ago</span></button></li>' +
+        '</ol>' +
+        '<p id="vesselIdle" class="vessel-idle muted" hidden>Tap a chore below.</p>' +
+      '</aside>' +
+    '</div>' +
+    '<div class="today-readout-lines">' +
+      '<p id="bundleTotalLine" class="today-total">1 chore · 15 min</p>' +
+      '<p id="bundleFitLine" class="today-fit muted">15 min of your 30 still spare</p>' +
+    '</div>' +
+    '<div id="sessionStatus" class="inline-status" role="status"></div>' +
+    '<section class="pool" aria-labelledby="poolHeading">' +
+      '<p id="poolHeading" class="eyebrow eyebrow-quiet">Ripest first · hold for details</p>' +
+      '<div id="categoryFilter" class="pool-cats" role="group" aria-label="Category filter"></div>' +
+      '<div id="poolChips" class="pool-chips"></div>' +
+    '</section>' +
+  '</section></main>'
+
+const TODAY_SCRIPT = `
+  const box = selector => {
+    const element = document.querySelector(selector)
+    const rect = element.getBoundingClientRect()
+    return {
+      top: Math.round(rect.top), left: Math.round(rect.left),
+      right: Math.round(rect.right), bottom: Math.round(rect.bottom),
+      width: Math.round(rect.width), height: Math.round(rect.height)
+    }
+  }
+  const panel = document.querySelector('.vessel-side')
+  const panelStyle = getComputedStyle(panel)
+  const result = {
+    title: box('.today-title'),
+    chips: box('.budget-choices'),
+    actions: box('.today-actions'),
+    fill: box('#proposeBundleBtn'),
+    start: box('#startSessionBtn'),
+    bar: box('#vesselColumn'),
+    lines: box('.today-readout-lines'),
+    pool: box('.pool'),
+    panel: box('.vessel-side'),
+    app: box('#app'),
+    panelBackground: panelStyle.backgroundColor,
+    panelRadius: panelStyle.borderTopLeftRadius,
+    narrowBlock: box('.vessel-block'),
+    narrowName: box('.vessel-block .vessel-block-name'),
+    panelTitle: box('.vessel-side-title'),
+    panelTitleDisplay: getComputedStyle(document.querySelector('.vessel-side-title')).display,
+    dateDisplay: getComputedStyle(document.querySelector('.today-date')).display,
+    startText: document.querySelector('#startSessionBtn').innerText.replace(/\\s+/g, ' ').trim(),
+    targets: [...document.querySelectorAll('.today-actions .btn, .budget-choices .pill')]
+      .map(control => control.getBoundingClientRect().height)
+  }
+`
+
+test('Today sets its budget and its two controls on one desktop row, the session beside the pool', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 1280, height: 900 },
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
+    body: TODAY_BODY,
+    script: TODAY_SCRIPT
+  })
+
+  // Heading, budget, Fill it and Start doing share the top row, as the doc draws it.
+  assert.ok(result.chips.left >= result.title.right, JSON.stringify(result))
+  assert.ok(result.actions.left >= result.chips.right, JSON.stringify(result))
+  assert.ok(result.actions.top <= result.chips.top + 4,
+    'the head stays one row with the full budget set: ' + JSON.stringify(result))
+  assert.ok(result.start.left >= result.fill.right, JSON.stringify(result))
+  assert.equal(result.startText, 'Start doing')
+  assert.notEqual(result.dateDisplay, 'none', 'a desktop states which day it is')
+
+  // The bar takes the full width; the one fact line sits directly under it.
+  assert.equal(result.bar.left, result.pool.left, JSON.stringify(result))
+  assert.equal(result.bar.right, result.panel.right, JSON.stringify(result))
+  assert.ok(result.lines.top >= result.bar.bottom, JSON.stringify(result))
+
+  // A short chore gets a narrow block. Its name is cut to the block rather than
+  // painted across its neighbours.
+  assert.ok(result.narrowName.left >= result.narrowBlock.left - 1, JSON.stringify(result))
+  assert.ok(result.narrowName.right <= result.narrowBlock.right + 1, JSON.stringify(result))
+
+  // The session is a panel beside the pool, not a row beside the bar.
+  assert.equal(result.panel.width, 290, JSON.stringify(result))
+  assert.ok(result.panel.left >= result.pool.right, JSON.stringify(result))
+  assert.ok(result.panel.top >= result.bar.bottom, JSON.stringify(result))
+  assert.equal(result.panelBackground, 'rgb(235, 221, 197)')
+  assert.equal(result.panelRadius, '28px')
+  assert.notEqual(result.panelTitleDisplay, 'none', 'the panel says what it holds')
+  assert.ok(result.panelTitle.top - result.panel.top <= 40,
+    'the panel reads from the top, not from the bottom of a tall column: ' + JSON.stringify(result))
+
+  assert.ok(result.targets.every(height => height >= 44.5), JSON.stringify(result.targets))
+})
+
+test('Today stacks its head and stands the vessel up on a phone', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 800 },
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
+    body: TODAY_BODY,
+    script: TODAY_SCRIPT
+  })
+
+  // Nothing is squeezed beside the heading, and the button keeps the short word.
+  assert.ok(result.chips.top >= result.title.bottom, JSON.stringify(result))
+  assert.equal(result.startText, 'Start')
+  assert.equal(result.dateDisplay, 'none', 'the phone eyebrow stays one word')
+
+  // The two controls drop out of the head to sit beside the readout.
+  assert.ok(result.actions.top >= result.panel.bottom, JSON.stringify(result))
+  assert.ok(result.actions.left >= result.lines.right, JSON.stringify(result))
+
+  // The vessel stands up: a narrow column with the session listed beside it.
+  assert.equal(result.bar.width, 118, JSON.stringify(result))
+  assert.ok(result.panel.left >= result.bar.right, JSON.stringify(result))
+  assert.equal(result.panelTitleDisplay, 'none', 'the phone panel needs no heading')
+
+  assert.ok(result.targets.every(height => height >= 44.5), JSON.stringify(result.targets))
+})
+
 const DOING_BODY =
   '<main id="app"><div class="doing-layout">' +
     '<div class="doing-main">' +

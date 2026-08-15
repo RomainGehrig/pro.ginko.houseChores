@@ -63,7 +63,9 @@ export function initDoingView () {
   if (typeof window !== 'undefined' && boundWindow !== window) {
     boundWindow = window
     window.addEventListener('focus', () => refreshDoing({
-      allowNavigation: document.getElementById('view-doing')?.style.display === 'block'
+      // Shown screens take their display from the stylesheet, so "not hidden"
+      // is what identifies the one the user is actually looking at.
+      allowNavigation: document.getElementById('view-doing')?.style.display !== 'none'
     }))
   }
 }

@@ -14,7 +14,8 @@ import { localDateFromDate } from './scheduleLogic.js'
 import { poolOrder } from './ripenessLogic.js'
 import { openSheet } from './sheet.js'
 import {
-  togglePick, pickedBundle, bundleTotal, bundleTotalLine, bundleFitLine, vesselGeometry
+  togglePick, pickedBundle, bundleTotal, bundleTotalLine, bundleFitLine, vesselGeometry,
+  todayDateLine
 } from './pickingLogic.js'
 import {
   buildVesselFillHtml, buildVesselListHtml, buildPoolChipsHtml,
@@ -218,6 +219,7 @@ function renderToday () {
   const total = bundleTotal(bundle)
   const geometry = vesselGeometry(total, selectedMinutes)
 
+  element('todayDate').textContent = todayDateLine(new Date())
   element('budgetHeadline').textContent = String(selectedMinutes)
   for (const button of document.querySelectorAll('.time-btn')) {
     const isOn = Number(button.dataset.minutes) === selectedMinutes

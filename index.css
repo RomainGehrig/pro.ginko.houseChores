@@ -1853,9 +1853,21 @@ textarea {
   width: 1px;
 }
 
+/* Words a phone has no room for. The screen still reads correctly without
+   them, so they are additions rather than a second copy deck. */
+.wide-only {
+  display: none;
+}
+
 .today-head h1 {
   font-size: var(--t-count);
   margin: var(--s1) 0 var(--s3);
+}
+
+/* The panel names itself only where it is a panel. Beside the column on a
+   phone the list needs no heading — the shape it sits against is the label. */
+.vessel-side-title {
+  display: none;
 }
 
 .budget-choices {
@@ -1868,7 +1880,7 @@ textarea {
 .pill-input {
   background: transparent;
   text-align: center;
-  width: 104px;
+  width: 86px;
 }
 
 .pill-input.is-on {
@@ -1885,7 +1897,6 @@ textarea {
   display: flex;
   gap: var(--gutter);
   height: 300px;
-  margin-top: var(--s2);
 }
 
 .vessel-column {
@@ -2003,16 +2014,40 @@ textarea {
   margin: 0;
 }
 
-.today-readout {
-  align-items: center;
-  display: flex;
-  gap: 10px;
-  margin-top: var(--s3);
+/* Today is one grid at every width, because the pieces that share a row change
+   between the two. On a phone the two controls leave the head to sit beside
+   the readout; on a desktop they stay in the head and the session leaves the
+   bar to become a panel. Both are the same five rows, dealt differently. */
+#view-today {
+  align-items: end;
+  column-gap: 10px;
+  display: grid;
+  grid-template-areas:
+    "title  title"
+    "chips  chips"
+    "vessel vessel"
+    "lines  actions"
+    "status status"
+    "pool   pool";
+  grid-template-columns: minmax(0, 1fr) auto;
+  row-gap: var(--s3);
 }
 
-.today-readout-lines {
-  flex: 1;
-  min-width: 0;
+.today-head {
+  display: contents;
+}
+
+.today-title { grid-area: title; }
+.budget-choices { grid-area: chips; }
+.vessel { grid-area: vessel; }
+.today-readout-lines { grid-area: lines; min-width: 0; }
+.today-actions { grid-area: actions; }
+#sessionStatus { grid-area: status; }
+#view-today .pool { grid-area: pool; }
+
+.today-actions {
+  display: flex;
+  gap: 10px;
 }
 
 .today-total {
@@ -2030,7 +2065,7 @@ textarea {
 /* ── Today — the pool ─────────────────────────────────────────────────────── */
 
 .pool {
-  margin-top: var(--s5);
+  margin-top: var(--s3);
 }
 
 .pool-cats {
@@ -2177,21 +2212,98 @@ textarea {
 }
 
 /* ── Wider than a phone ─────────────────────────────────────────────────────
-   The vessel turns on its side and the pool sits beside the session. */
+   The vessel turns on its side and the pool sits beside the session.
+
+   The screen becomes one grid so that pieces which live in different phone
+   containers can share a row: the budget and both controls join the heading
+   at the top, and the session leaves the bar to become a panel beside the
+   pool. The three containers hand their children over with display: contents
+   rather than being rebuilt in the markup, so the phone order stays the
+   reading order. */
 
 @media (min-width: 900px) {
   #app {
     max-width: 1020px;
   }
 
-  .today-head h1 {
-    font-size: var(--t-total);
+  .wide-only {
+    display: inline;
   }
 
-  .vessel {
-    flex-direction: column;
-    gap: 10px;
-    height: auto;
+  /* The head becomes one row of its own, so the budget and both controls can
+     size themselves without the panel's column dictating their width. The
+     session leaves the bar and becomes the panel beside the pool. */
+  #view-today {
+    column-gap: 18px;
+    grid-template-areas:
+      "head   head"
+      "bar    bar"
+      "lines  lines"
+      "status status"
+      "pool   panel";
+    grid-template-columns: minmax(0, 1fr) 290px;
+  }
+
+  .today-head {
+    align-items: flex-end;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px 16px;
+    grid-area: head;
+  }
+
+  .today-title { flex: 1 1 200px; }
+  .today-actions { margin-left: auto; }
+
+  #view-today .vessel { display: contents; }
+  #view-today #vesselColumn { grid-area: bar; }
+  .today-readout-lines { align-self: start; grid-area: lines; }
+  #sessionStatus { align-self: start; grid-area: status; }
+  #view-today .pool { align-self: start; grid-area: pool; margin-top: 0; }
+
+  .today-head h1 {
+    font-size: 36px;
+    line-height: 1.04;
+    margin-bottom: 0;
+  }
+
+  /* One line under the bar, as the doc writes it: what is in, then how it
+     sits against the budget. */
+  .today-readout-lines {
+    align-items: baseline;
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--s2);
+  }
+
+  .today-total,
+  .today-fit {
+    font-size: 13px;
+    font-weight: 400;
+  }
+
+  .today-fit::before {
+    content: "· ";
+  }
+
+  /* The session becomes the panel it is on a desktop — its own plate, beside
+     the pool rather than beside the bar. */
+  #view-today .vessel-side {
+    align-self: stretch;
+    background: var(--plate);
+    border-radius: 28px;
+    gap: var(--s3);
+    grid-area: panel;
+    /* Beside the fill the list hangs from the bottom to meet it. In a panel
+       of its own it reads from the top, under its heading. */
+    justify-content: flex-start;
+    padding: 22px;
+  }
+
+  .vessel-side-title {
+    display: block;
+    font-size: 19px;
+    margin: 0;
   }
 
   .vessel-column {
@@ -2235,6 +2347,9 @@ textarea {
     gap: 2px;
     justify-content: center;
     min-width: 0;
+    /* A five-minute chore gets a five-minute block. Its name is cut to the
+       block it owns rather than painted over the chores either side. */
+    overflow: hidden;
     padding: 0 var(--gutter);
   }
 
@@ -2243,24 +2358,16 @@ textarea {
     font-family: var(--face-display);
     font-size: 15px;
     line-height: 1.1;
+    /* The block is the name's whole allowance — beyond it the name ends in an
+       ellipsis instead of running over the chores either side. */
+    max-width: 100%;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  .vessel-side {
-    justify-content: flex-start;
-  }
-
   .vessel-list {
-    flex-direction: row;
-    flex-wrap: wrap;
-    gap: var(--s3) var(--s4);
     justify-content: flex-start;
-  }
-
-  .vessel-entry {
-    max-width: 240px;
   }
 }
 

@@ -5,7 +5,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
-  togglePick, pickedBundle, bundleTotal, bundleTotalLine, bundleFitLine, vesselGeometry
+  togglePick, pickedBundle, bundleTotal, bundleTotalLine, bundleFitLine, vesselGeometry,
+  todayDateLine
 } from './pickingLogic.js'
 
 const task = (id, minutes) => ({ _id: id, name: id, estimatedDuration: minutes })
@@ -93,4 +94,14 @@ test('over budget the vessel stays full and the budget line drops to meet it', (
 test('with no budget there is no line to draw', () => {
   assert.deepEqual(vesselGeometry(20, 0),
     { fillPercent: 0, linePercent: 0, fillFraction: 0, lineFraction: 0, overhangs: false })
+})
+
+test('the desktop eyebrow states which day it is, without a year nobody needs', () => {
+  assert.equal(todayDateLine(new Date(2026, 7, 13)), ' · Thursday 13 Aug')
+  assert.equal(todayDateLine(new Date(2026, 0, 1)), ' · Thursday 1 Jan')
+})
+
+test('an unreadable date says nothing rather than something wrong', () => {
+  assert.equal(todayDateLine(new Date('nonsense')), '')
+  assert.equal(todayDateLine(null), '')
 })

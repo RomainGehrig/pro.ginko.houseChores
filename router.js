@@ -119,7 +119,9 @@ function renderRoute (route) {
 
   for (const name of SCREEN_NAMES) {
     const view = document.getElementById?.('view-' + name)
-    if (view) view.style.display = name === screenName ? 'block' : 'none'
+    // The screen being shown gets its display back from the stylesheet rather
+    // than an inline 'block', so a screen is free to be a grid or a flex box.
+    if (view) view.style.display = name === screenName ? '' : 'none'
   }
   for (const item of navigationItems()) {
     const active = navRouteName(item) === activeNavRouteName(route.name)

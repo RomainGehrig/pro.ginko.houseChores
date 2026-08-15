@@ -106,14 +106,14 @@ test('each final route shows its Stage 3 screen, focuses its heading, and canoni
       ? '#/receipt/session' : '#/' + route
     const dom = installRouterDom(hash)
     initRouter()
-    assert.equal(dom.views.get(screen).style.display, 'block', hash)
+    assert.equal(dom.views.get(screen).style.display, '', hash)
     assert.equal(dom.views.get(screen).heading.focusCalls, 1, hash)
   }
 
   const fallback = installRouterDom('#/not-a-route')
   initRouter()
   assert.equal(window.location.hash, '#/today')
-  assert.equal(fallback.views.get('today').style.display, 'block')
+  assert.equal(fallback.views.get('today').style.display, '')
   assert.equal(fallback.views.get('today').heading.focusCalls, 1)
 })
 
@@ -141,7 +141,7 @@ test('router refreshes history only when dispatching the log route', () => {
 
   initRouter({ onLogRoute: () => { refreshes++ } })
 
-  assert.equal(dom.views.get('log').style.display, 'block')
+  assert.equal(dom.views.get('log').style.display, '')
   assert.equal(refreshes, 1)
   showView('tasks')
   assert.equal(refreshes, 1)
@@ -158,7 +158,7 @@ test('legacy showView callers bridge to their final screen routes and absent pri
     initRouter()
     showView(caller, caller === 'review' ? 'session/42' : undefined)
     assert.equal(window.location.hash, hash, caller)
-    assert.equal(dom.views.get(screen).style.display, 'block', caller)
+    assert.equal(dom.views.get(screen).style.display, '', caller)
   }
 
   assert.doesNotThrow(() => setNavVisible('doing', true))

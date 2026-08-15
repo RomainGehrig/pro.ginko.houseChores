@@ -21,6 +21,15 @@ export function bundleTotal (bundle) {
   return (bundle || []).reduce((sum, task) => sum + (Number(task?.estimatedDuration) || 0), 0)
 }
 
+// A date is a fact, not a deadline: it tells you which day you are planning,
+// and it is the only thing on this screen that is about the calendar at all.
+export function todayDateLine (date) {
+  const time = date instanceof Date ? date.getTime() : NaN
+  if (!Number.isFinite(time)) return ''
+  return ' · ' + date.toLocaleDateString('en-GB',
+    { weekday: 'long', day: 'numeric', month: 'short' })
+}
+
 export function bundleTotalLine (count, minutes) {
   if (!count) return 'Nothing in yet'
   return count + ' chore' + (count === 1 ? '' : 's') + ' · ' + minutesLabel(minutes)
