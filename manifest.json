@@ -255,11 +255,23 @@
     },
     {
       "path": "historyView.js",
-      "Description": "Renders status-aware session history with rounded raw or legacy durations and expand/collapse controls."
+      "Description": "Drives the Log screen: loads the record, filters it by range and opens one session at a time."
     },
     {
-      "path": "historyView.test.js",
-      "Description": "Node tests covering safe history facts with instrument-number markup."
+      "path": "log/logLogic.js",
+      "Description": "Pure view model for the Log: its ranges, chart geometry and per-session copy."
+    },
+    {
+      "path": "log/logLogic.test.js",
+      "Description": "Tests the Log's ranges, chart geometry and per-session copy."
+    },
+    {
+      "path": "log/logView.js",
+      "Description": "Renders the Log: the range control, the active-time chart and the session cards."
+    },
+    {
+      "path": "log/logView.test.js",
+      "Description": "Tests the Log's range control, chart and session card markup."
     },
     {
       "path": "categoryLocationLogic.js",

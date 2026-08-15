@@ -4,8 +4,6 @@
 import { activeElapsedMs } from './sessionLogic.js'
 
 const DIFFICULTY_WORDS = ['Easy', 'Light', 'Middling', 'Hard', 'A slog']
-const OUTCOME_KEYS = ['done', 'already_done', 'cancelled']
-const OUTCOME_LABELS = { done: 'done', already_done: 'already done', cancelled: 'skipped' }
 const STATUS_LABELS = {
   active: 'in progress',
   paused: 'paused',
@@ -38,13 +36,6 @@ export function buildHistory (sessions, executions, tasks) {
   return sessions
     .map(s => summariseSession(s, execsBySession.get(s._id) || [], taskById))
     .sort((a, b) => (b.startTime || 0) - (a.startTime || 0))
-}
-
-export function describeOutcomes (outcomeCounts) {
-  return OUTCOME_KEYS
-    .filter(key => outcomeCounts[key] > 0)
-    .map(key => outcomeCounts[key] + ' ' + OUTCOME_LABELS[key])
-    .join(', ')
 }
 
 // A session's own clock is the one its budget was measured against, so the Log
@@ -103,10 +94,4 @@ export function displayMinutes (minutes) {
   const value = Number(minutes)
   if (!Number.isFinite(value) || value <= 0) return 0
   return Math.max(1, Math.round(value))
-}
-
-export function buildLogCountLine (sessionCount) {
-  const count = Number(sessionCount) || 0
-  if (!count) return 'Log · nothing yet'
-  return 'Log · ' + count + ' session' + (count === 1 ? '' : 's')
 }

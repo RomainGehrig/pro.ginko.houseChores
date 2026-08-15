@@ -1,93 +1,70 @@
-// ABOUTME: Renders the read-only session history accordion and wires
-// ABOUTME: expand/collapse for each past session row.
+// ABOUTME: Drives the Log screen — loads the record, filters it by range and opens one session at a time.
+// ABOUTME: Holds no view markup of its own; log/logView.js renders, log/logLogic.js decides what is said.
 
 import { listAllSessions } from './sessionData.js'
 import { listAllExecutions } from './executionData.js'
 import { listAllTasks } from './taskData.js'
-import {
-  buildHistory, describeOutcomes, buildLogCountLine, displayMinutes, difficultyLabel
-} from './historyLogic.js'
-import { formatDateTime, formatDuration, escapeHtml, formatFactHtml } from './helpers.js'
+import { buildHistory } from './historyLogic.js'
+import { escapeHtml } from './helpers.js'
+import { activeBars, logHeadline, sessionsInRange } from './log/logLogic.js'
+import { logChartHtml, logRangesHtml, logSessionsHtml } from './log/logView.js'
 
-const OUTCOME_TEXT = { done: 'done', already_done: 'already done', cancelled: 'skipped' }
+const state = { range: '7', openId: null, history: [] }
 
-export function initHistoryView() {
-  // content is rendered on demand by refreshHistoryView
+export function initHistoryView () {
+  const ranges = document.getElementById('logRanges')
+  const list = document.getElementById('historyList')
+  if (ranges) ranges.addEventListener('click', handleRangeClick)
+  if (list) list.addEventListener('click', handleCardClick)
 }
 
-export async function refreshHistoryView() {
-  const container = document.getElementById('historyList')
-  container.innerHTML = '<div class="freezr-spinner"></div>'
+export async function refreshHistoryView () {
+  const list = document.getElementById('historyList')
+  if (!list) return
+  list.innerHTML = '<div class="freezr-spinner"></div>'
   try {
     const [sessions, executions, tasks] = await Promise.all([
       listAllSessions(),
       listAllExecutions(),
       listAllTasks()
     ])
-    render(buildHistory(sessions, executions, tasks), container)
+    state.history = buildHistory(sessions, executions, tasks)
+    render()
   } catch (err) {
-    container.innerHTML = '<p class="empty">Could not load history: ' + escapeHtml(err.message || String(err)) + '</p>'
+    list.innerHTML = '<p class="empty">Could not load the log: ' +
+      escapeHtml(err.message || String(err)) + '</p>'
   }
 }
 
-function render(history, container) {
-  const countLine = document.getElementById('logCountLine')
-  if (countLine) countLine.textContent = buildLogCountLine(history.length)
-  if (!history.length) {
-    container.innerHTML = '<p class="empty">No sessions yet.</p>'
-    return
-  }
-  container.innerHTML = history.map(historyRowHtml).join('')
-  container.querySelectorAll('.history-head').forEach(head => {
-    head.addEventListener('click', () => {
-      const row = head.closest('.history-row')
-      const expanded = row.classList.toggle('expanded')
-      head.querySelector('.history-caret').textContent = expanded ? '▾' : '▸'
-    })
-  })
+function render () {
+  const now = Date.now()
+  const shown = sessionsInRange(state.history, state.range, now)
+
+  const headline = document.getElementById('logHeadline')
+  if (headline) headline.textContent = logHeadline(shown)
+
+  const ranges = document.getElementById('logRanges')
+  if (ranges) ranges.innerHTML = logRangesHtml(state.range)
+
+  const chart = document.getElementById('logChart')
+  if (chart) chart.innerHTML = logChartHtml(activeBars(shown, now))
+
+  const list = document.getElementById('historyList')
+  if (list) list.innerHTML = logSessionsHtml(shown, { openId: state.openId, now })
 }
 
-export function historyRowHtml(session) {
-  const budget = formatDuration(session.timeBudgetMinutes)
-  const filter = session.categoryFilter || 'All'
-  const summary = session.taskCount
-    ? session.taskCount + (session.taskCount === 1 ? ' task' : ' tasks') +
-      ' · ' + describeOutcomes(session.outcomeCounts) +
-      ' · ' + formatDuration(displayMinutes(session.totalActualMinutes))
-    : 'no tasks recorded'
-
-  return (
-    '<div class="history-row">' +
-      '<div class="history-head">' +
-        '<div class="history-title">' +
-          '<span class="history-caret">▸</span>' +
-          '<span class="history-when">' + formatFactHtml(formatDateTime(session.startTime)) + '</span>' +
-          '<span class="task-meta">' + formatFactHtml(budget + ' · ' + filter) + '</span>' +
-          (session.statusLabel !== null
-            ? '<span class="history-tag">' + formatFactHtml(session.statusLabel) + '</span>'
-            : '') +
-        '</div>' +
-        '<div class="task-meta history-summary">' + formatFactHtml(summary) + '</div>' +
-      '</div>' +
-      '<div class="history-detail">' + session.entries.map(historyEntryHtml).join('') + '</div>' +
-    '</div>'
-  )
+function handleRangeClick (event) {
+  const option = event.target.closest('[data-log-range]')
+  if (!option) return
+  state.range = option.dataset.logRange
+  render()
 }
 
-export function historyEntryHtml(entry) {
-  const extras = []
-  if (entry.difficultyRating) extras.push(formatFactHtml(difficultyLabel(entry.difficultyRating)))
-  if (entry.notes) extras.push('“' + formatFactHtml(entry.notes) + '”')
-
-  return (
-    '<div class="history-entry">' +
-      '<div class="history-entry-line">' +
-        '<span class="history-entry-name">' + formatFactHtml(entry.taskName) + '</span>' +
-        '<span class="history-entry-outcome">' + formatFactHtml(OUTCOME_TEXT[entry.outcome] || entry.outcome) + '</span>' +
-        '<span class="history-entry-time">' + formatFactHtml(formatDuration(displayMinutes(entry.actualDuration))) + '</span>' +
-      '</div>' +
-      (extras.length ? '<div class="task-meta">' + extras.join('&nbsp;&nbsp;') + '</div>' : '') +
-    '</div>'
-  )
+// One session open at a time: the point of opening one is to read it.
+function handleCardClick (event) {
+  const head = event.target.closest('.log-card-head')
+  if (!head) return
+  const id = head.closest('.log-card')?.dataset.id
+  state.openId = state.openId === id ? null : id
+  render()
 }
-

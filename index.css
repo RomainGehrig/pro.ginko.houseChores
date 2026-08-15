@@ -1549,85 +1549,247 @@ textarea {
   width: 100%;
 }
 
-.history-row {
-  background: var(--plate);
-  border: 1px solid var(--rule);
-  border-radius: var(--r-plate);
-  box-shadow: var(--lift);
-  margin-bottom: 10px;
+/* ── Log — what the sessions measured ───────────────────────────────────────
+   Bars scale to the tallest session in view, not to a target. Nothing here
+   counts down, and nothing turns red for taking longer than it was guessed. */
+
+.log-head {
+  gap: 12px;
 }
 
-.history-head {
-  padding: 10px 12px;
-  cursor: pointer;
+.log-subline {
+  margin: 0;
 }
 
-.history-head:hover {
-  background: var(--sunk);
-}
-
-.history-title {
+.log-body {
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.log-chart-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.log-chart-title {
+  font-size: 15px;
+  margin: 0;
+}
+
+.log-chart {
+  align-items: flex-end;
+  display: flex;
   gap: 8px;
-  flex-wrap: wrap;
+  min-height: 112px;
+  padding-top: 6px;
 }
 
-.history-caret {
+.log-bar-column {
+  align-items: center;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 5px;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+.log-bar {
+  background: var(--enamel);
+  border-radius: 8px 8px 4px 4px;
+  width: 100%;
+}
+
+.log-bar-cap {
   color: var(--graphite);
+  font-size: 9.5px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.history-when {
+.log-chart-empty {
+  align-self: center;
+  margin: auto 0;
+}
+
+.log-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.log-card {
+  /* A transparent edge when closed, so opening one does not nudge the list. */
+  border: 1px solid transparent;
+  padding: 0;
+}
+
+.log-card[data-open="true"] {
+  background: var(--ground);
+  border-color: var(--rule);
+}
+
+.log-card-head {
+  align-items: baseline;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  display: flex;
+  font: inherit;
+  gap: 10px;
+  padding: 13px 15px;
+  text-align: left;
+  width: 100%;
+}
+
+.log-card-lines {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.log-when {
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.log-summary {
+  color: var(--graphite);
+  font-size: 11.5px;
+}
+
+.log-status {
+  background: var(--sunk);
+  border-radius: var(--r-chip);
+  color: var(--graphite);
+  flex: none;
+  font-size: var(--t-stamp);
+  padding: 1px 6px;
+}
+
+.log-rel {
+  color: var(--stamp);
+  flex: none;
+  font-size: 11px;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.log-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 0 16px 16px;
+}
+
+.log-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.log-row {
+  align-items: center;
+  display: flex;
+  gap: 10px;
+}
+
+.log-row-main {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.log-row-name {
+  font-size: 13.5px;
   font-weight: 600;
 }
 
-.history-summary {
-  margin-top: 2px;
-  padding-left: 20px;
-}
-
-.history-tag {
-  font-size: var(--t-stamp);
-  padding: 1px 6px;
-  border-radius: var(--r-chip);
-  background: var(--sunk);
+.log-row-fact,
+.log-row-aside {
   color: var(--graphite);
+  font-size: 11px;
 }
 
-.history-detail {
-  display: none;
-  padding: 0 12px 10px 32px;
+/* One length, read twice: the track is what it took or what was guessed,
+   whichever is longer, so a bar short of the end simply beat the guess. */
+.log-row-bar {
+  background: color-mix(in srgb, var(--ink) 8%, transparent);
+  border-radius: var(--r-pill);
+  flex: none;
+  height: 5px;
+  position: relative;
+  width: 52px;
 }
 
-.history-row.expanded .history-detail {
-  display: block;
+.log-row-fill {
+  background: var(--enamel);
+  border-radius: var(--r-pill);
+  bottom: 0;
+  left: 0;
+  position: absolute;
+  top: 0;
 }
 
-.history-entry {
-  padding: 6px 0;
+.log-row-fill.is-quiet {
+  background: color-mix(in srgb, var(--ink) 20%, transparent);
+}
+
+.log-budget {
   border-top: 1px solid var(--rule);
-}
-
-.history-entry-line {
-  display: flex;
-  gap: 10px;
-  align-items: baseline;
-}
-
-.history-entry-name {
-  flex: 1;
-}
-
-.history-entry-outcome {
-  font-size: var(--t-fig);
   color: var(--graphite);
+  font-size: 12px;
+  margin: 0;
+  padding-top: 6px;
 }
 
-.history-entry-time {
-  font-size: var(--t-fig);
-  color: var(--graphite);
-  min-width: 52px;
-  text-align: right;
+@media (min-width: 900px) {
+  .log-body {
+    align-items: start;
+    display: grid;
+    gap: 26px;
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+
+  .log-chart-card {
+    background: var(--plate);
+    border-radius: var(--r-plate);
+    gap: 14px;
+    grid-column: 2;
+    grid-row: 1;
+    padding: 24px 22px;
+  }
+
+  .log-chart-title {
+    font-size: 20px;
+  }
+
+  .log-chart {
+    gap: 10px;
+    min-height: 130px;
+  }
+
+  .log-sessions {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  .log-when {
+    font-size: 19px;
+  }
 }
 
 /* ── Today — the vessel ─────────────────────────────────────────────────────

@@ -99,8 +99,11 @@ export function driftLine (entry) {
     : formatDuration(estimate - actual) + ' under'
 }
 
+// The bar illustrates the drift line. Where there is no comparison to state —
+// a skip, an already-done, a chore with no estimate — it draws nothing rather
+// than an unexplained sliver.
 export function driftFillPercent (entry) {
-  if (!isResolved(entry)) return 0
+  if (!driftLine(entry)) return 0
   const actual = displayMinutes(entry?.actualDuration)
   const estimate = Number(entry?.estimatedDuration) || 0
   const span = Math.max(actual, estimate, 1)

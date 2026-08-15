@@ -3,7 +3,7 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert'
-import { buildHistory, describeOutcomes, buildLogCountLine, displayMinutes } from './historyLogic.js'
+import { buildHistory, displayMinutes } from './historyLogic.js'
 
 const tasks = [
   { _id: 't1', name: 'Pay electricity bill', estimatedDuration: 10 },
@@ -139,19 +139,6 @@ test('an entry carries the estimate its chore now holds, so drift has something 
     { sessionId: 's1', taskId: 'gone', startTime: 2, actualDuration: 3, outcome: 'done' }
   ], tasks)
   assert.deepEqual(summary.entries.map(entry => entry.estimatedDuration), [10, null])
-})
-
-test('describeOutcomes lists only non-zero outcomes, done first', () => {
-  assert.equal(describeOutcomes({ done: 2, already_done: 0, cancelled: 1 }), '2 done, 1 skipped')
-  assert.equal(describeOutcomes({ done: 0, already_done: 1, cancelled: 0 }), '1 already done')
-  assert.equal(describeOutcomes({ done: 1, already_done: 1, cancelled: 1 }), '1 done, 1 already done, 1 skipped')
-  assert.equal(describeOutcomes({ done: 0, already_done: 0, cancelled: 0 }), '')
-})
-
-test('the log eyebrow counts the sessions it holds', () => {
-  assert.equal(buildLogCountLine(0), 'Log · nothing yet')
-  assert.equal(buildLogCountLine(1), 'Log · 1 session')
-  assert.equal(buildLogCountLine(12), 'Log · 12 sessions')
 })
 
 test('measured minutes are shown whole, and any time at all counts as a minute', () => {

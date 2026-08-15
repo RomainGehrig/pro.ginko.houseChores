@@ -120,7 +120,13 @@ test('a chore states what it took and how that compares, as one plain fact', () 
 test('the drift bar fills against the larger of what it took and what was guessed', () => {
   assert.equal(driftFillPercent({ outcome: 'done', actualDuration: 5, estimatedDuration: 10 }), 50)
   assert.equal(driftFillPercent({ outcome: 'done', actualDuration: 20, estimatedDuration: 10 }), 100)
+  assert.equal(driftFillPercent({ outcome: 'done', actualDuration: 10, estimatedDuration: 10 }), 100)
+})
+
+test('a chore with no comparison to draw draws nothing at all', () => {
   assert.equal(driftFillPercent({ outcome: 'cancelled', actualDuration: 0, estimatedDuration: 10 }), 0)
+  assert.equal(driftFillPercent({ outcome: 'already_done', actualDuration: 1, estimatedDuration: 15 }), 0)
+  assert.equal(driftFillPercent({ outcome: 'done', actualDuration: 8, estimatedDuration: null }), 0)
 })
 
 test('a session is placed in time by how long ago it was, not by how late it is', () => {

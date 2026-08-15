@@ -133,11 +133,19 @@
   </section>
 
   <section id="view-log" class="view" style="display:none">
-    <header class="screen-head">
-      <p class="eyebrow"><span id="logCountLine">Log</span></p>
-      <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">Log. </span>What the sessions measured</h1>
+    <header class="screen-head log-head">
+      <p class="eyebrow">Log</p>
+      <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">Log. </span><span id="logHeadline">Nothing recorded yet</span></h1>
+      <p class="muted log-subline">What actually happened. Nothing here is a score.</p>
+      <div id="logRanges" class="seg" role="group" aria-label="How far back to read"></div>
     </header>
-    <div id="historyList"></div>
+    <div class="log-body">
+      <section class="log-chart-card" aria-labelledby="logChartTitle">
+        <h2 id="logChartTitle" class="display log-chart-title">Active time</h2>
+        <div id="logChart" class="log-chart"></div>
+      </section>
+      <div id="historyList" class="log-sessions"></div>
+    </div>
   </section>
 </div>
 
