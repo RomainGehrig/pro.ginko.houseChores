@@ -86,11 +86,11 @@ test('resolved timing falls back for null or empty raw values while preserving n
     taskId: 'zero-raw', outcome: 'done', rawDurationMs: 0, actualDuration: 99
   }], [])
 
-  assert.match(markup, /data-task-id="null-raw"[\s\S]*?Done · <span class="fig">02:00<\/span>/)
-  assert.match(markup, /data-task-id="empty-raw"[\s\S]*?Done · <span class="fig">00:30<\/span>/)
-  assert.match(markup, /data-task-id="zero-raw"[\s\S]*?Done · <span class="fig">00:00<\/span>/)
+  assert.match(markup, /data-task-id="null-raw"[\s\S]*?Took <span class="fig">2<\/span> min/)
+  assert.match(markup, /data-task-id="empty-raw"[\s\S]*?Took <span class="fig">30<\/span> sec/)
+  assert.match(markup, /data-task-id="zero-raw"[\s\S]*?Took <span class="fig">0<\/span> sec/)
   assert.match(markup, /estimate <span class="fig">1<\/span> min/)
-  assert.match(markup, /Budget <span class="fig">15<\/span> min/)
+  assert.match(markup, /of the <span class="fig">15<\/span> min you set/)
 })
 
 test('resolved and unavailable cards remain visible without outcome controls while paused', () => {
@@ -100,12 +100,61 @@ test('resolved and unavailable cards remain visible without outcome controls whi
     { _id: 't1', name: 'Clean sink', estimatedDuration: 5 },
     { _id: 'missing', name: 'Unavailable task', unavailable: true }
   ], [{ taskId: 't1', outcome: 'done', rawDurationMs: 5000 }], [])
-  assert.match(markup, /data-task-id="t1"[\s\S]*Done · <span class="fig">00:05<\/span>/)
+  assert.match(markup, /data-task-id="t1"[\s\S]*Took <span class="fig">5<\/span> sec/)
   assert.match(markup, /data-task-id="missing"[\s\S]*Unavailable task/)
   assert.doesNotMatch(markup, /data-outcome=/)
-  assert.match(markup, /id="doingDecisionPanel"/)
-  assert.match(markup, />Conclude</)
-  assert.match(markup, />Continue</)
+
+  // Paused is where chores get added, so the panel is the paused state itself
+  // rather than something a second button has to open.
+  assert.match(markup, /id="doingContinuePanel"[^>]*class="[^"]*doing-add/)
+  assert.doesNotMatch(markup, /id="doingContinuePanel"[^>]*hidden/)
+  assert.doesNotMatch(markup, /id="openContinueBtn"|id="doingDecisionPanel"/)
+})
+
+test('the head states the clock, what it is doing, and both ways out of the session', () => {
+  const running = buildDoingSessionHtml(
+    { _id: 's1', status: 'active', timeBudgetMinutes: 30, accumulatedActiveMs: 12 * 60000 },
+    [{ _id: 't1', name: 'Water the plants', estimatedDuration: 10 }],
+    [], [], 0
+  )
+
+  assert.match(running, /id="sessionTimerDisplay"/)
+  assert.match(running, /class="doing-status">Counting active time</)
+  assert.match(running, /id="concludeSessionBtn"[^>]*>Conclude</)
+  assert.match(running, /id="pauseSessionBtn"[^>]*>Pause</)
+  assert.match(running, /id="doingRemaining">About <span class="fig">18<\/span> min left/)
+  assert.match(running, /<span class="fig">0<\/span> of <span class="fig">1<\/span> resolved/)
+  assert.match(running, /id="doingSpent">Time allocated to chores: <span class="fig">0<\/span> sec/)
+
+  const paused = buildDoingSessionHtml(
+    { _id: 's1', status: 'paused', timeBudgetMinutes: 30, accumulatedActiveMs: 12 * 60000 },
+    [{ _id: 't1', name: 'Water the plants', estimatedDuration: 10 }],
+    [], [], 0
+  )
+  assert.match(paused, /class="doing-status">Paused — the clock is stopped</)
+  assert.match(paused, /id="pauseSessionBtn"[^>]*>Resume</)
+
+  // Conclude is in the head from the start: it must not take a pause first.
+  assert.match(paused, /id="concludeSessionBtn"/)
+})
+
+test('a session that resolved itself says why it stopped', () => {
+  const all = buildDoingSessionHtml(
+    { _id: 's1', status: 'paused', timeBudgetMinutes: 30, accumulatedActiveMs: 60000 },
+    [{ _id: 't1', name: 'Water the plants', estimatedDuration: 10 }],
+    [{ _id: 'x1', taskId: 't1', outcome: 'done', rawDurationMs: 60000 }], [], 0
+  )
+  assert.match(all, /class="doing-auto-note[^"]*">Everything is resolved\. Conclude, or add more\.</)
+
+  const some = buildDoingSessionHtml(
+    { _id: 's1', status: 'paused', timeBudgetMinutes: 30, accumulatedActiveMs: 60000 },
+    [
+      { _id: 't1', name: 'Water the plants', estimatedDuration: 10 },
+      { _id: 't2', name: 'Vacuum', estimatedDuration: 10 }
+    ],
+    [{ _id: 'x1', taskId: 't1', outcome: 'done', rawDurationMs: 60000 }], [], 0
+  )
+  assert.doesNotMatch(some, /doing-auto-note/)
 })
 
 test('picker markup escapes every stored suggestion and search-result title', () => {
@@ -125,14 +174,16 @@ test('picker markup escapes every stored suggestion and search-result title', ()
     /&lt;\/button&gt;&lt;script&gt;globalThis\.compromised = true&lt;\/script&gt;&lt;button&gt;/
   )
   assert.doesNotMatch(markup, /<img|<script>/)
-  assert.match(markup, /<span class="fig">5<\/span> min/)
-  assert.match(markup, /<span class="fig">30<\/span> min/)
+  // The estimate is its own cell, so the whole cell is the instrument face.
+  assert.match(markup, /<span class="continue-row-est fig">5 min<\/span>/)
+  assert.match(markup, /<span class="continue-row-est fig">30 min<\/span>/)
 })
 
-test('continuation budget copy isolates its measurement without styling prose as a figure', () => {
+test('continuation budget copy isolates its measurement and states the rule after it', () => {
   assert.equal(
-    buildContinuationRemainingHtml(12),
-    '<span class="fig">12</span> min remain in the original session budget for suggestions.'
+    buildContinuationRemainingHtml({ timeBudgetMinutes: 30 }, 18 * 60000),
+    'About <span class="fig">12</span> min left of the <span class="fig">30</span> min you set' +
+    '. Anything you pick deliberately fits, budget or not.'
   )
 })
 

@@ -4,6 +4,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
+  canQuickAdd,
   normalizeContinuationSuggestionEntries,
   searchContinuationTasks,
   suggestContinuationTasks,
@@ -48,4 +49,18 @@ test('normalizes persisted suggestion snapshots and ignores malformed duplicates
     { taskId: 'b', estimatedDurationMinutes: 0 }
   ]), [{ taskId: 'a', estimatedDurationMinutes: 4 }])
   assert.deepEqual(normalizeContinuationSuggestionEntries(null), [])
+})
+
+// The one field both searches and offers. Anything the chores already answer to
+// is a search hit, not a new chore — offering both would be offering a duplicate.
+test('a typed name that no chore already carries can be added as a new one', () => {
+  const tasks = [{ _id: 't1', name: 'Water the plants' }, { _id: 't2', name: 'Vacuum' }]
+  assert.equal(canQuickAdd('Descale the kettle', tasks), true)
+  assert.equal(canQuickAdd('Water the plants', tasks), false)
+  assert.equal(canQuickAdd('  water the PLANTS  ', tasks), false, 'case and padding do not matter')
+  assert.equal(canQuickAdd('Water', tasks), true, 'a partial match is a search, not a duplicate')
+  assert.equal(canQuickAdd('', tasks), false)
+  assert.equal(canQuickAdd('   ', tasks), false)
+  assert.equal(canQuickAdd(null, tasks), false)
+  assert.equal(canQuickAdd('Anything', []), true)
 })

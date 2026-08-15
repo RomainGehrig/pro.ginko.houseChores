@@ -98,6 +98,14 @@
       "Description": "Node tests covering refreshed completion preparation and stage-specific retry dispatch."
     },
     {
+      "path": "doingLines.js",
+      "Description": "The lines Doing states about a session — status, progress, budget, spent and conclusion."
+    },
+    {
+      "path": "doingLines.test.js",
+      "Description": "Node tests covering the Doing session lines and their neutral over-budget wording."
+    },
+    {
       "path": "taskData.js",
       "Description": "DB calls for creating, reading, updating, and permanently deleting normalized task records."
     },

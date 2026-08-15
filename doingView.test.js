@@ -169,7 +169,9 @@ function createDoingDocument ({ failFirstReviewDisplay = false } = {}) {
 
   Object.defineProperty(content, 'innerHTML', {
     configurable: true,
+    get () { return content._markup || '' },
     set (markup) {
+      content._markup = markup
       for (const child of content._dynamicChildren) unregister(child)
       content._dynamicChildren = []
       dynamicIds.forEach(id => nodes.delete(id))
@@ -601,7 +603,7 @@ test('stale outcome applies a paused authoritative aggregate without writes', as
     assert.equal(persistence.taskUpdates.length, 0)
     assert.equal(persistence.sessionUpdateCalls, 0)
     assert.equal(state.currentSession.status, 'paused')
-    assert.equal(document.control('doingDecisionPanel').hidden, false)
+    assert.equal(document.control('doingContinuePanel').hidden, false)
   })
 })
 
@@ -718,7 +720,7 @@ test('stale Conclude applies a resumed authoritative session without a write', a
     assert.equal(persistence.session.status, 'active')
     assert.equal(persistence.session.activeStartedAt, 30000)
     assert.equal(state.currentSession.status, 'active')
-    assert.equal(document.control('doingDecisionPanel').hidden, true)
+    assert.equal(document.control('doingContinuePanel').hidden, true)
   })
 })
 
@@ -891,7 +893,7 @@ test('failed pause keeps the session visible and retries after reporting the err
     assert.equal(persistence.session.status, 'paused')
     assert.equal(persistence.session.accumulatedActiveMs, 9000)
     assert.equal(document.control('sessionTimerDisplay').textContent, '00:09')
-    assert.equal(document.control('doingDecisionPanel').hidden, false)
+    assert.equal(document.control('doingContinuePanel').hidden, false)
   })
 })
 
@@ -945,7 +947,7 @@ test('focus refresh applies a pause written by another device', async () => {
 
     assert.equal(state.currentSession.status, 'paused')
     assert.equal(document.control('sessionTimerDisplay').textContent, '00:09')
-    assert.equal(document.control('doingDecisionPanel').hidden, false)
+    assert.equal(document.control('doingContinuePanel').hidden, false)
   })
 })
 
@@ -1019,15 +1021,17 @@ test('paused picker attaches suggestions and search, quick-adds a proposed task,
       executions
     }, async ({ document, persistence, clock }) => {
       clock.setNow(900000)
-      await document.clickControl('openContinueBtn')
 
       assert.equal(document.control('doingContinuePanel').hidden, false)
-      assert.equal(document.control('resumeSessionBtn').disabled, true)
+      // Everything is resolved. The note says so; Resume is still offered,
+      // because adding one more chore is a reason to resume.
+      assert.match(document.control('doingContent').innerHTML, /doing-auto-note/)
+      assert.equal(document.control('pauseSessionBtn').disabled, false)
 
       await document.checkSuggestion('suggested-5m')
       await document.inputControl('continueSearchInput', 'garage')
       await document.clickSearchResult('searched-30m')
-      await document.inputControl('continueQuickTitle', 'Replace hallway bulb')
+      await document.inputControl('continueSearchInput', 'Replace hallway bulb')
       await document.clickControl('continueQuickAddBtn')
 
       assert.deepEqual(attachedTaskIds, ['suggested-5m', 'searched-30m'])
@@ -1037,7 +1041,7 @@ test('paused picker attaches suggestions and search, quick-adds a proposed task,
       assert.equal(persistence.session.accumulatedActiveMs, elapsedBeforePicker)
 
       clock.setNow(resumeClickedAt)
-      await document.clickControl('resumeSessionBtn')
+      await document.clickControl('pauseSessionBtn')
 
       assert.equal(persistence.session.accumulatedActiveMs, elapsedBeforePicker)
       assert.equal(persistence.session.activeStartedAt, resumeClickedAt)
@@ -1052,7 +1056,7 @@ test('paused picker attaches suggestions and search, quick-adds a proposed task,
       await document.clickOutcome(quickTaskId, 'done')
 
       assert.equal(persistence.session.status, 'paused')
-      assert.equal(document.control('doingDecisionPanel').hidden, false)
+      assert.equal(document.control('doingContinuePanel').hidden, false)
       assert.equal(persistence.getTask(quickTaskId).status, 'proposed')
     })
   } finally {
@@ -1090,7 +1094,6 @@ test('explicitly selected suggestions beyond the remaining estimate use unrestri
       bundle: [original],
       executions
     }, async ({ document, persistence }) => {
-      await document.clickControl('openContinueBtn')
       await document.checkSuggestion('suggestion-a')
       await document.checkSuggestion('suggestion-b')
 
@@ -1135,7 +1138,6 @@ test('explicit suggestion selection follows the authoritative pause without budg
     bundle: [original],
     executions
   }, async ({ document, persistence }) => {
-    await document.clickControl('openContinueBtn')
     persistence.patchSession({
       accumulatedActiveMs: 9 * 60000,
       checkpointElapsedMs: 5 * 60000
@@ -1145,7 +1147,7 @@ test('explicit suggestion selection follows the authoritative pause without budg
 
     assert.deepEqual(persistence.session.taskBundle, ['original-task', 'suggested-5m'])
     assert.equal(state.currentSession.accumulatedActiveMs, 9 * 60000)
-    assert.equal(document.control('resumeSessionBtn').disabled, false)
+    assert.equal(document.control('pauseSessionBtn').disabled, false)
     assert.doesNotMatch(
       document.control('doingStatus').textContent,
       /exceed the remaining session budget/
@@ -1175,8 +1177,7 @@ test('Quick add treats an attached staged task as successful after its response 
     executions,
     loseQuickAddAttachmentResponse: true
   }, async ({ document, persistence }) => {
-    await document.clickControl('openContinueBtn')
-    await document.inputControl('continueQuickTitle', 'Replace hallway bulb')
+    await document.inputControl('continueSearchInput', 'Replace hallway bulb')
     await document.clickControl('continueQuickAddBtn')
 
     assert.equal(persistence.quickCreates.length, 1)
@@ -1214,12 +1215,11 @@ test('Quick add Retry preserves a new title across ambiguous recovery of an olde
     executions,
     loseQuickAddAttachmentResponse: true
   }, async ({ document, persistence }) => {
-    await document.clickControl('openContinueBtn')
-    await document.inputControl('continueQuickTitle', 'Wipe the mirror')
+    await document.inputControl('continueSearchInput', 'Wipe the mirror')
     await document.clickControl('continueQuickAddBtn')
 
     assert.ok(document.control('retrySessionMutationBtn'))
-    assert.equal(document.control('continueQuickTitle').value, '')
+    assert.equal(document.control('continueSearchInput').value, '')
     await document.clickControl('retrySessionMutationBtn')
 
     assert.deepEqual(
@@ -1276,7 +1276,6 @@ test('suggestion inputs are disabled while an attachment is in flight', async ()
       bundle: [original],
       executions
     }, async ({ document }) => {
-      await document.clickControl('openContinueBtn')
       const checkbox = document.suggestionControl('suggested-2m')
       const attachment = document.checkSuggestion('suggested-2m')
       await attachmentStarted
@@ -1337,7 +1336,6 @@ test('a later suggestion reconciles and drops an unattached ambiguous selection'
       bundle: [original],
       executions
     }, async ({ document, persistence }) => {
-      await document.clickControl('openContinueBtn')
       await document.checkSuggestion('suggested-2m')
       assert.ok(document.control('retrySessionMutationBtn'))
 
@@ -1415,7 +1413,6 @@ test('ambiguous suggestion attachment reconciles once and leaves later explicit 
       executions
     }, async ({ document, persistence }) => {
       persistenceRef = persistence
-      await document.clickControl('openContinueBtn')
       const firstCheckbox = document.suggestionControl('suggested-2m')
       const firstAttachment = document.checkSuggestion('suggested-2m')
       await attachmentStarted
@@ -1467,7 +1464,6 @@ test('reopened paused picker does not turn persisted suggestion estimates into a
       activeElapsedMs: 5 * 60000, actualDuration: 5
     }]
   }, async ({ document, persistence }) => {
-    await document.clickControl('openContinueBtn')
     await document.checkSuggestion('candidate-2m')
 
     assert.deepEqual(persistence.session.taskBundle, [
@@ -1512,7 +1508,6 @@ test('paused picker sends an explicit suggestion through the unrestricted attach
         activeElapsedMs: 5 * 60000, actualDuration: 5
       }]
     }, async ({ document, persistence }) => {
-      await document.clickControl('openContinueBtn')
       await document.checkSuggestion('candidate-2m')
 
       assert.deepEqual(attachCalls, [[
