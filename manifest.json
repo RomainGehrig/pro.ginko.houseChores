@@ -186,6 +186,14 @@
       "Description": "Node tests covering task approval/edit helpers, due-first ledgers, and optimistic archive commit and recovery."
     },
     {
+      "path": "chores/ledgerLogic.js",
+      "Description": "Pure view model for the Chores ledger: bands, counts, filters and ripeness."
+    },
+    {
+      "path": "chores/ledgerLogic.test.js",
+      "Description": "Tests the Chores ledger bands, filters and ripeness arithmetic."
+    },
+    {
       "path": "chores/listView.js",
       "Description": "Pure active due-first chore ledger and inline-editor markup renderer."
     },
