@@ -3,13 +3,13 @@
 const TODAY = { name: 'today', param: null }
 const SIMPLE_ROUTES = new Set(['today', 'inbox', 'chores', 'archive', 'doing', 'log', 'setup'])
 const PARAMETER_ROUTES = new Set(['chore', 'receipt'])
-const SCREEN_NAMES = ['today', 'inbox', 'chores', 'archive', 'setup', 'doing', 'review', 'log']
+const SCREEN_NAMES = ['today', 'inbox', 'chores', 'setup', 'doing', 'review', 'log']
 const ROUTE_SCREENS = {
   today: 'today',
   inbox: 'inbox',
   chores: 'chores',
   chore: 'chores',
-  archive: 'archive',
+  archive: 'chores',
   setup: 'setup',
   doing: 'doing',
   receipt: 'review',
@@ -34,6 +34,7 @@ const LEGACY_ROUTES = {
 
 let refreshHistory = null
 let loadReceipt = null
+let selectChoresView = null
 let requestedInitialRoute = false
 let lastRenderedHash = null
 
@@ -132,6 +133,7 @@ function renderRoute (route) {
     ?.querySelector?.('.route-heading[tabindex="-1"]')
   heading?.focus?.()
   if (route.name === 'log') refreshHistory?.()
+  if (screenName === 'chores') selectChoresView?.(route.name)
   return route
 }
 
@@ -168,9 +170,10 @@ function dispatchHash ({ force = false } = {}) {
   return route
 }
 
-export function initRouter ({ onLogRoute, onReceiptRoute } = {}) {
+export function initRouter ({ onLogRoute, onReceiptRoute, onChoresRoute } = {}) {
   refreshHistory = onLogRoute || null
   loadReceipt = onReceiptRoute || null
+  selectChoresView = onChoresRoute || null
   const initialHash = typeof window === 'undefined' ? '' : window.location?.hash
   requestedInitialRoute = Boolean(recognizedRoute(initialHash))
   lastRenderedHash = null

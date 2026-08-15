@@ -1,88 +1,219 @@
+// ABOUTME: Renders the Chores ledger — bands, rows, the inline editor, the unscheduled list and the archive.
+// ABOUTME: A row states facts only: no overdue figure, no red, nothing counting how far behind you are.
+
 import { buildTaskEditorModel } from '../categoryLocationLogic.js'
 import { escapeAttribute } from '../categoryLocationView.js'
-import { escapeHtml } from '../helpers.js'
-import { buildTaskLedgerSummaryHtml } from '../taskPresentationLogic.js'
-import { groupAndSort } from '../slip.js'
-import { localDateFromDate } from '../scheduleLogic.js'
+import { escapeHtml, formatDuration } from '../helpers.js'
+import { buildChoreNoteHtml } from '../taskPresentationLogic.js'
+import { dueGroup } from '../slip.js'
+import { scheduleSummary, localDateFromDate } from '../scheduleLogic.js'
 import { buildScheduleEditorModel, scheduleEditorHtml } from '../scheduleEditor.js'
+import { categoryPillsHtml, locationPillsHtml, referenceStateSuffix } from './fieldPills.js'
+import {
+  bandLabel, bandIsNear, cadenceColor, cadenceProgress, cadenceProgressNote,
+  buildLedgerGroups, unscheduledTasks,
+  archivedCountLine, unscheduledCountLine, doneLabel, permanentDeleteLabel, ledgerViews
+} from './ledgerLogic.js'
 
-export function referenceStateSuffix (reference) {
-  if (reference.status === 'archived') return ' (Archived)'
-  if (reference.unresolved) return ' (Unavailable)'
-  return ''
+export { referenceStateSuffix }
+
+export const ESTIMATE_PRESETS = [5, 10, 15, 20, 30, 45, 60]
+
+// The meter runs 0–2 cadences, so a chore exactly at its cadence sits at the
+// halfway tick. Past that it keeps filling, and the colour stops moving.
+const RIPE_SPAN = 2
+
+const emptyCard = (title, body) =>
+  '<div class="card ledger-empty"><p class="display ledger-empty-title">' + escapeHtml(title) +
+  '</p><p class="muted">' + escapeHtml(body) + '</p></div>'
+
+export function ledgerViewsHtml (unscheduledCount, activeView = 'active') {
+  return ledgerViews(unscheduledCount).map(view =>
+    '<button type="button" class="seg-opt" data-ledger-view="' + view.key +
+      '" aria-pressed="' + (view.key === activeView ? 'true' : 'false') + '">' +
+      escapeHtml(view.label) + '</button>'
+  ).join('')
 }
 
-function dueGroupSlug (name) {
-  return name.toLowerCase().replace(/\s+/g, '-')
+export function ripeMeterHtml (task, today) {
+  const progress = cadenceProgress(task, today)
+  if (progress === null) return ''
+  const percent = Math.min(100, (progress / RIPE_SPAN) * 100)
+  return '<span class="ripe" aria-hidden="true" title="' +
+    escapeAttribute(cadenceProgressNote(progress)) + '">' +
+    '<span class="ripe-fill" style="width: ' + percent + '%; background: ' +
+      cadenceColor(progress) + ';"></span>' +
+    '<span class="ripe-due"></span></span>'
 }
 
-export function activeTaskGroupsHtml (tasks, snapshot, today, editorState = {}) {
-  const groups = groupAndSort(tasks, today)
-  if (!groups.length) return '<p class="empty">No active tasks.</p>'
+function categoryFlag (task, snapshot) {
+  if (!task?.categoryId) return ''
+  const category = (snapshot?.categories || []).find(item => item._id === task.categoryId)
+  if (!category) return 'Unavailable'
+  return category.status === 'archived' ? 'Archived' : ''
+}
+
+const estimateStepperHtml = task => {
+  const minutes = Number(task?.estimatedDuration) || ''
+  return '<div class="field-group"><span class="eyebrow eyebrow-quiet">Estimate</span>' +
+    '<div class="estimate-stepper">' +
+      '<button type="button" class="pill-icon est-minus" aria-label="Less time">−</button>' +
+      '<input class="input fig est-input" type="number" name="estimatedDuration" min="1" step="1" ' +
+        'inputmode="numeric" aria-label="Estimate in minutes" value="' +
+        escapeAttribute(minutes) + '">' +
+      '<span class="est-unit muted">min</span>' +
+      '<button type="button" class="pill-icon est-plus" aria-label="More time">+</button>' +
+    '</div>' +
+    '<div class="pill-set" role="group" aria-label="Common estimates">' +
+      ESTIMATE_PRESETS.map(preset =>
+        '<button type="button" class="pill pill-compact" data-estimate="' + preset +
+          '" aria-pressed="' + (minutes === preset ? 'true' : 'false') + '">' +
+          preset + ' min</button>').join('') +
+    '</div></div>'
+}
+
+// No Save: every control writes through as it is touched. The only two writes
+// that are awkward to take back — done, and delete — ask a second time in their
+// own label instead.
+function rowEditorHtml (task, snapshot, state, { withSchedule = true } = {}) {
+  const model = buildTaskEditorModel(task, snapshot)
+  const selectedLocationIds = new Set(model.locationIds)
+  const confirming = state.confirmDoneId === task._id
+
+  return '<div class="ledger-row-editor">' +
+    '<div class="ledger-row-actions">' +
+      '<button type="button" class="pill done-btn" aria-pressed="' +
+        (confirming ? 'true' : 'false') + '">' + doneLabel(confirming) + '</button>' +
+      '<button type="button" class="btn btn-ghost archive-btn">Archive</button>' +
+    '</div>' +
+    estimateStepperHtml(task) +
+    (withSchedule
+      ? '<div class="field-group"><span class="eyebrow eyebrow-quiet">Schedule</span>' +
+        scheduleEditorHtml(buildScheduleEditorModel(task)) + '</div>'
+      : '') +
+    '<div class="field-group"><span class="eyebrow eyebrow-quiet">Category</span>' +
+      categoryPillsHtml(model) + '</div>' +
+    '<div class="field-group"><span class="eyebrow eyebrow-quiet">Where</span>' +
+      '<fieldset class="f-locations pill-set"><legend class="visually-hidden">Locations</legend>' +
+      locationPillsHtml(model, selectedLocationIds) + '</fieldset></div>' +
+    '<p class="task-card-error" role="alert">' +
+      escapeHtml(state.openTaskId === task._id ? (state.rowError || '') : '') + '</p>' +
+  '</div>'
+}
+
+// Split out so a write-through edit can repaint one row's facts without
+// rebuilding the editor the user is still touching.
+export function rowSummaryHtml (task, snapshot, today, { band, tag } = {}) {
+  const stamp = band === null
+    ? ''
+    : '<span class="row-band" aria-hidden="true">' +
+      escapeHtml(band || bandLabel(dueGroup(task, today))) + '</span>'
+  const flag = categoryFlag(task, snapshot)
+
+  return stamp +
+    '<span class="row-main">' +
+      '<span class="row-name">' + escapeHtml(String(task?.name ?? '')) + '</span>' +
+      '<span class="row-note">' + buildChoreNoteHtml(task, today) + '</span>' +
+    '</span>' +
+    (flag ? '<span class="row-flag">' + flag + '</span>' : '') +
+    (tag ? '<span class="row-tag">' + escapeHtml(tag) + '</span>' : '') +
+    '<span class="row-est fig">' + escapeHtml(formatDuration(task?.estimatedDuration)) + '</span>' +
+    ripeMeterHtml(task, today)
+}
+
+export function ledgerRowHtml (task, snapshot, today, state = {}, placement = {}) {
+  const open = state.openTaskId === task._id
+  const band = placement.band
+
+  return '<li class="task-card ledger-row" data-id="' + escapeAttribute(task._id) + '"' +
+      (band === null ? ' data-band=""' : ' data-band="' +
+        escapeAttribute(band || bandLabel(dueGroup(task, today))) + '"') +
+      (placement.tag ? ' data-tag="' + escapeAttribute(placement.tag) + '"' : '') +
+      (open ? ' data-open="true"' : '') + '>' +
+    '<button type="button" class="ledger-row-summary" aria-expanded="' +
+      (open ? 'true' : 'false') + '">' +
+      rowSummaryHtml(task, snapshot, today, placement) +
+    '</button>' +
+    (open ? rowEditorHtml(task, snapshot, state, { withSchedule: band !== null }) : '') +
+  '</li>'
+}
+
+export function ledgerGroupsHtml (tasks, snapshot, today = localDateFromDate(new Date()), state = {}) {
+  const groups = buildLedgerGroups(tasks, today, state.filter || {}, snapshot?.categories || [])
+  if (!groups.length) {
+    return emptyCard('Nothing matches',
+      'No chore in this category answers to that. Clear the search, or widen the category.')
+  }
 
   return groups.map(group => {
-    const slug = dueGroupSlug(group.name)
+    const slug = group.key.toLowerCase().replace(/\s+/g, '-')
     return '<section class="ledger-group" aria-labelledby="ledger-' + slug + '">' +
-      '<h3 id="ledger-' + slug + '" class="ledger-eyebrow stamp"><span>' + group.name +
-        '</span><span class="ledger-count fig">' + group.tasks.length + '</span></h3>' +
+      '<h3 id="ledger-' + slug + '" class="ledger-eyebrow' + (bandIsNear(group.key) ? ' stamp' : '') +
+        '"><span>' + escapeHtml(group.label) + '</span>' +
+        '<span class="ledger-count fig">' + group.count + '</span></h3>' +
       '<ul class="ledger">' +
-        group.tasks.map(task => activeTaskCardHtml(task, snapshot, today, editorState)).join('') +
+        group.tasks.map(task =>
+          ledgerRowHtml(task, snapshot, today, state, { band: group.label })).join('') +
       '</ul>' +
     '</section>'
   }).join('')
 }
 
-export function activeTaskCardHtml (
-  task,
-  snapshot,
-  today = localDateFromDate(new Date()),
-  editorState = {}
-) {
-  const isEditing = task._id === editorState.editingTaskId
-  const editor = isEditing
-    ? '<div class="ledger-row-editor">' + taskEditorHtml(task, snapshot, editorState.taskEditorError) + '</div>'
-    : ''
-  const actions = isEditing
-    ? '<button class="btn btn-sage save-task-edit-btn" type="button">Save</button>' +
-      '<button class="btn btn-ghost cancel-task-edit-btn" type="button">Cancel</button>'
-    : '<button class="btn btn-ghost edit-task-btn" type="button">Edit</button>'
+export function unscheduledListHtml (tasks, snapshot, today = localDateFromDate(new Date()), state = {}) {
+  const loose = unscheduledTasks(tasks, today, state.filter || {}, snapshot?.categories || [])
+  if (!loose.length) {
+    return emptyCard('Everything has a schedule',
+      'Nothing is sitting without a cadence or a date.')
+  }
 
-  return (
-    '<li class="task-card ledger-row" data-id="' + escapeAttribute(task._id) + '">' +
-      '<div class="ledger-row-summary">' + buildTaskLedgerSummaryHtml(task, today) + '</div>' +
-      editor +
-      '<div class="ledger-row-actions">' + actions +
-        '<button class="btn btn-secondary archive-btn" type="button">Archive</button>' +
-      '</div>' +
-    '</li>'
-  )
+  return '<section class="ledger-group" aria-labelledby="ledger-unscheduled">' +
+    '<h3 id="ledger-unscheduled" class="ledger-eyebrow"><span>' +
+      escapeHtml(unscheduledCountLine(loose.length)) + '</span></h3>' +
+    '<p class="muted ledger-group-note">No cadence and no date — these sit out of the bands ' +
+      'until you give them one.</p>' +
+    '<ul class="ledger">' +
+      loose.map(task =>
+        ledgerRowHtml(task, snapshot, today, state, { band: null, tag: 'No schedule' })).join('') +
+    '</ul>' +
+  '</section>'
 }
 
-function taskEditorHtml (task, snapshot, taskEditorError = '') {
-  const model = buildTaskEditorModel(task, snapshot)
-  const selectedLocationIds = new Set(model.locationIds)
-  const categoryOptions = model.categoryOptions.map(category =>
-    '<option value="' + escapeAttribute(category._id) + '"' +
-      (category._id === model.categoryId ? ' selected' : '') + '>' +
-      escapeHtml(String(category.name)) + referenceStateSuffix(category) + '</option>'
-  ).join('')
-  const locationOptions = model.locationOptions.length
-    ? model.locationOptions.map(location =>
-        '<label class="location-option"><input class="task-edit-location" name="locationIds" type="checkbox" value="' +
-          escapeAttribute(location._id) + '"' + (selectedLocationIds.has(location._id) ? ' checked' : '') + '> ' +
-          '<span>' + escapeHtml(String(location.name)) + '</span>' +
-          (location.status === 'archived' ? ' <span class="archived-badge">Archived</span>' : '') +
-          (location.unresolved ? ' <span class="archived-badge">Unavailable</span>' : '') + '</label>'
-      ).join('')
-    : '<span class="empty">No locations available.</span>'
+export function archiveListHtml (tasks, snapshot, today = localDateFromDate(new Date()), state = {}) {
+  const archived = (tasks || []).filter(task => task.status === 'archived')
+  if (!archived.length) {
+    return emptyCard('Nothing archived',
+      'Archiving a chore from the list puts it here, with its category, location and schedule intact.')
+  }
 
-  return (
-    '<div class="task-edit-form">' +
-      '<label>Category <select class="task-edit-category" name="categoryId">' +
-        '<option value="">-</option>' + categoryOptions + '</select></label>' +
-      '<fieldset class="location-options"><legend>Locations</legend>' + locationOptions + '</fieldset>' +
-      scheduleEditorHtml(buildScheduleEditorModel(task)) +
-      '<div class="task-card-error" role="alert">' + escapeHtml(taskEditorError) + '</div>' +
-    '</div>'
-  )
+  return '<section class="ledger-group" aria-labelledby="ledger-archive">' +
+    '<h3 id="ledger-archive" class="ledger-eyebrow"><span>' +
+      escapeHtml(archivedCountLine(archived.length)) + '</span></h3>' +
+    '<ul class="ledger">' +
+      archived.map(task => archivedRowHtml(task, snapshot, today, state)).join('') +
+    '</ul>' +
+    '<p class="muted ledger-group-note">Archived chores keep their category, location and ' +
+      'schedule. Restoring returns them to the list on their own cadence. Deleting is the one ' +
+      'thing the app asks twice about.</p>' +
+  '</section>'
+}
+
+function archivedRowHtml (task, snapshot, today, state) {
+  const confirming = state.confirmDeleteId === task._id
+  const facts = [
+    (snapshot?.categories || []).find(item => item._id === task.categoryId)?.name,
+    formatDuration(task?.estimatedDuration),
+    scheduleSummary(task?.schedule)
+  ].filter(Boolean).join(' · ')
+
+  return '<li class="task-card ledger-row archived-row" data-id="' + escapeAttribute(task._id) + '">' +
+    '<div class="archived-row-head">' +
+      '<span class="row-main">' +
+        '<span class="row-name">' + escapeHtml(String(task?.name ?? '')) + '</span>' +
+        '<span class="row-note">' + escapeHtml(facts) + '</span>' +
+      '</span>' +
+      '<button type="button" class="btn btn-ghost restore-task-btn">Restore</button>' +
+    '</div>' +
+    '<button type="button" class="pill delete-task-btn" aria-pressed="' +
+      (confirming ? 'true' : 'false') + '">' + permanentDeleteLabel(confirming) + '</button>' +
+  '</li>'
 }

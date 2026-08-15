@@ -5,7 +5,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { hasRequestedRoute, initRouter, parseRoute, setNavVisible, showView } from './router.js'
 
-const screenNames = ['today', 'inbox', 'chores', 'archive', 'setup', 'doing', 'review', 'log']
+const screenNames = ['today', 'inbox', 'chores', 'setup', 'doing', 'review', 'log']
 const primaryRoutes = ['today', 'inbox', 'chores', 'log']
 
 function installRouterDom (hash = '') {
@@ -97,7 +97,7 @@ test('parseRoute falls back to today for malformed, missing, unknown, and extra 
 
 test('each final route shows its Stage 3 screen, focuses its heading, and canonicalizes fallback', () => {
   const expectedScreens = {
-    today: 'today', inbox: 'inbox', chores: 'chores', chore: 'chores', archive: 'archive',
+    today: 'today', inbox: 'inbox', chores: 'chores', chore: 'chores', archive: 'chores',
     setup: 'setup', doing: 'doing', receipt: 'review', log: 'log'
   }
 
@@ -240,4 +240,15 @@ test('only a recognized initial route suppresses automatic unfinished-session di
     initRouter()
     assert.equal(hasRequestedRoute(), true, hash)
   }
+})
+
+test('the archive is a view of the Chores screen, and the screen is told which one', () => {
+  const seen = []
+  installRouterDom('#/archive')
+  initRouter({ onChoresRoute: name => seen.push(name) })
+  assert.deepEqual(seen, ['archive'])
+
+  installRouterDom('#/chores')
+  initRouter({ onChoresRoute: name => seen.push(name) })
+  assert.deepEqual(seen, ['archive', 'chores'])
 })

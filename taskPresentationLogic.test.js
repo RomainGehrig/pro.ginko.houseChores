@@ -10,9 +10,9 @@ import {
   buildContinuationRemainingHtml,
   buildContinuationSearchResultsHtml,
   buildContinuationSuggestionsHtml,
+  buildChoreNoteHtml,
   buildDoingSessionHtml,
-  buildEnrichmentAvailability,
-  buildTaskLedgerSummaryHtml
+  buildEnrichmentAvailability
 } from './taskPresentationLogic.js'
 
 test('fact markup keeps words in reading type while safely isolating every number', () => {
@@ -209,63 +209,29 @@ test('non-editing task details safely mark unresolved retained assignments unava
   assert.doesNotMatch(markup, /<img/)
 })
 
-test('ledger summary presents periodic ripeness as neutral completion and cadence facts', () => {
-  const markup = buildTaskLedgerSummaryHtml({
-    name: '<img src=x onerror=alert(1)>',
-    estimatedDuration: 45,
-    scheduledDate: '2026-08-07',
-    lastCompletedDate: Date.UTC(2026, 7, 1, 12),
-    schedule: { type: 'periodic', every: 1, unit: 'week' }
+test('a one-off chore states its date in the note, once, with nothing counted against it', () => {
+  const markup = buildChoreNoteHtml({
+    name: 'One-off wish', scheduledDate: '2026-08-07', schedule: { type: 'one_off' }
   }, '2026-08-08')
 
-  assert.match(markup, /class="row-stamp"><span class="fig">7<\/span>d</)
-  assert.match(markup, /class="row-name">&lt;img src=x onerror=alert\(<span class="fig">1<\/span>\)&gt;</)
-  assert.match(markup, /class="row-fig"><span class="fig">45<\/span> min</)
-  assert.match(markup, /class="row-tag"><span class="fig">7<\/span>d</)
-  assert.match(markup, /last done <span class="fig">7<\/span>d ago · about every <span class="fig">7<\/span>/)
-  assert.doesNotMatch(markup, /<img|\b(?:late|overdue|slip)\b|\+\d+d/i)
-})
-
-test('ledger summary uses an em dash until a periodic chore has completion history', () => {
-  const markup = buildTaskLedgerSummaryHtml({
-    name: 'Vacuum bedroom',
-    estimatedDuration: 15,
-    scheduledDate: '2026-08-07',
-    lastCompletedDate: null,
-    schedule: { type: 'periodic', every: 2, unit: 'week' }
-  }, '2026-08-08')
-
-  assert.match(markup, /class="row-stamp">—</)
-  assert.match(markup, /not yet done · about every <span class="fig">14<\/span>/)
-})
-
-test('ledger summary states a fixed date once without turning it into an overdue tally', () => {
-  const markup = buildTaskLedgerSummaryHtml({
-    name: 'Pay bills',
-    estimatedDuration: 20,
-    scheduledDate: '2026-08-05',
-    schedule: { type: 'fixed', pattern: { kind: 'month_day', day: 5 } }
-  }, '2026-08-08')
-
-  assert.equal((markup.match(/<span class="fig">5<\/span> Aug/g) || []).length, 1)
-  assert.match(markup, /Monthly on day <span class="fig">5<\/span>/)
+  assert.equal((markup.match(/<span class="fig">7<\/span> Aug/g) || []).length, 1)
+  assert.match(markup, /^Once · /)
   assert.doesNotMatch(markup, /\b(?:due|late|overdue)\b|\+\d+d/i)
 })
 
-test('ledger summary gives today a filled state and keeps one-off dates neutral', () => {
-  const todayMarkup = buildTaskLedgerSummaryHtml({
-    name: 'Today task', estimatedDuration: 5, scheduledDate: '2026-08-08',
-    schedule: { type: 'one_off' }
-  }, '2026-08-08')
-  const pastMarkup = buildTaskLedgerSummaryHtml({
-    name: 'One-off wish', estimatedDuration: 5, scheduledDate: '2026-08-07',
-    schedule: { type: 'one_off' }
-  }, '2026-08-08')
+test('a fixed chore states its pattern and a periodic one its cadence', () => {
+  assert.match(buildChoreNoteHtml({
+    scheduledDate: '2026-08-05', schedule: { type: 'fixed', pattern: { kind: 'month_day', day: 5 } }
+  }, '2026-08-08'), /^Monthly on day <span class="fig">5<\/span>$/)
 
-  assert.match(todayMarkup, /class="row-stamp stamp is-today">TODAY</)
-  assert.match(pastMarkup, /class="row-stamp"><span class="fig">7<\/span> Aug</)
-  assert.match(pastMarkup, /class="row-note">Once</)
-  assert.doesNotMatch(todayMarkup + pastMarkup, /\b(?:due|late|overdue)\b|\+\d+d/i)
+  assert.match(buildChoreNoteHtml({
+    lastCompletedDate: Date.UTC(2026, 7, 1, 12),
+    schedule: { type: 'periodic', every: 1, unit: 'week' }
+  }, '2026-08-08'), /last done <span class="fig">7<\/span>d ago · about every <span class="fig">7<\/span>/)
+
+  assert.match(buildChoreNoteHtml({
+    lastCompletedDate: null, schedule: { type: 'periodic', every: 2, unit: 'week' }
+  }, '2026-08-08'), /not yet done · about every <span class="fig">14<\/span>/)
 })
 
 test('a resolved chore offers to be reopened, naming the outcome it would take back', () => {

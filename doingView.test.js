@@ -79,7 +79,11 @@ function createDoingDocument ({ failFirstReviewDisplay = false } = {}) {
   })
   nodes.set('reviewList', reviewList)
   nodes.set('finishReviewBtn', createControl('finishReviewBtn'))
-  for (const id of ['proposedCards', 'activeCards', 'archivedCards', 'enrichBtn', 'enrichStatus']) {
+  for (const id of [
+    'proposedCards', 'activeCards', 'unscheduledCards', 'archivedCards',
+    'choresViews', 'choreCategoryFilter', 'choresFilters', 'choresCountLine',
+    'enrichBtn', 'enrichStatus'
+  ]) {
     nodes.set(id, createControl(id))
   }
   for (const view of ['tasks', 'session', 'doing', 'review', 'history']) {

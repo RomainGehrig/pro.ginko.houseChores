@@ -1,42 +1,11 @@
-// ABOUTME: Renders archived chores and coordinates restore and permanent-delete actions.
-// ABOUTME: Keeps datastore writes behind explicit controls and reports failures inline.
+// ABOUTME: The two writes behind an archived chore — restoring it, and deleting it for good.
+// ABOUTME: The second ask lives in the delete button's own label, so nothing stops the user dead.
 
 import { deleteTask, updateTask } from './taskData.js'
-import { buildActiveTaskDetailsHtml } from './taskPresentationLogic.js'
-import { escapeHtml, formatFactHtml } from './helpers.js'
 import { commitPending, undoPending } from './undoToast.js'
-import { openSheet } from './sheet.js'
-
-let refreshTasksView = async () => {}
-let archivedTasks = new Map()
-
-export function archivedTaskCardHtml (task, snapshot) {
-  return '<article class="task-card archived" data-id="' + escapeHtml(task._id) + '" aria-busy="false">' +
-    '<div class="task-name display">' + formatFactHtml(String(task.name ?? '')) +
-      ' <span class="tag tag-neutral">Archived</span></div>' +
-    buildActiveTaskDetailsHtml(task, snapshot) +
-    '<div class="archive-actions">' +
-      '<button type="button" class="btn btn-secondary" data-action="restore">Restore</button>' +
-      '<button type="button" class="btn btn-ghost btn-danger" data-action="delete">Delete permanently</button>' +
-    '</div>' +
-  '</article>'
-}
 
 export function restoredTaskStatus (task) {
   return task?.schedule?.type === 'one_off' ? 'active' : 'approved_recurring'
-}
-
-export function renderArchiveView (tasks, snapshot) {
-  const archived = tasks.filter(task => task.status === 'archived')
-  archivedTasks = new Map(archived.map(task => [String(task._id), task]))
-  const container = document.getElementById('archivedCards')
-  const count = document.getElementById('archiveNavCount')
-  if (count) count.textContent = archived.length
-  if (container) {
-    container.innerHTML = archived.length
-      ? archived.map(task => archivedTaskCardHtml(task, snapshot)).join('')
-      : '<p class="empty">No archived tasks.</p>'
-  }
 }
 
 export async function runArchiveAction ({
@@ -46,8 +15,7 @@ export async function runArchiveAction ({
   commit = commitPending,
   update = updateTask,
   remove = deleteTask,
-  confirmDelete = openSheet,
-  refresh = refreshTasksView
+  refresh = async () => {}
 }) {
   if (action === 'restore') {
     try {
@@ -63,15 +31,9 @@ export async function runArchiveAction ({
 
   if (action === 'delete') {
     try {
-      const choice = await confirmDelete({
-        title: 'Delete chore permanently?',
-        message: String(task.name ?? 'This chore') + ' will be removed permanently.',
-        actions: [
-          { value: 'keep', label: 'Keep', className: 'btn-quiet' },
-          { value: 'delete', label: 'Delete permanently', className: 'btn-danger' }
-        ]
-      })
-      if (choice !== 'delete') return { ok: true, deleted: false }
+      // An archive that has not yet reached the datastore has to settle first:
+      // deleting a record the app is still trying to write is how a chore comes
+      // back from the dead.
       const settlement = await commit(`task:${task._id}`)
       if (settlement?.result?.ok === false) {
         return { ok: false, message: settlement.result.message }
@@ -85,37 +47,4 @@ export async function runArchiveAction ({
   }
 
   return { ok: true }
-}
-
-export function initArchiveView ({ refreshTasks }) {
-  refreshTasksView = refreshTasks
-  const container = document.getElementById('archivedCards')
-  if (!container) return false
-
-  container.addEventListener('click', async event => {
-    const button = event.target.closest('[data-action]')
-    if (!button || !container.contains(button)) return
-    const card = button.closest('[data-id]')
-    if (!card || card.getAttribute('aria-busy') === 'true') return
-    const task = archivedTasks.get(String(card.dataset.id))
-    if (!task) return
-
-    const status = document.getElementById('archiveStatus')
-    status.textContent = ''
-    status.removeAttribute('data-state')
-    status.setAttribute('role', 'status')
-    card.setAttribute('aria-busy', 'true')
-    const result = await runArchiveAction({
-      action: button.dataset.action,
-      task,
-      refresh: refreshTasksView
-    })
-    if (card.isConnected) card.setAttribute('aria-busy', 'false')
-    if (!result.ok) {
-      status.textContent = result.message
-      status.dataset.state = 'error'
-      status.setAttribute('role', 'alert')
-    }
-  })
-  return true
 }

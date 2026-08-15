@@ -68,29 +68,21 @@
   </section>
 
   <section id="view-chores" class="view" style="display:none">
-    <header class="screen-head">
+    <header class="ledger-head">
       <p class="eyebrow"><span id="choresCountLine">Chores</span></p>
-      <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">Chores. </span>Everything you look after</h1>
+      <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">Chores. </span>The whole ledger</h1>
+      <div id="choresViews" class="seg ledger-views" role="group" aria-label="Which chores"></div>
+      <div id="choresFilters" class="ledger-filters">
+        <input id="choreSearch" class="input" type="search" placeholder="Search chores" aria-label="Search chores">
+        <div id="choreCategoryFilter" class="pool-cats" role="group" aria-label="Category filter"></div>
+      </div>
     </header>
     <div id="choresStatus" role="status"></div>
-    <div class="task-section">
-      <div class="task-cards" id="activeCards"></div>
-    </div>
-    <nav class="route-leaf-nav" aria-label="Chore options">
-      <a id="archiveNav" href="#/archive">Archived · <span id="archiveNavCount" class="fig">0</span></a>
-      <a href="#/setup">Setup · categories and locations</a>
-    </nav>
-  </section>
-
-  <section id="view-archive" class="view" style="display:none">
-    <a class="back-link" href="#/chores">‹ CHORES</a>
-    <header class="screen-head">
-      <p class="eyebrow">Archive</p>
-      <h1 class="route-heading display" tabindex="-1">Put aside for now</h1>
-    </header>
-    <div id="archiveStatus" role="status"></div>
-    <div class="task-section">
-      <div class="task-cards" id="archivedCards"></div>
+    <div class="ledger-body">
+      <div id="activeCards" class="ledger-pane"></div>
+      <div id="unscheduledCards" class="ledger-pane" hidden></div>
+      <div id="archivedCards" class="ledger-pane" hidden></div>
+      <div id="archiveStatus" role="status"></div>
     </div>
   </section>
 

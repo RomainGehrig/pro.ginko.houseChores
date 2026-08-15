@@ -1,7 +1,7 @@
 // ABOUTME: Pure view model for the Chores ledger — bands, counts, filters and ripeness.
 // ABOUTME: Ripeness is cadences elapsed since the last completion, never a count of lateness.
 
-import { cadenceDays, daysBetween, dueGroup, groupAndSort } from '../slip.js'
+import { cadenceDays, daysSinceCompletion, dueGroup, groupAndSort } from '../slip.js'
 import { resolveTaskCategoryName } from '../taskPresentationLogic.js'
 
 const BAND_LABELS = {
@@ -25,7 +25,7 @@ export const bandIsNear = group => group === 'READY' || group === 'TODAY'
 export function cadenceProgress (task, today) {
   const cadence = cadenceDays(task?.schedule)
   if (!cadence) return null
-  const since = daysBetween(task?.lastCompletedDate, today)
+  const since = daysSinceCompletion(task?.lastCompletedDate, today)
   if (since === null) return null
   return Math.min(RIPE_CEILING, Math.max(0, since / cadence))
 }

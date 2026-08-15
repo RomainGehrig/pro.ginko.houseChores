@@ -10,18 +10,11 @@ const SHORT_MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
 ]
-const DAY_MS = 24 * 60 * 60 * 1000
-
 export function buildEnrichmentAvailability (categories) {
   return {
     disabled: categories.length === 0,
     message: 'Add a category before using AI enrichment.'
   }
-}
-
-function calendarDayNumber (value) {
-  const date = parseLocalDate(value)
-  return date ? Date.UTC(date.year, date.month - 1, date.day) / DAY_MS : null
 }
 
 function compactScheduledDate (value) {
@@ -43,32 +36,19 @@ function scheduleFactHtml (schedule) {
 export function buildChoreNoteHtml (task, today) {
   const cadenceText = compactCadence(cadenceDays(task?.schedule))
   const completedDaysAgo = daysSinceCompletion(task?.lastCompletedDate, today)
-  if (task?.schedule?.type !== 'periodic') return scheduleFactHtml(task?.schedule)
+  if (task?.schedule?.type !== 'periodic') {
+    // A one-off's date is the only thing it knows about itself, so the note
+    // carries it — once, as a plain fact, with no tally against it.
+    const date = task?.schedule?.type === 'one_off' && parseLocalDate(task?.scheduledDate)
+      ? ' · ' + compactScheduledDate(task.scheduledDate)
+      : ''
+    return formatFactHtml(scheduleSummary(task?.schedule) + date)
+  }
 
   return formatFactHtml((completedDaysAgo === null
     ? 'not yet done'
     : 'last done ' + completedDaysAgo + 'd ago') +
     (cadenceText ? ' · about every ' + cadenceText : ''))
-}
-
-export function buildTaskLedgerSummaryHtml (task, today) {
-  const cadence = cadenceDays(task?.schedule)
-  const cadenceText = compactCadence(cadence)
-  const completedDaysAgo = daysSinceCompletion(task?.lastCompletedDate, today)
-  const isToday = task?.scheduledDate === today
-  const periodic = task?.schedule?.type === 'periodic'
-  const stamp = isToday
-    ? '<span class="row-stamp stamp is-today">TODAY</span>'
-    : '<span class="row-stamp">' + formatFactHtml(periodic
-        ? completedDaysAgo === null ? '—' : completedDaysAgo + 'd'
-        : compactScheduledDate(task?.scheduledDate)) + '</span>'
-  const note = buildChoreNoteHtml(task, today)
-
-  return stamp +
-    '<span class="row-name">' + formatFactHtml(String(task?.name ?? '')) + '</span>' +
-    '<span class="row-fig">' + formatFactHtml(formatDuration(task?.estimatedDuration)) + '</span>' +
-    '<span class="row-tag">' + formatFactHtml(cadenceText ? cadenceText + 'd' : '') + '</span>' +
-    '<p class="row-note">' + note + '</p>'
 }
 
 export function resolveTaskCategoryName (task, categories = []) {

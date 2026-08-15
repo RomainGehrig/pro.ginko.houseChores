@@ -1,4 +1,4 @@
-import { initTasksView, refreshTasksView } from './tasksView.js'
+import { initTasksView, selectLedgerView } from './tasksView.js'
 import { initSessionView } from './sessionView.js'
 import { initDoingView, startDoing } from './doingView.js'
 import { initReviewView, startReview } from './reviewView.js'
@@ -9,7 +9,6 @@ import { initCategoryLocationView } from './categoryLocationView.js'
 import { sessionStore } from './sessionStore.js'
 import { setCurrentSessionAggregate } from './state.js'
 import { escapeHtml } from './helpers.js'
-import { initArchiveView } from './archiveView.js'
 import { initSheet } from './sheet.js'
 import { initUndoToast } from './undoToast.js'
 
@@ -37,7 +36,6 @@ async function init () {
   await categoryLocationStore.initialize()
   initSheet()
   initUndoToast()
-  initArchiveView({ refreshTasks: refreshTasksView })
   initCategoryLocationView()
   await initTasksView()
   initSessionView()
@@ -46,7 +44,8 @@ async function init () {
   initHistoryView()
   initRouter({
     onLogRoute: refreshHistoryView,
-    onReceiptRoute: sessionId => startReview({ sessionId })
+    onReceiptRoute: sessionId => startReview({ sessionId }),
+    onChoresRoute: selectLedgerView
   })
   await openInitialView()
 }

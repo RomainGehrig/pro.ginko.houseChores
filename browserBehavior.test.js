@@ -208,7 +208,10 @@ test('reference publication preserves every proposed and active task draft contr
   const result = await runBrowserScenario({
     body: '<button id="addTasksBtn"></button><button id="enrichBtn"></button>' +
       '<span id="enrichStatus"></span><div id="proposedCards"></div>' +
-      '<div id="activeCards"></div><div id="archivedCards"></div>',
+      '<span id="choresCountLine"></span><div id="choresViews"></div>' +
+      '<div id="choresFilters"><input id="choreSearch"><div id="choreCategoryFilter"></div></div>' +
+      '<div id="activeCards"></div><div id="unscheduledCards"></div>' +
+      '<div id="archivedCards"></div><div id="archiveStatus"></div>',
     script: `
       const records = {
         categories: [
@@ -313,11 +316,11 @@ test('reference publication preserves every proposed and active task draft contr
       setValue(proposed, '[data-schedule-field="annual-month"]', '12')
       setValue(proposed, '[data-schedule-field="annual-day"]', '25')
 
-      document.querySelector('[data-id="task-active"] .edit-task-btn').click()
+      document.querySelector('[data-id="task-active"] .ledger-row-summary').click()
       await Promise.resolve()
       let active = document.querySelector('[data-id="task-active"]')
-      setValue(active, '.task-edit-category', 'category-2')
-      setChecks(active, '.task-edit-location', ['location-2'])
+      setValue(active, '.f-category', 'category-2')
+      setChecks(active, '.f-location', ['location-2'])
       setValue(active, '[data-schedule-field="date"]', '2026-10-31')
       setValue(active, '[data-schedule-field="type"]', 'fixed')
       setValue(active, '[data-schedule-field="every"]', '4')
@@ -333,7 +336,7 @@ test('reference publication preserves every proposed and active task draft contr
       active = document.querySelector('[data-id="task-active"]')
       const result = {
         proposed: draftSnapshot(proposed, '.f-category', '.f-location', '.f-duration'),
-        active: draftSnapshot(active, '.task-edit-category', '.task-edit-location')
+        active: draftSnapshot(active, '.f-category', '.f-location')
       }
     `
   })
@@ -378,7 +381,10 @@ test('infers a fixed date then approves a manual off-pattern override', async ()
   const result = await runBrowserScenario({
     body: '<button id="addTasksBtn"></button><button id="enrichBtn"></button>' +
       '<span id="enrichStatus"></span><div id="proposedCards"></div>' +
-      '<div id="activeCards"></div><div id="archivedCards"></div>',
+      '<span id="choresCountLine"></span><div id="choresViews"></div>' +
+      '<div id="choresFilters"><input id="choreSearch"><div id="choreCategoryFilter"></div></div>' +
+      '<div id="activeCards"></div><div id="unscheduledCards"></div>' +
+      '<div id="archivedCards"></div><div id="archiveStatus"></div>',
     script: `
       const suggestedSchedule = {
         type: 'fixed', pattern: { kind: 'annual_date', month: 1, day: 1 }
@@ -979,7 +985,7 @@ test('shared undo toast reads as one action and clears above the phone navigatio
 test('archived and saving states keep full contrast and state their status', async () => {
   const result = await runBrowserScenario({
     body: '<main id="app">' +
-      '<article id="archivedCard" class="task-card archived">Archived</article>' +
+      '<li id="archivedCard" class="task-card ledger-row archived-row">Archived</li>' +
       '<article id="savingCard" class="task-card is-saving">Saving</article>' +
       '<span id="archivedReference" class="is-archived">Reference</span>' +
       '<section id="busyManager" class="reference-manager is-busy">Busy</section>' +
@@ -1062,21 +1068,25 @@ test('active chores render as ruled ledger rows instead of bordered cards', asyn
   const result = await runBrowserScenario({
     viewport: { width: 390, height: 640 },
     mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
-    body: '<main id="app"><section class="ledger-group">' +
-      '<h3 class="ledger-eyebrow stamp"><span>READY</span><span class="ledger-count fig">1</span></h3>' +
-      '<ul class="ledger"><li class="task-card ledger-row"><div class="ledger-row-summary">' +
-        '<span class="row-stamp fig">21d</span><span class="row-name">Laundry</span>' +
-        '<span class="row-fig fig">45 min</span><span class="row-tag fig">7d</span>' +
-        '<p class="row-note">last done <span class="fig">21d</span> ago</p>' +
-      '</div><div class="ledger-row-actions"><button>Edit</button><button>Archive</button></div></li></ul>' +
-      '<span class="row-stamp stamp is-today" id="todayStamp">TODAY</span>' +
+    body: '<main id="app"><section class="ledger-group is-near">' +
+      '<h3 class="ledger-eyebrow stamp"><span>Ready</span><span class="ledger-count fig">1</span></h3>' +
+      '<ul class="ledger"><li class="task-card ledger-row"><button class="ledger-row-summary">' +
+        '<span class="row-band" aria-hidden="true">Ready</span>' +
+        '<span class="row-main"><span class="row-name">Laundry</span>' +
+        '<span class="row-note">last done <span class="fig">21d</span> ago</span></span>' +
+        '<span class="row-est fig">45 min</span>' +
+        '<span class="ripe" id="ripe"><span class="ripe-fill" style="width: 50%; ' +
+          'background: color-mix(in srgb, var(--enamel) 100%, var(--sage));"></span>' +
+          '<span class="ripe-due" id="ripeDue"></span></span>' +
+      '</button></li></ul>' +
       '</section></main>',
     script: `
       const ledger = document.querySelector('.ledger')
       const row = document.querySelector('.ledger-row')
       const summary = document.querySelector('.ledger-row-summary')
-      const stamp = document.querySelector('.row-stamp.fig')
-      const todayStamp = document.getElementById('todayStamp')
+      const stamp = document.querySelector('.row-band')
+      const ripe = document.getElementById('ripe')
+      const ripeDue = document.getElementById('ripeDue')
       const ledgerStyle = getComputedStyle(ledger)
       const rowStyle = getComputedStyle(row)
       const summaryStyle = getComputedStyle(summary)
@@ -1092,8 +1102,9 @@ test('active chores render as ruled ledger rows instead of bordered cards', asyn
         summaryDisplay: summaryStyle.display,
         summaryColumns: summaryStyle.gridTemplateColumns,
         stampColor: getComputedStyle(stamp).color,
-        todayBackground: getComputedStyle(todayStamp).backgroundColor,
-        todayColor: getComputedStyle(todayStamp).color
+        ripeWidth: ripe.getBoundingClientRect().width,
+        ripeFillWidth: document.querySelector('.ripe-fill').getBoundingClientRect().width,
+        ripeDueLeft: ripeDue.getBoundingClientRect().left - ripe.getBoundingClientRect().left
       }
     `
   })
@@ -1107,10 +1118,11 @@ test('active chores render as ruled ledger rows instead of bordered cards', asyn
   assert.equal(result.rowBorderBottom, '0px')
   assert.equal(result.rowRadius, '0px')
   assert.equal(result.summaryDisplay, 'grid')
-  assert.match(result.summaryColumns, /^56px /)
-  assert.equal(result.stampColor, 'rgb(100, 92, 80)')
-  assert.equal(result.todayBackground, 'rgb(198, 113, 57)')
-  assert.equal(result.todayColor, 'rgb(245, 234, 216)')
+  assert.match(result.summaryColumns, /^62px /)
+  assert.equal(result.stampColor, 'rgb(140, 73, 26)', 'a near band is stamped in the accent')
+  assert.equal(result.ripeWidth, 52)
+  assert.equal(result.ripeFillWidth, 26)
+  assert.equal(result.ripeDueLeft, 26, 'the cadence itself sits at the halfway tick')
 })
 
 test('the receipt gauge draws both tracks, its history and its suggestion', async () => {

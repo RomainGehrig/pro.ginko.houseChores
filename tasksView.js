@@ -10,7 +10,7 @@ import {
 import { escapeAttribute } from './categoryLocationView.js'
 import { escapeHtml, formatDuration } from './helpers.js'
 import { buildEnrichmentAvailability } from './taskPresentationLogic.js'
-import { localDateFromDate } from './scheduleLogic.js'
+import { localDateFromDate, taskUpdateForOutcome } from './scheduleLogic.js'
 import { saveTaskWithRefresh } from './taskSaveLogic.js'
 import {
   applyScheduleChoice,
@@ -19,14 +19,34 @@ import {
   scheduleEditorHtml,
   syncScheduleEditor
 } from './scheduleEditor.js'
-import { activeTaskGroupsHtml, referenceStateSuffix } from './chores/listView.js'
+import {
+  archiveListHtml,
+  ledgerGroupsHtml,
+  ledgerViewsHtml,
+  rowSummaryHtml,
+  unscheduledListHtml
+} from './chores/listView.js'
+import { categoryPillsHtml, locationPillsHtml, referenceStateSuffix } from './chores/fieldPills.js'
+import { unscheduledTasks } from './chores/ledgerLogic.js'
+import { buildCategoryTabsHtml } from './vesselPresentation.js'
 import { optimisticArchive, pendingUndo } from './undoToast.js'
-import { renderArchiveView } from './archiveView.js'
+import { runArchiveAction } from './archiveView.js'
 
 let tasksCache = []
-let editingTaskId = null
-let taskEditorError = ''
 const pendingTaskArchives = new Map()
+
+// The Chores screen is one ledger with three views. Everything the user is part
+// way through — which row is open, which button has been asked once — lives
+// here so a repaint never loses it.
+const ledger = {
+  view: 'active',
+  query: '',
+  categoryId: '',
+  openTaskId: null,
+  confirmDoneId: null,
+  confirmDeleteId: null,
+  rowError: ''
+}
 
 export function overlayPendingTaskArchives (tasks, pendingArchives) {
   const fetchedIds = new Set(tasks.map(task => String(task._id)))
@@ -45,11 +65,32 @@ export async function initTasksView() {
   document.getElementById('proposedCards').addEventListener('click', handleProposedClick)
   document.getElementById('proposedCards').addEventListener('change', handleProposedScheduleChange)
   document.getElementById('proposedCards').addEventListener('input', handleProposedScheduleChange)
-  document.getElementById('activeCards').addEventListener('click', handleActiveClick)
-  document.getElementById('activeCards').addEventListener('change', handleActiveScheduleChange)
-  document.getElementById('activeCards').addEventListener('input', handleActiveScheduleChange)
+
+  for (const id of ['activeCards', 'unscheduledCards']) {
+    const pane = document.getElementById(id)
+    pane.addEventListener('click', handleLedgerClick)
+    pane.addEventListener('change', handleLedgerChange)
+    pane.addEventListener('input', handleLedgerChange)
+  }
+  document.getElementById('archivedCards').addEventListener('click', handleArchivedClick)
+  document.getElementById('choresViews').addEventListener('click', handleLedgerViewClick)
+  document.getElementById('choreCategoryFilter').addEventListener('click', handleLedgerCategoryClick)
+  document.getElementById('choreSearch').addEventListener('input', event => {
+    ledger.query = event.target.value
+    renderLedger()
+  })
+
   categoryLocationStore.subscribe(renderTasksAfterReferencePublication)
   await refreshTasksView()
+}
+
+// The router owns which view the Chores screen opens on, so #/archive is a
+// place you can link to rather than a tab you have to find.
+export function selectLedgerView (routeName) {
+  const next = routeName === 'archive' ? 'archive' : 'active'
+  if (ledger.view === next) return
+  Object.assign(ledger, { view: next, openTaskId: null, confirmDoneId: null, confirmDeleteId: null, rowError: '' })
+  if (typeof document !== 'undefined') renderLedger()
 }
 
 export async function refreshTasksView() {
@@ -60,8 +101,7 @@ export async function refreshTasksView() {
 function renderTasks() {
   const snapshot = categoryLocationStore.getSnapshot()
   renderProposed()
-  renderActive(snapshot)
-  renderArchiveView(tasksCache, snapshot)
+  renderLedger(snapshot)
   syncEnrichmentAvailability()
 }
 
@@ -75,7 +115,8 @@ function captureTaskEditorDrafts () {
   const drafts = new Map()
   const containers = [
     { id: 'proposedCards', accepts: () => true },
-    { id: 'activeCards', accepts: card => Boolean(card.querySelector('.task-edit-form')) }
+    { id: 'activeCards', accepts: card => Boolean(card.querySelector('.ledger-row-editor')) },
+    { id: 'unscheduledCards', accepts: card => Boolean(card.querySelector('.ledger-row-editor')) }
   ]
 
   for (const { id, accepts } of containers) {
@@ -286,19 +327,6 @@ const inboxMetaLine = (task, model) => {
   return parts.length ? parts.join(' · ') : 'Nothing filled in yet'
 }
 
-// Category is a pill group over a hidden input: the pills are what you touch,
-// the input stays the single value everything else already reads.
-const categoryPillsHtml = model =>
-  '<input type="hidden" class="f-category" name="categoryId" value="' +
-    escapeAttribute(model.categoryId || '') + '">' +
-  '<div class="pill-set" role="group" aria-label="Category">' +
-  model.categoryOptions.map(category =>
-    '<button type="button" class="pill pill-compact" data-field="category" data-value="' +
-      escapeAttribute(category._id) + '" aria-pressed="' +
-      (category._id === model.categoryId ? 'true' : 'false') + '">' +
-      escapeHtml(String(category.name)) + referenceStateSuffix(category) + '</button>'
-  ).join('') + '</div>'
-
 // Like category: the pills and the custom field both write one hidden value, so
 // the custom box only ever shows a duration the pills cannot express.
 const durationPillsHtml = duration => {
@@ -318,15 +346,6 @@ const durationPillsHtml = duration => {
       escapeAttribute(isCustom ? duration : '') + '">' +
     '</div>'
 }
-
-const locationPillsHtml = (model, selectedLocationIds) => model.locationOptions.length
-  ? model.locationOptions.map(location =>
-      '<label class="pill pill-compact pill-check"><input class="f-location" name="locationIds" ' +
-        'type="checkbox" value="' + escapeAttribute(location._id) + '"' +
-        (selectedLocationIds.has(location._id) ? ' checked' : '') + '><span>' +
-        escapeHtml(String(location.name)) + referenceStateSuffix(location) + '</span></label>'
-    ).join('')
-  : '<span class="empty">No locations available.</span>'
 
 function proposedCardHtml(task, snapshot) {
   const model = buildProposedTaskEditorModel(task, snapshot)
@@ -416,24 +435,44 @@ function handleProposedScheduleChange (evt) {
   }
 }
 
-function handleActiveScheduleChange (evt) {
-  const editor = evt.target.closest('.schedule-editor')
-  if (editor) {
-    syncScheduleEditor(editor, {
-      userEditedDate: evt.target.matches('[data-schedule-field="date"]')
-    })
+function ledgerFilterCategoryName (snapshot) {
+  if (!ledger.categoryId) return 'All'
+  return (snapshot.categories || []).find(item => item._id === ledger.categoryId)?.name || 'All'
+}
+
+function ledgerState (snapshot) {
+  return {
+    openTaskId: ledger.openTaskId,
+    confirmDoneId: ledger.confirmDoneId,
+    confirmDeleteId: ledger.confirmDeleteId,
+    rowError: ledger.rowError,
+    filter: { query: ledger.query, category: ledgerFilterCategoryName(snapshot) }
   }
 }
 
-function renderActive(snapshot = categoryLocationStore.getSnapshot()) {
-  const container = document.getElementById('activeCards')
+function renderLedger (snapshot = categoryLocationStore.getSnapshot()) {
+  const today = localDateFromDate(new Date())
   const active = getActiveTasks()
+  const state = ledgerState(snapshot)
+  const looseCount = unscheduledTasks(active, today, {}, snapshot.categories || []).length
+
   const countLine = document.getElementById('choresCountLine')
   if (countLine) countLine.textContent = buildChoresCountLine(active.length)
-  container.innerHTML = activeTaskGroupsHtml(active, snapshot, localDateFromDate(new Date()), {
-    editingTaskId,
-    taskEditorError
-  })
+  document.getElementById('choresViews').innerHTML = ledgerViewsHtml(looseCount, ledger.view)
+  document.getElementById('choreCategoryFilter').innerHTML = buildCategoryTabsHtml(
+    selectableReferences(snapshot.categories), ledger.categoryId)
+  document.getElementById('choresFilters').hidden = ledger.view === 'archive'
+
+  const panes = {
+    active: ledgerGroupsHtml(active, snapshot, today, state),
+    unscheduled: unscheduledListHtml(active, snapshot, today, state),
+    archive: archiveListHtml(tasksCache, snapshot, today, state)
+  }
+  for (const [view, id] of [['active', 'activeCards'], ['unscheduled', 'unscheduledCards'], ['archive', 'archivedCards']]) {
+    const pane = document.getElementById(id)
+    pane.innerHTML = panes[view]
+    pane.hidden = ledger.view !== view
+  }
 }
 
 async function handleEnrichOne (evt) {
@@ -589,84 +628,248 @@ function syncEnrichmentAvailability() {
   else if (status.textContent === availability.message) status.textContent = ''
 }
 
-async function handleActiveClick(evt) {
-  if (handleScheduleChoiceClick(evt)) return
-  const card = evt.target.closest('.task-card')
-  if (!card) return
-  if (card.dataset.saving === 'true') return
+function showChoresFailure (message) {
+  const status = document.getElementById('choresStatus')
+  status.textContent = message
+  status.dataset.state = 'error'
+  status.setAttribute('role', 'alert')
+}
+
+function handleLedgerViewClick (evt) {
+  const tab = evt.target.closest('[data-ledger-view]')
+  if (!tab) return
+  Object.assign(ledger, {
+    view: tab.dataset.ledgerView,
+    openTaskId: null,
+    confirmDoneId: null,
+    confirmDeleteId: null,
+    rowError: ''
+  })
+  renderLedger()
+}
+
+function handleLedgerCategoryClick (evt) {
+  const tab = evt.target.closest('[data-category-id]')
+  if (!tab) return
+  ledger.categoryId = tab.dataset.categoryId || ''
+  renderLedger()
+}
+
+// The estimate is one value written from three places — the two steps, the
+// presets and the field itself — so they all go through here.
+function setRowEstimate (card, minutes) {
+  const input = card.querySelector('.est-input')
+  input.value = minutes > 0 ? String(minutes) : ''
+  for (const preset of card.querySelectorAll('[data-estimate]')) {
+    preset.setAttribute('aria-pressed', String(Number(preset.dataset.estimate) === minutes))
+  }
+}
+
+function handleEstimateClick (evt, card) {
+  const input = card.querySelector('.est-input')
+  if (!input) return false
+  const current = Number(input.value) || 0
+
+  const preset = evt.target.closest('[data-estimate]')
+  if (preset) {
+    setRowEstimate(card, Number(preset.dataset.estimate))
+    return true
+  }
+  if (evt.target.closest('.est-minus')) {
+    setRowEstimate(card, Math.max(1, current - 1))
+    return true
+  }
+  if (evt.target.closest('.est-plus')) {
+    setRowEstimate(card, current + 1)
+    return true
+  }
+  return false
+}
+
+async function markLedgerRowDone (card, task) {
+  if (ledger.confirmDoneId !== task._id) {
+    ledger.confirmDoneId = task._id
+    renderLedger()
+    return
+  }
+  ledger.confirmDoneId = null
+  const now = Date.now()
+  const fields = taskUpdateForOutcome(task, 'completed', {
+    completedAt: now,
+    completionDate: localDateFromDate(new Date(now))
+  })
+  setTaskCardBusy(card, true)
+  try {
+    await updateTask(task._id, fields)
+    ledger.openTaskId = null
+    await refreshTasksView()
+  } catch {
+    showChoresFailure("Couldn't record that. The chore is unchanged.")
+  } finally {
+    if (card.isConnected) setTaskCardBusy(card, false)
+  }
+}
+
+// Nothing here has a Save: every control writes through as it is touched, and
+// the row repaints only its own facts so the editor under your finger stays put.
+async function saveLedgerRow (card) {
+  const task = tasksCache.find(item => item._id === card.dataset.id)
+  if (!task) return
+  const errorElement = card.querySelector('.task-card-error')
+  const snapshot = categoryLocationStore.getSnapshot()
+  const scheduleResult = readScheduleEditor(card)
+  if (!scheduleResult.ok) {
+    ledger.rowError = scheduleResult.message
+    if (errorElement) errorElement.textContent = ledger.rowError
+    return
+  }
+  ledger.rowError = ''
+  if (errorElement) errorElement.textContent = ''
+
+  const requestedCategoryId = card.querySelector('.f-category')?.value || null
+  const requestedLocationIds = [...card.querySelectorAll('.f-location:checked')].map(input => input.value)
+  const fields = {
+    ...buildTaskReferenceFields(task, requestedCategoryId, requestedLocationIds, snapshot),
+    ...buildActiveTaskScheduleFields(task, scheduleResult),
+    estimatedDuration: Number(card.querySelector('.est-input')?.value) || null
+  }
+
+  try {
+    await updateTask(task._id, fields)
+    const updated = { ...task, ...fields }
+    tasksCache = tasksCache.map(item => item._id === task._id ? updated : item)
+    const summary = card.querySelector('.ledger-row-summary')
+    if (summary) {
+      summary.innerHTML = rowSummaryHtml(updated, snapshot, localDateFromDate(new Date()), {
+        band: card.dataset.band === '' ? null : card.dataset.band,
+        tag: card.dataset.tag || undefined
+      })
+    }
+  } catch {
+    ledger.rowError = "Couldn't save that. The chore is unchanged."
+    if (errorElement) errorElement.textContent = ledger.rowError
+  }
+}
+
+const savingRows = new Map()
+
+function queueLedgerSave (card, delay = 0) {
+  const id = card.dataset.id
+  clearTimeout(savingRows.get(id))
+  savingRows.set(id, setTimeout(() => {
+    savingRows.delete(id)
+    saveLedgerRow(card)
+  }, delay))
+}
+
+async function handleLedgerClick (evt) {
+  const card = evt.target.closest('.ledger-row')
+  if (!card || card.dataset.saving === 'true') return
   const id = card.dataset.id
 
-  if (evt.target.classList.contains('archive-btn')) {
-    const task = tasksCache.find(item => item._id === id)
-    if (!task) return
+  if (evt.target.closest('.ledger-row-summary')) {
+    Object.assign(ledger, {
+      openTaskId: ledger.openTaskId === id ? null : id,
+      confirmDoneId: null,
+      rowError: ''
+    })
+    renderLedger()
+    return
+  }
+
+  const task = tasksCache.find(item => item._id === id)
+  if (!task) return
+
+  if (evt.target.closest('.done-btn')) return markLedgerRowDone(card, task)
+
+  if (ledger.confirmDoneId) {
+    ledger.confirmDoneId = null
+    const doneButton = card.querySelector('.done-btn')
+    if (doneButton) {
+      doneButton.setAttribute('aria-pressed', 'false')
+      doneButton.textContent = 'Done'
+    }
+  }
+
+  if (evt.target.closest('.archive-btn')) {
     archiveTaskOptimistically(task, {
       replace: replacement => {
         tasksCache = tasksCache.map(item => item._id === id ? replacement : item)
       },
       clearEditing: () => {
-        if (editingTaskId === id) {
-          editingTaskId = null
-          taskEditorError = ''
+        if (ledger.openTaskId === id) {
+          ledger.openTaskId = null
+          ledger.rowError = ''
         }
       },
       render: renderTasks,
-      showFailure: message => {
-        const status = document.getElementById('choresStatus')
-        status.textContent = message
-        status.dataset.state = 'error'
-        status.setAttribute('role', 'alert')
-      },
+      showFailure: showChoresFailure,
       pending: pendingTaskArchives
     })
     return
   }
 
-  if (evt.target.classList.contains('edit-task-btn')) {
-    editingTaskId = id
-    taskEditorError = ''
-    renderActive()
-    return
+  if (handleScheduleChoiceClick(evt)) return queueLedgerSave(card)
+  if (handleEstimateClick(evt, card)) return queueLedgerSave(card)
+  if (evt.target.closest('[data-field="category"]')) {
+    handleInboxPillClick(evt)
+    return queueLedgerSave(card)
   }
+}
 
-  if (evt.target.classList.contains('cancel-task-edit-btn')) {
-    editingTaskId = null
-    taskEditorError = ''
-    renderActive()
-    return
+function handleLedgerChange (evt) {
+  const card = evt.target.closest('.ledger-row')
+  if (!card) return
+  const editor = evt.target.closest('.schedule-editor')
+  if (editor) {
+    syncScheduleEditor(editor, {
+      userEditedDate: evt.target.matches('[data-schedule-field="date"]')
+    })
   }
-
-  if (!evt.target.classList.contains('save-task-edit-btn')) return
-  const task = tasksCache.find(item => item._id === id)
-  if (!task) return
-  const snapshot = categoryLocationStore.getSnapshot()
-  const requestedCategoryId = card.querySelector('.task-edit-category').value || null
-  const requestedLocationIds = [...card.querySelectorAll('.task-edit-location:checked')].map(input => input.value)
-  const errorElement = card.querySelector('.task-card-error')
-  taskEditorError = ''
-  errorElement.textContent = ''
-  const scheduleResult = readScheduleEditor(card)
-  if (!scheduleResult.ok) {
-    taskEditorError = scheduleResult.message
-    errorElement.textContent = taskEditorError
-    return
-  }
-  const referenceFields = buildTaskReferenceFields(task, requestedCategoryId, requestedLocationIds, snapshot)
-  const scheduleFields = buildActiveTaskScheduleFields(task, scheduleResult)
-  setTaskCardBusy(card, true)
-  try {
-    const result = await saveTaskWithRefresh(
-      () => updateTask(id, { ...referenceFields, ...scheduleFields }),
-      refreshTasksView
-    )
-    if (!result.ok) {
-      taskEditorError = result.message
-      errorElement.textContent = taskEditorError
-      return
+  if (evt.target.closest('.est-input')) {
+    for (const preset of card.querySelectorAll('[data-estimate]')) {
+      preset.setAttribute('aria-pressed',
+        String(Number(preset.dataset.estimate) === Number(evt.target.value)))
     }
-    editingTaskId = null
-    renderActive()
-  } finally {
-    setTaskCardBusy(card, false)
+  }
+  queueLedgerSave(card, evt.type === 'input' ? 500 : 0)
+}
+
+async function handleArchivedClick (evt) {
+  const button = evt.target.closest('.restore-task-btn, .delete-task-btn')
+  if (!button) return
+  const card = button.closest('.ledger-row')
+  if (!card || card.getAttribute('aria-busy') === 'true') return
+  const task = tasksCache.find(item => item._id === card.dataset.id)
+  if (!task) return
+
+  const deleting = button.classList.contains('delete-task-btn')
+  if (deleting && ledger.confirmDeleteId !== task._id) {
+    ledger.confirmDeleteId = task._id
+    renderLedger()
+    return
+  }
+  ledger.confirmDeleteId = null
+
+  const status = document.getElementById('archiveStatus')
+  status.textContent = ''
+  status.removeAttribute('data-state')
+  status.setAttribute('role', 'status')
+  card.setAttribute('aria-busy', 'true')
+  const result = await runArchiveAction({
+    action: deleting ? 'delete' : 'restore',
+    task,
+    refresh: refreshTasksView
+  })
+  if (card.isConnected) card.setAttribute('aria-busy', 'false')
+  if (!result.ok) {
+    status.textContent = result.message
+    status.dataset.state = 'error'
+    status.setAttribute('role', 'alert')
+  } else if (result.pendingArchiveRestored) {
+    await refreshTasksView()
+  } else {
+    renderLedger()
   }
 }
 
