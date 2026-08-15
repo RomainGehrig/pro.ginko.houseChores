@@ -1309,6 +1309,60 @@ test('active chores render as rounded cards that take an edge and a fill when op
   assert.equal(result.ripeDueLeft, 26, 'the cadence itself sits at the halfway tick')
 })
 
+test('the Where pills read as pills while staying real checkboxes', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 640 },
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
+    body: '<main id="app"><fieldset class="f-locations pill-set">' +
+      '<legend class="visually-hidden">Locations</legend>' +
+      '<label class="pill pill-compact pill-check"><input class="f-location" name="locationIds" ' +
+        'type="checkbox" value="loc-1" checked><span>Kitchen</span></label>' +
+      '<label class="pill pill-compact pill-check"><input class="f-location" name="locationIds" ' +
+        'type="checkbox" value="loc-2"><span>Garden</span></label>' +
+    '</fieldset></main>',
+    script: `
+      const [onLabel, offLabel] = document.querySelectorAll('.pill-check')
+      const input = onLabel.querySelector('input')
+      const spare = offLabel.querySelector('input')
+      const box = input.getBoundingClientRect()
+      const pill = onLabel.getBoundingClientRect()
+      spare.focus()
+      const result = {
+        inputOpacity: getComputedStyle(input).opacity,
+        // What matters is that pressing anywhere on the pill presses the
+        // control, not that the two boxes agree to the pixel.
+        pressLandsOnInput: document.elementFromPoint(
+          pill.left + pill.width / 2, pill.top + pill.height / 2) === input,
+        inputCoversPill: pill.width - box.width <= 2 && pill.height - box.height <= 2,
+        stillACheckbox: input.type === 'checkbox' && input.checked === true &&
+          input.name === 'locationIds' && input.value === 'loc-1',
+        focusable: document.activeElement === spare,
+        focusRing: getComputedStyle(offLabel).outlineStyle + ' ' + getComputedStyle(offLabel).outlineColor,
+        onBackground: getComputedStyle(onLabel).backgroundColor,
+        onColor: getComputedStyle(onLabel).color,
+        offBackground: getComputedStyle(offLabel).backgroundColor,
+        pillHeight: Math.round(pill.height)
+      }
+    `
+  })
+
+  // The native control is still the value the app reads and the thing a
+  // keyboard reaches — it is only the box that has gone.
+  assert.equal(result.inputOpacity, '0')
+  assert.equal(result.inputCoversPill, true, JSON.stringify(result))
+  assert.equal(result.pressLandsOnInput, true, JSON.stringify(result))
+  assert.equal(result.stillACheckbox, true, JSON.stringify(result))
+  assert.equal(result.focusable, true)
+  assert.equal(result.focusRing, 'solid rgb(198, 113, 57)',
+    'the ring the input lost is drawn on the pill instead')
+
+  // Chosen is the accent, as it is for the category pills right above it.
+  assert.equal(result.onBackground, 'rgb(198, 113, 57)')
+  assert.equal(result.onColor, 'rgb(245, 234, 216)')
+  assert.equal(result.offBackground, 'rgba(0, 0, 0, 0)')
+  assert.ok(result.pillHeight >= 32, JSON.stringify(result))
+})
+
 const LEDGER_HEAD_SCRIPT = `
   document.getElementById('view-today').style.display = 'none'
   document.getElementById('view-chores').style.display = ''

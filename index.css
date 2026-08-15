@@ -2514,23 +2514,39 @@ textarea {
   padding: 0;
 }
 
+/* Locations are a pill row like every other set of choices, and underneath it
+   each one is still a checkbox: the input covers its pill and toggles on the
+   press, but does not draw a box of its own. What it gives up in paint — its
+   own tick, its own focus ring — the pill takes back below. */
 .pill-check {
   cursor: pointer;
   gap: 7px;
+  position: relative;
 }
 
 .pill-check input {
-  height: 16px;
+  cursor: inherit;
+  height: 100%;
+  left: 0;
   margin: 0;
   min-height: 0;
   min-width: 0;
-  width: 16px;
+  opacity: 0;
+  position: absolute;
+  top: 0;
+  width: 100%;
 }
 
 .pill-check:has(input:checked) {
-  background: var(--sage);
-  border-color: var(--sage);
-  color: var(--on-sage);
+  background: var(--enamel);
+  border-color: var(--enamel);
+  color: var(--on-enamel);
+  font-weight: 600;
+}
+
+.pill-check:has(input:focus-visible) {
+  outline: 2px solid var(--enamel);
+  outline-offset: 2px;
 }
 
 .inbox-card .pill-input {
