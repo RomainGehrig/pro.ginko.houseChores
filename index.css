@@ -1058,7 +1058,9 @@ label:has(input[type="radio"]) {
   display: grid;
   font: inherit;
   gap: 0 var(--s2);
-  grid-template-columns: 62px minmax(0, 1fr) auto auto auto auto;
+  grid-auto-columns: auto;
+  grid-auto-flow: column;
+  grid-template-columns: 62px minmax(0, 1fr);
   min-height: 44px;
   padding: 0;
   text-align: left;
@@ -1100,6 +1102,13 @@ label:has(input[type="radio"]) {
   color: var(--graphite);
   font-size: var(--t-fig);
   white-space: nowrap;
+}
+
+/* A phone row has no room for the category and does not need it: the filter
+   above already says which categories are showing. It appears on the desktop
+   row, where there is width for it. */
+.row-cat {
+  display: none;
 }
 
 .row-flag {
@@ -1230,6 +1239,19 @@ label:has(input[type="radio"]) {
 @media (max-width: 420px) {
   .row-tag {
     display: none;
+  }
+}
+
+@media (min-width: 900px) {
+  .row-cat {
+    display: inline-flex;
+  }
+
+  /* A fixed estimate column lines the ripeness meters up down the list, so the
+     eye reads one column of them rather than a ragged edge. */
+  .row-est {
+    min-width: 46px;
+    text-align: right;
   }
 }
 

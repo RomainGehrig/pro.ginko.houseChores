@@ -63,6 +63,28 @@ test('a closed row states the facts and carries no editor', () => {
   assert.doesNotMatch(markup, /overdue|late|behind/i)
 })
 
+test('a row wears its category, and the flag carries the reason when there is none', () => {
+  assert.match(ledgerRowHtml(chore(), SNAPSHOT, TODAY, {}),
+    /<span class="row-cat tag tag-sage">Cleaning<\/span>/)
+
+  const uncategorised = ledgerRowHtml(chore({ categoryId: null }), SNAPSHOT, TODAY, {})
+  assert.match(uncategorised, /<span class="row-cat tag tag-sage">—<\/span>/)
+  assert.doesNotMatch(uncategorised, /row-flag/, 'no category is not a fault to flag')
+
+  // The design writes "Unavailable" into both the tag and the flag. Said twice
+  // on one row it reads as two problems, so the tag shows there is no name and
+  // the flag is the one place that says why.
+  const gone = ledgerRowHtml(chore({ categoryId: 'cat-gone' }), SNAPSHOT, TODAY, {})
+  assert.match(gone, /<span class="row-cat tag tag-sage">—<\/span>/)
+  assert.match(gone, /<span class="row-flag">Unavailable<\/span>/)
+
+  const archived = ledgerRowHtml(chore(),
+    { categories: [{ _id: 'cat-1', name: 'Cleaning', status: 'archived' }] }, TODAY, {})
+  assert.match(archived, /<span class="row-cat tag tag-sage">Cleaning<\/span>/,
+    'an archived category still names the chore it holds')
+  assert.match(archived, /<span class="row-flag">Archived<\/span>/)
+})
+
 test('the band stamp repeats the group for the eye, not for the screen reader', () => {
   const markup = ledgerRowHtml(chore({ scheduledDate: '2026-08-10' }), SNAPSHOT, TODAY, {})
   assert.match(markup, /<span class="row-band" aria-hidden="true">Ready<\/span>/)

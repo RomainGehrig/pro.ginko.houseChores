@@ -45,11 +45,24 @@ export function ripeMeterHtml (task, today) {
     '<span class="ripe-due"></span></span>'
 }
 
+const taskCategory = (task, snapshot) => task?.categoryId
+  ? (snapshot?.categories || []).find(item => item._id === task.categoryId) || null
+  : null
+
 function categoryFlag (task, snapshot) {
   if (!task?.categoryId) return ''
-  const category = (snapshot?.categories || []).find(item => item._id === task.categoryId)
+  const category = taskCategory(task, snapshot)
   if (!category) return 'Unavailable'
   return category.status === 'archived' ? 'Archived' : ''
+}
+
+// The category a chore belongs to, on the row rather than only in the editor.
+// A chore with no category, and one whose category has gone, both show a dash:
+// there is no name to print, and the flag beside it is where the reason goes.
+function categoryTagHtml (task, snapshot) {
+  const category = taskCategory(task, snapshot)
+  return '<span class="row-cat tag tag-sage">' +
+    (category ? escapeHtml(String(category.name ?? '')) : '—') + '</span>'
 }
 
 const estimateStepperHtml = task => {
@@ -114,6 +127,7 @@ export function rowSummaryHtml (task, snapshot, today, { band, tag } = {}) {
       '<span class="row-name">' + escapeHtml(String(task?.name ?? '')) + '</span>' +
       '<span class="row-note">' + buildChoreNoteHtml(task, today) + '</span>' +
     '</span>' +
+    categoryTagHtml(task, snapshot) +
     (flag ? '<span class="row-flag">' + flag + '</span>' : '') +
     (tag ? '<span class="row-tag">' + escapeHtml(tag) + '</span>' : '') +
     '<span class="row-est fig">' + escapeHtml(formatDuration(task?.estimatedDuration)) + '</span>' +
