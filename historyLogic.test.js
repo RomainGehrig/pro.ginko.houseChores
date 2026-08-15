@@ -6,8 +6,8 @@ import assert from 'node:assert'
 import { buildHistory, describeOutcomes, buildLogCountLine, displayMinutes } from './historyLogic.js'
 
 const tasks = [
-  { _id: 't1', name: 'Pay electricity bill' },
-  { _id: 't2', name: 'File tax receipts' }
+  { _id: 't1', name: 'Pay electricity bill', estimatedDuration: 10 },
+  { _id: 't2', name: 'File tax receipts', estimatedDuration: 25 }
 ]
 
 test('sorts sessions newest first, missing startTime last', () => {
@@ -107,6 +107,38 @@ test('executions are matched to their own session only', () => {
   const result = buildHistory(sessions, executions, tasks)
   assert.deepEqual(result.find(s => s.id === 's1').entries.map(e => e.taskName), ['Pay electricity bill'])
   assert.deepEqual(result.find(s => s.id === 's2').entries.map(e => e.taskName), ['File tax receipts'])
+})
+
+test('a session reports the clock its budget was measured against', () => {
+  const [ran] = buildHistory([{
+    _id: 's1', status: 'completed', startTime: 1000, endTime: 900000,
+    accumulatedActiveMs: 26 * 60000, activeStartedAt: null
+  }], [
+    { sessionId: 's1', taskId: 't1', rawDurationMs: 14 * 60000, outcome: 'done' }
+  ], tasks)
+  assert.equal(ran.activeMinutes, 26)
+
+  const [running] = buildHistory([{
+    _id: 's2', status: 'active', startTime: 1000, endTime: null,
+    accumulatedActiveMs: 5 * 60000, activeStartedAt: 2000
+  }], [], tasks)
+  assert.equal(running.activeMinutes, 5)
+})
+
+test('a session written before the app kept its own clock reports what the chores recorded', () => {
+  const [summary] = buildHistory([{ _id: 's1', status: 'completed', accumulatedActiveMs: null }], [
+    { sessionId: 's1', taskId: 't1', actualDuration: 12, outcome: 'done' },
+    { sessionId: 's1', taskId: 't2', actualDuration: 7, outcome: 'cancelled' }
+  ], tasks)
+  assert.equal(summary.activeMinutes, 19)
+})
+
+test('an entry carries the estimate its chore now holds, so drift has something to read', () => {
+  const [summary] = buildHistory([{ _id: 's1', status: 'completed' }], [
+    { sessionId: 's1', taskId: 't1', startTime: 1, actualDuration: 14, outcome: 'done' },
+    { sessionId: 's1', taskId: 'gone', startTime: 2, actualDuration: 3, outcome: 'done' }
+  ], tasks)
+  assert.deepEqual(summary.entries.map(entry => entry.estimatedDuration), [10, null])
 })
 
 test('describeOutcomes lists only non-zero outcomes, done first', () => {
