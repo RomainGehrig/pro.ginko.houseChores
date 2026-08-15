@@ -9,7 +9,7 @@ import {
   logRangesHtml,
   logSessionCardHtml,
   logSessionsHtml
-} from './logView.js'
+} from './logScreen.js'
 
 const NOW = new Date(2026, 7, 15, 12, 0).getTime()
 const DAY = 24 * 60 * 60 * 1000

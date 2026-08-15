@@ -274,11 +274,11 @@
       "Description": "Tests the Log's ranges, chart geometry and per-session copy."
     },
     {
-      "path": "log/logView.js",
+      "path": "log/logScreen.js",
       "Description": "Renders the Log: the range control, the active-time chart and the session cards."
     },
     {
-      "path": "log/logView.test.js",
+      "path": "log/logScreen.test.js",
       "Description": "Tests the Log's range control, chart and session card markup."
     },
     {

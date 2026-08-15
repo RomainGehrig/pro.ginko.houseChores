@@ -1,5 +1,5 @@
 // ABOUTME: Drives the Log screen — loads the record, filters it by range and opens one session at a time.
-// ABOUTME: Holds no view markup of its own; log/logView.js renders, log/logLogic.js decides what is said.
+// ABOUTME: Holds no view markup of its own; log/logScreen.js renders, log/logLogic.js decides what is said.
 
 import { listAllSessions } from './sessionData.js'
 import { listAllExecutions } from './executionData.js'
@@ -7,7 +7,7 @@ import { listAllTasks } from './taskData.js'
 import { buildHistory } from './historyLogic.js'
 import { escapeHtml } from './helpers.js'
 import { activeBars, logHeadline, sessionsInRange } from './log/logLogic.js'
-import { logChartHtml, logRangesHtml, logSessionsHtml } from './log/logView.js'
+import { logChartHtml, logRangesHtml, logSessionsHtml } from './log/logScreen.js'
 
 const state = { range: '7', openId: null, history: [] }
 
