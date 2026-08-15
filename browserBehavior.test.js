@@ -1309,6 +1309,78 @@ test('active chores render as rounded cards that take an edge and a fill when op
   assert.equal(result.ripeDueLeft, 26, 'the cadence itself sits at the halfway tick')
 })
 
+const LEDGER_HEAD_SCRIPT = `
+  document.getElementById('view-today').style.display = 'none'
+  document.getElementById('view-chores').style.display = ''
+  document.getElementById('choresViews').innerHTML =
+    '<button type="button" class="seg-opt" aria-pressed="true">Active</button>' +
+    '<button type="button" class="seg-opt" aria-pressed="false">Unscheduled</button>' +
+    '<button type="button" class="seg-opt" aria-pressed="false">Archive</button>'
+  document.getElementById('choreCategoryFilter').innerHTML =
+    ['All', 'Cleaning', 'Admin', 'Garden'].map(label =>
+      '<button type="button" class="pill" aria-pressed="false">' + label + '</button>').join('')
+
+  const box = selector => {
+    const rect = document.querySelector(selector).getBoundingClientRect()
+    return { top: Math.round(rect.top), bottom: Math.round(rect.bottom), left: Math.round(rect.left),
+      right: Math.round(rect.right), width: Math.round(rect.width) }
+  }
+  const filters = document.getElementById('choresFilters')
+  const result = {
+    title: box('.ledger-title'),
+    search: box('#choreSearch'),
+    views: box('#choresViews'),
+    cats: box('#choreCategoryFilter'),
+    headingSize: getComputedStyle(document.querySelector('.ledger-head .route-heading')).fontSize,
+    searchRadius: getComputedStyle(document.getElementById('choreSearch')).borderRadius,
+    hiddenLeavesNothing: (() => {
+      filters.hidden = true
+      const gone = ['#choreSearch', '#choreCategoryFilter'].every(selector =>
+        document.querySelector(selector).getBoundingClientRect().width === 0)
+      filters.hidden = false
+      return gone
+    })()
+  }
+`
+
+test('the desktop ledger head sets its search and views beside the heading', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 1280, height: 900 },
+    body: applicationMarkup,
+    script: LEDGER_HEAD_SCRIPT
+  })
+
+  assert.equal(result.headingSize, '36px')
+  assert.equal(result.search.width, 220, JSON.stringify(result))
+  assert.equal(result.searchRadius, '999px', 'the doc gives the desktop search a pill edge')
+
+  // One row: title, then search, then the view control, bottoms aligned.
+  assert.ok(result.search.left > result.title.right, JSON.stringify(result))
+  assert.ok(result.views.left >= result.search.right, JSON.stringify(result))
+  assert.equal(result.search.bottom, result.title.bottom, JSON.stringify(result))
+  assert.equal(result.views.bottom, result.title.bottom, JSON.stringify(result))
+
+  // The category pills wrap onto their own row underneath, at the left margin.
+  assert.ok(result.cats.top >= result.search.bottom, JSON.stringify(result))
+  assert.equal(result.cats.left, result.title.left, JSON.stringify(result))
+
+  assert.equal(result.hiddenLeavesNothing, true,
+    'hiding the filters on the archive view takes the search with them')
+})
+
+test('the phone ledger head stacks, so nothing is squeezed beside the heading', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 800 },
+    body: applicationMarkup,
+    script: LEDGER_HEAD_SCRIPT
+  })
+
+  assert.ok(result.search.top >= result.title.bottom, JSON.stringify(result))
+  assert.ok(result.views.top >= result.title.bottom, JSON.stringify(result))
+  assert.equal(result.search.width, result.title.width,
+    'the search takes the whole column on a phone')
+})
+
 test('the receipt gauge draws both tracks, its history and its suggestion', async () => {
   const result = await runBrowserScenario({
     viewport: { width: 390, height: 800 },

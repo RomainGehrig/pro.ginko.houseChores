@@ -979,6 +979,10 @@ label:has(input[type="radio"]) {
   margin-bottom: var(--s4);
 }
 
+.ledger-title {
+  min-width: 0;
+}
+
 .ledger-head .route-heading {
   margin: var(--s1) 0 0;
 }
@@ -1255,7 +1259,32 @@ label:has(input[type="radio"]) {
   }
 }
 
+/* On a desktop the head is one row — heading, search, view control, bottoms
+   aligned — with the category pills wrapping underneath. The filters element
+   steps out of the way with display: contents so its two children can take
+   their own places in that grid; hiding it on the archive view still removes
+   both, because [hidden] is the more specific rule. */
 @media (min-width: 900px) {
+  .ledger-head {
+    align-items: end;
+    grid-template-areas:
+      "title search views"
+      "cats  cats   cats";
+    grid-template-columns: minmax(0, 1fr) 220px auto;
+    column-gap: 18px;
+  }
+
+  .ledger-title { grid-area: title; }
+  #choresViews { align-self: end; grid-area: views; }
+  #choresFilters { display: contents; }
+  #choreSearch { border-radius: var(--r-pill); font-size: 13.5px; grid-area: search; }
+  #choreCategoryFilter { grid-area: cats; }
+
+  .ledger-head .route-heading {
+    font-size: 36px;
+    line-height: 1.04;
+  }
+
   .row-cat {
     display: inline-flex;
   }
@@ -3269,7 +3298,7 @@ textarea {
 }
 
 
-/* ── Chores, Archive, Setup and the Log ─────────────────────────────────────
+/* ── Archive, Setup and the Log ─────────────────────────────────────────────
    Not in the design doc. They keep their structure and take the Organic
    paint: one head shape, quiet row controls, the same card and pill. */
 
