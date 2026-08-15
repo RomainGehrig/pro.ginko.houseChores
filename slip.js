@@ -18,6 +18,26 @@ export function daysBetween (from, to) {
   return fromDay === null || toDay === null ? null : toDay - fromDay
 }
 
+// A session stamps `lastCompletedDate` with a millisecond timestamp; records
+// written by hand carry a local date string. Read both, so how ripe a chore
+// looks never depends on which one wrote it.
+function completionDay (value) {
+  if (value == null || value === '') return null
+  if (typeof value === 'number' || /^\d+$/.test(String(value))) {
+    const date = new Date(Number(value))
+    return Number.isNaN(date.getTime())
+      ? null
+      : Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / DAY_MS
+  }
+  return dayNumber(value)
+}
+
+export function daysSinceCompletion (value, today) {
+  const from = completionDay(value)
+  const to = dayNumber(today)
+  return from === null || to === null ? null : Math.max(to - from, 0)
+}
+
 export function cadenceDays (schedule) {
   if (!schedule || schedule.type === 'one_off') return null
 

@@ -4,7 +4,7 @@
 import { escapeHtml, formatDuration, formatFactHtml, formatTimer } from './helpers.js'
 import { normalizeReferenceName, resolveReference } from './categoryLocationLogic.js'
 import { formatScheduledDate, parseLocalDate, scheduleSummary } from './scheduleLogic.js'
-import { cadenceDays } from './slip.js'
+import { cadenceDays, daysSinceCompletion } from './slip.js'
 
 const SHORT_MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -22,23 +22,6 @@ export function buildEnrichmentAvailability (categories) {
 function calendarDayNumber (value) {
   const date = parseLocalDate(value)
   return date ? Date.UTC(date.year, date.month - 1, date.day) / DAY_MS : null
-}
-
-function completionDayNumber (value) {
-  if (value == null || value === '') return null
-  const timestamp = Number(value)
-  if (!Number.isFinite(timestamp)) return null
-  const date = new Date(timestamp)
-  if (Number.isNaN(date.getTime())) return null
-  return Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()) / DAY_MS
-}
-
-function daysSinceCompletion (value, today) {
-  const completionDay = completionDayNumber(value)
-  const todayDay = calendarDayNumber(today)
-  return completionDay === null || todayDay === null
-    ? null
-    : Math.max(todayDay - completionDay, 0)
 }
 
 function compactScheduledDate (value) {

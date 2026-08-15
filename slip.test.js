@@ -3,7 +3,7 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { cadenceDays, dueGroup, groupAndSort, slip } from './slip.js'
+import { cadenceDays, daysSinceCompletion, dueGroup, groupAndSort, slip } from './slip.js'
 
 test('cadenceDays normalizes every supported recurring schedule shape', () => {
   const cases = [
@@ -88,4 +88,17 @@ test('groupAndSort orders groups by date band, active ripeness, then drafts', ()
       { name: 'SOMEDAY', taskIds: ['someday'] }
     ]
   )
+})
+
+test('a completion reads the same whether the session stamped it or a date was typed', () => {
+  const stamped = Date.UTC(2026, 7, 8, 14, 30)
+  assert.equal(daysSinceCompletion(stamped, '2026-08-15'), 7)
+  assert.equal(daysSinceCompletion('2026-08-08', '2026-08-15'), 7)
+  assert.equal(daysSinceCompletion(String(stamped), '2026-08-15'), 7)
+})
+
+test('a completion in the future counts as no time elapsed, never as a negative', () => {
+  assert.equal(daysSinceCompletion('2026-08-20', '2026-08-15'), 0)
+  assert.equal(daysSinceCompletion(null, '2026-08-15'), null)
+  assert.equal(daysSinceCompletion('2026-08-08', null), null)
 })
