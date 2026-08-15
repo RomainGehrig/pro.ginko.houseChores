@@ -13,6 +13,7 @@ import { buildEnrichmentAvailability } from './taskPresentationLogic.js'
 import { localDateFromDate } from './scheduleLogic.js'
 import { saveTaskWithRefresh } from './taskSaveLogic.js'
 import {
+  applyScheduleChoice,
   buildScheduleEditorModel,
   readScheduleEditor,
   scheduleEditorHtml,
@@ -92,6 +93,8 @@ function captureTaskEditorDrafts () {
             ? control.checked
             : null
         })),
+        weekdays: [...card.querySelectorAll('[data-schedule-toggle="weekday"][aria-pressed="true"]')]
+          .map(pill => pill.dataset.scheduleValue),
         scheduleDateOwner: card.querySelector('.schedule-editor')?.dataset.scheduleDateOwner || null
       })
     }
@@ -118,6 +121,11 @@ function restoreTaskEditorDrafts (drafts) {
       if (!control) continue
       if (draftControl.checked === null) control.value = draftControl.value
       else control.checked = draftControl.checked
+    }
+
+    for (const pill of card.querySelectorAll('[data-schedule-toggle="weekday"]')) {
+      pill.setAttribute('aria-pressed',
+        String(draft.weekdays?.includes(pill.dataset.scheduleValue) === true))
     }
 
     const scheduleEditor = card.querySelector('.schedule-editor')
@@ -388,6 +396,16 @@ function handleCustomDurationInput (evt) {
   }
 }
 
+// A schedule pill writes into the field behind it, then the editor repaints
+// itself from those fields — the same one-way path a select would take.
+function handleScheduleChoiceClick (evt) {
+  const editor = evt.target.closest?.('.schedule-editor')
+  if (!editor) return false
+  if (!applyScheduleChoice(editor, evt.target)) return false
+  syncScheduleEditor(editor)
+  return true
+}
+
 function handleProposedScheduleChange (evt) {
   if (evt.target.closest('.duration-custom')) handleCustomDurationInput(evt)
   const editor = evt.target.closest('.schedule-editor')
@@ -489,6 +507,7 @@ function handleDiscard (evt) {
 }
 
 async function handleProposedClick(evt) {
+  if (handleScheduleChoiceClick(evt)) return
   if (evt.target.closest('[data-field]')) return handleInboxPillClick(evt)
   if (evt.target.closest('.enrich-one-btn')) return handleEnrichOne(evt)
   if (evt.target.closest('.discard-btn')) return handleDiscard(evt)
@@ -571,6 +590,7 @@ function syncEnrichmentAvailability() {
 }
 
 async function handleActiveClick(evt) {
+  if (handleScheduleChoiceClick(evt)) return
   const card = evt.target.closest('.task-card')
   if (!card) return
   if (card.dataset.saving === 'true') return

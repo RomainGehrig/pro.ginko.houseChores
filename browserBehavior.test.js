@@ -275,6 +275,12 @@ test('reference publication preserves every proposed and active task draft contr
           control.dispatchEvent(new Event('change', { bubbles: true }))
         })
       }
+      const setWeekdays = (root, values) => {
+        root.querySelectorAll('[data-schedule-toggle="weekday"]').forEach(pill => {
+          const wanted = values.includes(pill.dataset.scheduleValue)
+          if ((pill.getAttribute('aria-pressed') === 'true') !== wanted) pill.click()
+        })
+      }
       const draftSnapshot = (card, categorySelector, locationSelector, durationSelector = null) => ({
         scheduledDate: card.querySelector('[data-schedule-field="date"]').value,
         dateOwner: card.querySelector('.schedule-editor').dataset.scheduleDateOwner,
@@ -285,7 +291,8 @@ test('reference publication preserves every proposed and active task draft contr
         every: card.querySelector('[data-schedule-field="every"]').value,
         unit: card.querySelector('[data-schedule-field="unit"]').value,
         fixedKind: card.querySelector('[data-schedule-field="fixed-kind"]').value,
-        weekdays: [...card.querySelectorAll('[data-schedule-field="weekday"]:checked')].map(control => control.value),
+        weekdays: [...card.querySelectorAll('[data-schedule-toggle="weekday"][aria-pressed="true"]')]
+          .map(control => control.dataset.scheduleValue),
         monthDay: card.querySelector('[data-schedule-field="month-day"]').value,
         annualMonth: card.querySelector('[data-schedule-field="annual-month"]').value,
         annualDay: card.querySelector('[data-schedule-field="annual-day"]').value,
@@ -301,7 +308,7 @@ test('reference publication preserves every proposed and active task draft contr
       setValue(proposed, '[data-schedule-field="every"]', '9')
       setValue(proposed, '[data-schedule-field="unit"]', 'month')
       setValue(proposed, '[data-schedule-field="fixed-kind"]', 'weekdays')
-      setChecks(proposed, '[data-schedule-field="weekday"]', ['1', '5'])
+      setWeekdays(proposed, ['1', '5'])
       setValue(proposed, '[data-schedule-field="month-day"]', '31')
       setValue(proposed, '[data-schedule-field="annual-month"]', '12')
       setValue(proposed, '[data-schedule-field="annual-day"]', '25')
@@ -316,7 +323,7 @@ test('reference publication preserves every proposed and active task draft contr
       setValue(active, '[data-schedule-field="every"]', '4')
       setValue(active, '[data-schedule-field="unit"]', 'year')
       setValue(active, '[data-schedule-field="fixed-kind"]', 'annual_date')
-      setChecks(active, '[data-schedule-field="weekday"]', ['2'])
+      setWeekdays(active, ['2'])
       setValue(active, '[data-schedule-field="month-day"]', '29')
       setValue(active, '[data-schedule-field="annual-month"]', '10')
       setValue(active, '[data-schedule-field="annual-day"]', '31')
@@ -504,8 +511,8 @@ test('computed styles hide inactive fixed groups across transitions without clea
         monthDay: selectPattern('month_day'),
         annualDate: selectPattern('annual_date'),
         preservedValues: {
-          weekdays: [...editor.querySelectorAll('[data-schedule-field="weekday"]:checked')]
-            .map(control => control.value),
+          weekdays: [...editor.querySelectorAll('[data-schedule-toggle="weekday"][aria-pressed="true"]')]
+            .map(control => control.dataset.scheduleValue),
           monthDay: editor.querySelector('[data-schedule-field="month-day"]').value,
           annualMonth: editor.querySelector('[data-schedule-field="annual-month"]').value,
           annualDay: editor.querySelector('[data-schedule-field="annual-day"]').value

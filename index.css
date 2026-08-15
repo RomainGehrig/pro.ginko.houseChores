@@ -912,9 +912,9 @@ label:has(input[type="radio"]) {
 .schedule-editor {
   border-top: 1px solid var(--rule);
   display: grid;
-  gap: 6px;
+  gap: 10px;
   margin-top: 8px;
-  padding-top: 8px;
+  padding-top: 10px;
 }
 
 .schedule-editor [hidden] {
@@ -927,21 +927,118 @@ label:has(input[type="radio"]) {
   gap: 4px;
 }
 
+.schedule-cadence {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.schedule-word {
+  color: var(--graphite);
+  font-size: 13px;
+}
+
+.schedule-every {
+  border-radius: var(--r-control);
+  flex: none;
+  font-size: 13.5px;
+  padding: 8px;
+  text-align: center;
+  width: 68px;
+}
+
+/* A segmented control: one plate, the chosen face lifted out of it. */
+.seg {
+  align-self: flex-start;
+  background: color-mix(in srgb, var(--ink) 7%, transparent);
+  border-radius: var(--r-pill);
+  display: inline-flex;
+  gap: 2px;
+  max-width: 100%;
+  overflow-x: auto;
+  padding: 3px;
+}
+
+.seg-opt {
+  background: transparent;
+  border: 0;
+  border-radius: var(--r-pill);
+  color: var(--graphite);
+  cursor: pointer;
+  flex: none;
+  font-family: var(--face-read);
+  font-size: 12.5px;
+  font-weight: 500;
+  min-height: 40px;
+  padding: 6px 14px;
+  white-space: nowrap;
+}
+
+.seg-opt[aria-pressed="true"] {
+  background: var(--ground);
+  box-shadow: 0 1px 3px color-mix(in srgb, #2E2B25 16%, transparent);
+  color: var(--ink);
+  font-weight: 700;
+}
+
 .schedule-weekdays {
   border: 0;
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 10px;
+  gap: 5px;
   margin: 0;
   padding: 0;
 }
 
-.task-card .schedule-weekdays input {
-  width: auto;
+.schedule-weekdays .pill { min-height: 44px; padding: var(--s2) var(--s3); }
+
+.schedule-annual {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.day-grid,
+.month-grid {
+  display: grid;
+  gap: 4px;
+}
+
+.day-grid { grid-template-columns: repeat(7, 1fr); }
+.month-grid { grid-template-columns: repeat(6, 1fr); }
+
+/* The design draws 32px cells; the app's touch floor is 44px, so the cell
+   grows and the grid keeps its columns. */
+.grid-cell {
+  align-items: center;
+  background: color-mix(in srgb, var(--ink) 5%, transparent);
+  border: 1px solid color-mix(in srgb, var(--ink) 10%, transparent);
+  border-radius: 10px;
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  font-family: var(--face-read);
+  font-size: 13px;
+  justify-content: center;
+  min-height: 44px;
+  padding: 0;
+  width: 100%;
+}
+
+.grid-cell-wide { font-size: 12.5px; }
+
+.grid-cell:hover { background: color-mix(in srgb, var(--ink) 10%, transparent); }
+
+.grid-cell[aria-pressed="true"] {
+  background: var(--enamel);
+  border-color: var(--enamel);
+  color: var(--on-enamel);
+  font-weight: 600;
 }
 
 .schedule-summary {
-  color: var(--graphite);
+  color: var(--sage-ink);
   font-size: var(--t-note);
 }
 

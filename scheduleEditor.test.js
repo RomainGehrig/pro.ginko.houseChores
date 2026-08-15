@@ -102,7 +102,7 @@ test('names every schedule form control for browser form semantics', () => {
   controls.forEach(control => assert.match(control, /\bname="[^"]+"/))
 })
 
-test('gives cadence and calendar controls distinct accessible names and groups weekdays', () => {
+test('every schedule choice carries the value it writes and the state it is in', () => {
   const markup = scheduleEditorHtml({
     scheduledDate: '2026-08-16',
     schedule: {
@@ -122,13 +122,25 @@ test('gives cadence and calendar controls distinct accessible names and groups w
   ])
 
   for (const [field, accessibleName] of expectedNames) {
-    const control = markup.match(new RegExp('<(?:input|select)\\b[^>]*data-schedule-field="' + field + '"[^>]*>'))?.[0]
+    const control = markup.match(new RegExp('<input\\b[^>]*data-schedule-field="' + field + '"[^>]*>'))?.[0]
     assert.ok(control, `missing ${field}`)
     assert.match(control, new RegExp('aria-label="' + accessibleName + '"'))
   }
-  assert.match(markup, /<fieldset[^>]*class="schedule-weekdays"[^>]*aria-label="Weekdays"/)
-  assert.match(markup, /<label><input[^>]*value="1"[^>]*> Monday<\/label>/)
-  assert.match(markup, /data-schedule-fixed-group="annual_date"[^>]*role="group"[^>]*aria-label="Annual date"/)
+
+  // The pills are what the user presses; each one names the field it writes.
+  assert.match(markup, /data-schedule-set="type" data-schedule-value="periodic"[^>]*aria-pressed="false"/)
+  assert.match(markup, /data-schedule-set="fixed-kind" data-schedule-value="annual_date"[^>]*aria-pressed="true"/)
+  assert.match(markup, /data-schedule-set="annual-month" data-schedule-value="8"[^>]*aria-pressed="true"/)
+  assert.match(markup, /data-schedule-set="annual-day" data-schedule-value="16"[^>]*aria-pressed="true"/)
+  assert.match(markup, /class="pill-set schedule-weekdays"[^>]*aria-label="Weekdays"/)
+  assert.match(markup, /data-schedule-toggle="weekday" data-schedule-value="1"[^>]*aria-label="Monday"/)
+  assert.match(markup, /role="group" aria-label="Annual date" data-schedule-fixed-group="annual_date"/)
+})
+
+test('the day and month grids offer every choice the calendar allows', () => {
+  const markup = scheduleEditorHtml({ schedule: { type: 'fixed', pattern: { kind: 'month_day', day: 3 } } })
+  assert.equal((markup.match(/data-schedule-set="month-day"/g) || []).length, 31)
+  assert.equal((markup.match(/data-schedule-set="annual-month"/g) || []).length, 12)
 })
 
 test('converts form values into a validated schedule', () => {
@@ -199,11 +211,12 @@ function scheduleRoot (values) {
     ['.schedule-date-hint', { hidden: false }],
     ['.schedule-summary', { textContent: '', innerHTML: '' }]
   ])
-  const weekdays = values.weekdays.map(value => ({ value }))
+  const weekdays = values.weekdays.map(value => ({ dataset: { scheduleValue: value } }))
   return {
     dataset: { scheduleDateOwner: values.dateOwner || 'app' },
     querySelector: selector => nodes.get(selector) || null,
-    querySelectorAll: selector => selector === '[data-schedule-field="weekday"]:checked' ? weekdays : [],
+    querySelectorAll: selector =>
+      selector === '[data-schedule-toggle="weekday"][aria-pressed="true"]' ? weekdays : [],
     node: selector => nodes.get(selector)
   }
 }
