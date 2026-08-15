@@ -4,7 +4,8 @@
 export const SETUP_TABS = [
   { key: 'categories', label: 'Categories' },
   { key: 'locations', label: 'Locations' },
-  { key: 'ai', label: 'AI' }
+  { key: 'ai', label: 'AI' },
+  { key: 'theme', label: 'Theme' }
 ]
 
 export function setupTabs (activeTab) {

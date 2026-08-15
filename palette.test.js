@@ -47,3 +47,38 @@ test('dark keeps the same relationships with the ramp read upwards', () => {
   assert.match(dark, /--sage-ink:\s*#CCDBB2;/) // accent-2-300
   assert.match(dark, /--on-sage-soft:\s*#E1EECC;/) // accent-2-200 on the dark sage plate
 })
+
+// Plain CSS cannot share one rule between a media query and an attribute, so
+// the dark palette is written twice. This is what stops the copies drifting.
+function declarationsIn (selector, from = 0) {
+  const at = css.indexOf(selector, from)
+  assert.notEqual(at, -1, 'missing rule: ' + selector)
+  const open = css.indexOf('{', at) + 1
+  let depth = 1
+  let i = open
+  while (depth) {
+    if (css[i] === '{') depth += 1
+    else if (css[i] === '}') depth -= 1
+    i += 1
+  }
+  return css.slice(open, i - 1)
+    .split(';')
+    .map(line => line.replace(/\/\*[\s\S]*?\*\//g, '').trim())
+    .filter(Boolean)
+    .map(line => line.replace(/\s+/g, ' '))
+}
+
+test('the system-dark and chosen-dark palettes declare exactly the same tokens', () => {
+  const system = declarationsIn(':root:not([data-theme="light"])')
+  const chosen = declarationsIn(':root[data-theme="dark"] {')
+
+  assert.ok(system.length >= 15, 'the dark palette should be the whole set, got ' + system.length)
+  assert.deepEqual(chosen, system)
+})
+
+test('a chosen theme wins over the device, and pins the scheme native controls read', () => {
+  // The media query has to stand aside when the user has asked for light.
+  assert.match(css, /@media \(prefers-color-scheme: dark\)\s*\{\s*:root:not\(\[data-theme="light"\]\)/)
+  assert.match(css, /:root\[data-theme="light"\] \{ color-scheme: light; \}/)
+  assert.match(css, /:root\[data-theme="dark"\] \{ color-scheme: dark; \}/)
+})

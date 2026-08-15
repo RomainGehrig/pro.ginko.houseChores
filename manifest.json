@@ -338,6 +338,14 @@
       "Description": "Tests the Chores ledger markup \u2014 bands, rows, the inline editor and the archive."
     },
     {
+      "path": "theme.js",
+      "Description": "The light/dark/system choice: its default, its copy, and how it reaches the document."
+    },
+    {
+      "path": "theme.test.js",
+      "Description": "Tests the theme default, its copy and how an override reaches the document."
+    },
+    {
       "path": "settingsData.js",
       "Description": "Reads and writes the single app-settings record behind the Setup switches."
     },
@@ -602,6 +610,10 @@
         "aiSuggestions": {
           "type": "String",
           "description": "True when the user has turned Inbox suggestions on (boolean). Off by default."
+        },
+        "theme": {
+          "type": "String",
+          "description": "Appearance override: 'system' (default), 'light' or 'dark'."
         }
       }
     }

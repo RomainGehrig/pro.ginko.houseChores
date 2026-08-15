@@ -4,8 +4,9 @@
 import { categoryLocationStore } from '../categoryLocationStore.js'
 import { escapeAttribute, escapeHtml } from '../helpers.js'
 import { listAllTasks } from '../taskData.js'
-import { aiSuggestionsEnabled, readSettings, writeSettings } from '../settingsData.js'
+import { aiSuggestionsEnabled, readSettings, storedTheme, writeSettings } from '../settingsData.js'
 import { pendingUndo } from '../undoToast.js'
+import { DEFAULT_THEME, applyTheme, cacheTheme, themeChoices, themeNote } from '../theme.js'
 import {
   aiSwitchLabel,
   aiToggleMessage,
@@ -131,7 +132,22 @@ export function aiPaneHtml (on) {
   '</section>'
 }
 
-const setup = { tab: 'categories', editing: null, adding: null, ai: false }
+// The three choices are a segmented control, not a toggle: System is a real
+// choice and has to be reachable, not just the state you are in before choosing.
+export function themePaneHtml (theme) {
+  return '<h2 id="themeHeading" class="display setup-pane-title">Theme</h2>' +
+    '<div class="card theme-card">' +
+      '<div class="seg theme-choices" role="group" aria-label="Theme">' +
+        themeChoices(theme).map(choice =>
+          '<button type="button" class="seg-opt" data-theme-choice="' + choice.key +
+            '" aria-pressed="' + (choice.active ? 'true' : 'false') + '">' +
+            escapeHtml(choice.label) + '</button>').join('') +
+      '</div>' +
+      '<p class="muted theme-note">' + escapeHtml(themeNote(theme)) + '</p>' +
+    '</div>'
+}
+
+const setup = { tab: 'categories', editing: null, adding: null, ai: false, theme: DEFAULT_THEME }
 let tasksCache = []
 let onSuggestionsChange = () => {}
 
@@ -153,6 +169,7 @@ function renderSetup (snapshot = categoryLocationStore.getSnapshot()) {
   element('locationsPane').innerHTML =
     vocabularyPaneHtml('location', snapshot.locations, tasksCache, setup)
   element('aiPane').innerHTML = aiPaneHtml(setup.ai)
+  element('themePane').innerHTML = themePaneHtml(setup.theme)
   if (snapshot.error) showStatus(snapshot.error, 'error')
   else if (snapshot.warning) showStatus(snapshot.warning, 'warning')
 
@@ -252,6 +269,9 @@ async function handleSetupClick (event) {
 
   if (event.target.closest('#aiSwitch')) return toggleSuggestions()
 
+  const themeChoice = event.target.closest('[data-theme-choice]')
+  if (themeChoice) return chooseTheme(themeChoice.dataset.themeChoice)
+
   const addButton = event.target.closest('[data-add-term]')
   if (addButton) {
     Object.assign(setup, { adding: addButton.dataset.addTerm, editing: null })
@@ -328,6 +348,26 @@ async function toggleSuggestions () {
   }, 6000)
 }
 
+// The whole app repainting is the feedback, so a success message would only
+// repeat what the user can see. There is no undo either: the way back is the
+// choice next to the one they just pressed.
+async function chooseTheme (choice) {
+  const previous = setup.theme
+  setup.theme = applyTheme(choice)
+  cacheTheme(setup.theme)
+  renderSetup()
+  if (setup.theme === previous) return
+
+  try {
+    await writeSettings({ theme: setup.theme })
+    showStatus('', 'status')
+  } catch {
+    // The colour is already what they asked for and this device will remember
+    // it, so the only thing lost is every other device. Say exactly that.
+    showStatus('Kept on this device — the setting could not be saved.', 'warning')
+  }
+}
+
 export async function refreshSetupView () {
   tasksCache = await listAllTasks().catch(() => [])
   renderSetup()
@@ -343,8 +383,14 @@ export async function initSetupView ({ onSuggestionsChange: notify = () => {} } 
   screen.addEventListener('focusout', handleSetupBlur)
   categoryLocationStore.subscribe(() => renderSetup())
 
-  setup.ai = aiSuggestionsEnabled(await readSettings())
+  const settings = await readSettings()
+  setup.ai = aiSuggestionsEnabled(settings)
   onSuggestionsChange(setup.ai)
+
+  // The record outranks the cache the first paint used: another device may have
+  // changed it since. Re-caching keeps the next first paint right.
+  setup.theme = applyTheme(storedTheme(settings))
+  cacheTheme(setup.theme)
   await refreshSetupView()
   return true
 }

@@ -697,6 +697,51 @@ test('bottom primary navigation has phone-sized targets, fixed safe-area placeme
   assert.ok(Number.parseFloat(result.transitionDuration) <= 0.001, JSON.stringify(result))
 })
 
+// The point of the switch: the device's answer is overridden in BOTH directions,
+// so a light device can hold a dark app and a dark device a light one.
+test('a chosen theme overrides the device, and System hands the decision back', async () => {
+  const readGround = `
+    const { applyTheme } = await import(applicationUrl + 'theme.js')
+    const ground = () => getComputedStyle(document.body).backgroundColor
+    const scheme = () => getComputedStyle(document.documentElement).colorScheme
+    const result = { system: ground(), systemScheme: scheme(), steps: [] }
+    for (const theme of ['dark', 'light', 'system']) {
+      applyTheme(theme, document.documentElement)
+      result.steps.push({ theme, ground: ground(), scheme: scheme() })
+    }
+  `
+
+  const onLightDevice = await runBrowserScenario({
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
+    body: '<main id="app">Chores</main>',
+    script: readGround
+  })
+  const onDarkDevice = await runBrowserScenario({
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'dark' }],
+    body: '<main id="app">Chores</main>',
+    script: readGround
+  })
+
+  const light = onLightDevice.system
+  const dark = onDarkDevice.system
+  assert.notEqual(light, dark, 'the two device answers should differ to begin with')
+
+  const step = (run, theme) => run.steps.find(entry => entry.theme === theme)
+
+  // Forced dark on a light device, and forced light on a dark device.
+  assert.equal(step(onLightDevice, 'dark').ground, dark, JSON.stringify(onLightDevice))
+  assert.equal(step(onDarkDevice, 'light').ground, light, JSON.stringify(onDarkDevice))
+
+  // ... and each device still gets its own answer back on System.
+  assert.equal(step(onLightDevice, 'system').ground, light)
+  assert.equal(step(onDarkDevice, 'system').ground, dark)
+
+  // Native controls follow the app, not the device it disagrees with.
+  assert.equal(step(onLightDevice, 'dark').scheme, 'dark')
+  assert.equal(step(onDarkDevice, 'light').scheme, 'light')
+  assert.equal(step(onDarkDevice, 'system').scheme, 'light dark')
+})
+
 test('the primary navigation turns into a side rail on a desktop and stays a bar on a phone', async () => {
   const phone = await runBrowserScenario({
     viewport: { width: 390, height: 640 },

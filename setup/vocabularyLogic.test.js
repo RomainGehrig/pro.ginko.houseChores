@@ -22,11 +22,11 @@ const TASKS = [
   { _id: 't4', categoryId: null, locationIds: null }
 ]
 
-test('the vocabulary is three tabs, and the one showing is pressed', () => {
-  assert.deepEqual(SETUP_TABS.map(tab => tab.key), ['categories', 'locations', 'ai'])
-  assert.deepEqual(SETUP_TABS.map(tab => tab.label), ['Categories', 'Locations', 'AI'])
+test('Setup is four tabs, and the one showing is pressed', () => {
+  assert.deepEqual(SETUP_TABS.map(tab => tab.key), ['categories', 'locations', 'ai', 'theme'])
+  assert.deepEqual(SETUP_TABS.map(tab => tab.label), ['Categories', 'Locations', 'AI', 'Theme'])
   assert.deepEqual(setupTabs('locations').map(tab => [tab.label, tab.active]), [
-    ['Categories', false], ['Locations', true], ['AI', false]
+    ['Categories', false], ['Locations', true], ['AI', false], ['Theme', false]
   ])
 })
 

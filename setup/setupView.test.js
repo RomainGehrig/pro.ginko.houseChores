@@ -5,6 +5,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   aiPaneHtml,
+  themePaneHtml,
   archiveTermWithUndo,
   mutationFeedback,
   setupTabsHtml,
@@ -26,6 +27,7 @@ test('the tabs press the one showing and name the pane they open', () => {
   const markup = setupTabsHtml('ai')
   assert.match(markup, /data-setup-tab="categories"[^>]*aria-pressed="false"[^>]*>Categories</)
   assert.match(markup, /data-setup-tab="ai"[^>]*aria-pressed="true"[^>]*>AI</)
+  assert.match(markup, /data-setup-tab="theme"[^>]*aria-pressed="false"[^>]*>Theme</)
 })
 
 test('a term states how many chores carry it, and offers rename and archive', () => {
@@ -167,4 +169,30 @@ test('the switch states its own position and exactly what suggestions do', () =>
   const on = aiPaneHtml(true)
   assert.match(on, /aria-checked="true"/)
   assert.match(on, />On</)
+})
+
+
+test('the theme pane offers the three choices and presses the one in force', () => {
+  const markup = themePaneHtml('dark')
+  assert.match(markup, /<h2 id="themeHeading"[^>]*>Theme<\/h2>/)
+  assert.match(markup, /data-theme-choice="system"[^>]*aria-pressed="false"[^>]*>System</)
+  assert.match(markup, /data-theme-choice="light"[^>]*aria-pressed="false"[^>]*>Light</)
+  assert.match(markup, /data-theme-choice="dark"[^>]*aria-pressed="true"[^>]*>Dark</)
+  assert.match(markup, /role="group"[^>]*aria-label="Theme"/)
+})
+
+test('the theme pane states what the chosen setting does, and nothing about taste', () => {
+  assert.match(themePaneHtml('system'), /Follows your device, and changes when it does\./)
+  assert.match(themePaneHtml('light'), /Stays light, whatever your device is set to\./)
+  assert.match(themePaneHtml('dark'), /Stays dark, whatever your device is set to\./)
+
+  for (const theme of ['system', 'light', 'dark']) {
+    assert.doesNotMatch(themePaneHtml(theme), /better|best|recommend|nicer|prefer|easier on/i)
+  }
+})
+
+test('a theme the app does not know falls back to System rather than pressing nothing', () => {
+  const markup = themePaneHtml('sepia')
+  assert.match(markup, /data-theme-choice="system"[^>]*aria-pressed="true"/)
+  assert.equal((markup.match(/aria-pressed="true"/g) || []).length, 1)
 })

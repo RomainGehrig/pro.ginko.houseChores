@@ -3,7 +3,7 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { SETTINGS_ID, aiSuggestionsEnabled, readSettings, writeSettings } from './settingsData.js'
+import { SETTINGS_ID, aiSuggestionsEnabled, readSettings, storedTheme, writeSettings } from './settingsData.js'
 
 function withFreezr (stub, run) {
   const original = globalThis.freezr
@@ -41,4 +41,12 @@ test('a write upserts the one record rather than making another', async () => {
   assert.deepEqual(calls, [[
     'settings', { aiSuggestions: true }, { data_object_id: 'app', upsert: true }
   ]])
+})
+
+test('the theme is read from the same record, and anything unrecognised means System', () => {
+  assert.equal(storedTheme({ theme: 'dark' }), 'dark')
+  assert.equal(storedTheme({ theme: 'light' }), 'light')
+  assert.equal(storedTheme({}), 'system', 'never chosen')
+  assert.equal(storedTheme(null), 'system', 'record unreadable')
+  assert.equal(storedTheme({ theme: 'sepia' }), 'system')
 })

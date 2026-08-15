@@ -11,6 +11,11 @@ import { escapeHtml } from './helpers.js'
 import { initSetupView } from './setup/setupView.js'
 import { initSheet } from './sheet.js'
 import { initUndoToast } from './undoToast.js'
+import { applyTheme, readCachedTheme } from './theme.js'
+
+// Before anything renders: the record that really holds the choice arrives over
+// the network, and a first paint in the wrong colour is worse than a stale one.
+applyTheme(readCachedTheme())
 
 async function openInitialView () {
   try {

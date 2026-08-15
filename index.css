@@ -146,6 +146,38 @@
   }
 }
 
+/* The same palette, chosen rather than inherited. Plain CSS cannot share one
+   rule between a media query and an attribute, so it is written twice;
+   palette.test.js fails if the two copies ever drift apart. */
+:root[data-theme="dark"] {
+  --ground: #1A1815;
+  --plate: #2E2B25;
+  --sunk: #241F1C;
+  --ink: #F9F4ED;
+  --graphite: #A19786;
+  --rule: #474238;
+  --enamel: #F6A06B;
+  --on-enamel: #402310;
+  --stamp: #FFC6A5;
+
+  --sage: #AEBF92;
+  --on-sage: #272E1B;
+  --sage-soft: #3D472B;
+  --sage-ink: #CCDBB2;
+  --on-sage-soft: #E1EECC;
+
+  --ripe-cold: #4A5836;
+  --ripe-warm: #C97A3E;
+  --ripe-ink: #F9F4ED;
+
+  --scrim: color-mix(in srgb, #0D0C0B 62%, transparent);
+}
+
+/* An override also pins the colour scheme, so native controls, form widgets
+   and scrollbars follow the app rather than the device it disagrees with. */
+:root[data-theme="light"] { color-scheme: light; }
+:root[data-theme="dark"] { color-scheme: dark; }
+
 *,
 *::before,
 *::after {
@@ -684,6 +716,21 @@ label:has(input[type="radio"]) {
   margin: 0;
 }
 
+.theme-card {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s3);
+}
+
+.theme-choices {
+  align-self: flex-start;
+}
+
+.theme-note {
+  font-size: var(--t-note);
+  margin: 0;
+}
+
 .term-list {
   display: flex;
   flex-direction: column;
@@ -843,7 +890,8 @@ label:has(input[type="radio"]) {
 @media (max-width: 899px) {
   .setup[data-tab="categories"] .setup-pane:not(.is-categories),
   .setup[data-tab="locations"] .setup-pane:not(.is-locations),
-  .setup[data-tab="ai"] .setup-pane:not(.is-ai) {
+  .setup[data-tab="ai"] .setup-pane:not(.is-ai),
+  .setup[data-tab="theme"] .setup-pane:not(.is-theme) {
     display: none;
   }
 
@@ -867,7 +915,8 @@ label:has(input[type="radio"]) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .setup-pane.is-ai {
+  .setup-pane.is-ai,
+  .setup-pane.is-theme {
     grid-column: 1 / -1;
   }
 }
