@@ -1005,50 +1005,48 @@ label:has(input[type="radio"]) {
 }
 
 .ledger-group + .ledger-group {
-  margin-top: var(--s5);
+  margin-top: var(--s4);
 }
 
+/* A band header names the band and counts it. Nothing more: the rule this
+   once drew implied a section boundary the bands do not have. */
 .ledger-eyebrow {
-  align-items: center;
+  align-items: baseline;
   color: var(--graphite);
   display: flex;
   gap: var(--s2);
-  justify-content: space-between;
   margin: 0 0 var(--s1);
-}
-
-.ledger-eyebrow::after {
-  background: var(--rule);
-  content: "";
-  flex: 1;
-  height: 1px;
-  order: 1;
-}
-
-.ledger-eyebrow > span:first-child {
-  order: 0;
+  padding: 0 14px var(--s1);
 }
 
 .ledger-count {
   color: var(--graphite);
   font-size: var(--t-fig);
-  order: 2;
 }
 
 .ledger {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
   list-style: none;
   margin: 0;
   padding: 0;
 }
 
+/* Closed, a row is only its contents; the border is there but transparent so
+   that opening one draws an edge without moving the rows below it. */
 .ledger-row.task-card {
   background: transparent;
-  border: 0;
-  border-top: 1px solid var(--rule);
-  border-radius: 0;
+  border: 1px solid transparent;
+  border-radius: 24px;
   box-shadow: none;
-  min-height: 56px;
-  padding: var(--s2) 0;
+  padding: 11px 14px;
+}
+
+.ledger-row.task-card[data-open="true"] {
+  background: var(--ground);
+  border-color: color-mix(in srgb, var(--ink) 14%, transparent);
+  padding: 16px;
 }
 
 .ledger-row-summary {
@@ -1060,8 +1058,8 @@ label:has(input[type="radio"]) {
   display: grid;
   font: inherit;
   gap: 0 var(--s2);
-  grid-template-columns: 62px minmax(0, 1fr) auto auto auto;
-  min-height: 56px;
+  grid-template-columns: 62px minmax(0, 1fr) auto auto auto auto;
+  min-height: 44px;
   padding: 0;
   text-align: left;
   width: 100%;
@@ -1157,13 +1155,13 @@ label:has(input[type="radio"]) {
   justify-content: flex-end;
 }
 
+/* The plate the open row draws is already the boundary; a divider on top of it
+   would be a second line saying the same thing. */
 .ledger-row-editor {
-  border-top: 1px solid var(--rule);
   display: flex;
   flex-direction: column;
   gap: var(--s4);
   margin-top: var(--s3);
-  padding-top: var(--s3);
 }
 
 .done-btn {

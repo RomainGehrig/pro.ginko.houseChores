@@ -1177,44 +1177,60 @@ test('dark organic tokens apply at a 390px phone viewport', async () => {
   })
 })
 
-test('active chores render as ruled ledger rows instead of bordered cards', async () => {
+const LEDGER_ROW_BODY = open =>
+  '<li class="task-card ledger-row"' + (open ? ' data-open="true"' : '') + '>' +
+    '<button class="ledger-row-summary">' +
+      '<span class="row-band" aria-hidden="true">Ready</span>' +
+      '<span class="row-main"><span class="row-name">Laundry</span>' +
+      '<span class="row-note">last done <span class="fig">21d</span> ago</span></span>' +
+      '<span class="row-tag tag tag-sage">Kitchen</span>' +
+      '<span class="row-est fig">45 min</span>' +
+      '<span class="ripe" id="ripe' + (open ? 'Open' : '') + '"><span class="ripe-fill" style="width: 50%; ' +
+        'background: color-mix(in srgb, var(--enamel) 100%, var(--sage));"></span>' +
+        '<span class="ripe-due" id="ripeDue' + (open ? 'Open' : '') + '"></span></span>' +
+    '</button>' +
+  '</li>'
+
+test('active chores render as rounded cards that take an edge and a fill when opened', async () => {
   const result = await runBrowserScenario({
     viewport: { width: 390, height: 640 },
     mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
     body: '<main id="app"><section class="ledger-group is-near">' +
-      '<h3 class="ledger-eyebrow stamp"><span>Ready</span><span class="ledger-count fig">1</span></h3>' +
-      '<ul class="ledger"><li class="task-card ledger-row"><button class="ledger-row-summary">' +
-        '<span class="row-band" aria-hidden="true">Ready</span>' +
-        '<span class="row-main"><span class="row-name">Laundry</span>' +
-        '<span class="row-note">last done <span class="fig">21d</span> ago</span></span>' +
-        '<span class="row-est fig">45 min</span>' +
-        '<span class="ripe" id="ripe"><span class="ripe-fill" style="width: 50%; ' +
-          'background: color-mix(in srgb, var(--enamel) 100%, var(--sage));"></span>' +
-          '<span class="ripe-due" id="ripeDue"></span></span>' +
-      '</button></li></ul>' +
+      '<h3 class="ledger-eyebrow stamp"><span>Ready</span><span class="ledger-count fig">2</span></h3>' +
+      '<ul class="ledger">' + LEDGER_ROW_BODY(false) + LEDGER_ROW_BODY(true) + '</ul>' +
       '</section></main>',
     script: `
       const ledger = document.querySelector('.ledger')
-      const row = document.querySelector('.ledger-row')
+      const [row, openRow] = document.querySelectorAll('.ledger-row')
       const summary = document.querySelector('.ledger-row-summary')
-      const stamp = document.querySelector('.row-band')
+      const eyebrow = document.querySelector('.ledger-eyebrow')
+      const label = eyebrow.querySelector('span')
+      const count = document.querySelector('.ledger-count')
       const ripe = document.getElementById('ripe')
       const ripeDue = document.getElementById('ripeDue')
       const ledgerStyle = getComputedStyle(ledger)
       const rowStyle = getComputedStyle(row)
-      const summaryStyle = getComputedStyle(summary)
+      const openStyle = getComputedStyle(openRow)
       const result = {
         ledgerListStyle: ledgerStyle.listStyleType,
         ledgerPaddingLeft: ledgerStyle.paddingLeft,
+        ledgerGap: ledgerStyle.rowGap,
         rowHeight: row.getBoundingClientRect().height,
-        rowBorderTop: rowStyle.borderTopWidth,
-        rowBorderLeft: rowStyle.borderLeftWidth,
-        rowBorderRight: rowStyle.borderRightWidth,
-        rowBorderBottom: rowStyle.borderBottomWidth,
         rowRadius: rowStyle.borderRadius,
-        summaryDisplay: summaryStyle.display,
-        summaryColumns: summaryStyle.gridTemplateColumns,
-        stampColor: getComputedStyle(stamp).color,
+        rowPadding: rowStyle.padding,
+        rowBackground: rowStyle.backgroundColor,
+        rowBorderWidth: rowStyle.borderTopWidth,
+        rowBorderColor: rowStyle.borderTopColor,
+        openBackground: openStyle.backgroundColor,
+        openBorderWidth: openStyle.borderTopWidth,
+        openBorderColor: openStyle.borderTopColor,
+        openPadding: openStyle.padding,
+        widthHeldOnOpen: row.getBoundingClientRect().width === openRow.getBoundingClientRect().width,
+        eyebrowAfter: getComputedStyle(eyebrow, '::after').content,
+        countGap: Math.round(count.getBoundingClientRect().left - label.getBoundingClientRect().right),
+        summaryDisplay: getComputedStyle(summary).display,
+        summaryColumns: getComputedStyle(summary).gridTemplateColumns,
+        stampColor: getComputedStyle(document.querySelector('.row-band')).color,
         ripeWidth: ripe.getBoundingClientRect().width,
         ripeFillWidth: document.querySelector('.ripe-fill').getBoundingClientRect().width,
         ripeDueLeft: ripeDue.getBoundingClientRect().left - ripe.getBoundingClientRect().left
@@ -1224,12 +1240,27 @@ test('active chores render as ruled ledger rows instead of bordered cards', asyn
 
   assert.equal(result.ledgerListStyle, 'none')
   assert.equal(result.ledgerPaddingLeft, '0px')
-  assert.ok(result.rowHeight >= 56, JSON.stringify(result))
-  assert.equal(result.rowBorderTop, '1px')
-  assert.equal(result.rowBorderLeft, '0px')
-  assert.equal(result.rowBorderRight, '0px')
-  assert.equal(result.rowBorderBottom, '0px')
-  assert.equal(result.rowRadius, '0px')
+  assert.equal(result.ledgerGap, '4px', 'rows sit 4px apart, not on a shared rule')
+  assert.ok(result.rowHeight >= 44, JSON.stringify(result))
+
+  assert.equal(result.rowRadius, '24px')
+  assert.equal(result.rowPadding, '11px 14px')
+  assert.equal(result.rowBackground, 'rgba(0, 0, 0, 0)', 'a closed row is not a plate')
+  assert.equal(result.rowBorderWidth, '1px')
+  assert.equal(result.rowBorderColor, 'rgba(0, 0, 0, 0)',
+    'the closed edge is transparent, so opening cannot nudge the list')
+
+  assert.equal(result.openBackground, 'rgb(245, 234, 216)')
+  assert.equal(result.openBorderWidth, '1px')
+  // The doc's rgba(32,30,29,.14), written as a mix of the ink token so the
+  // dark palette gets a light edge rather than an invisible one.
+  assert.equal(result.openBorderColor, 'color(srgb 0.12549 0.117647 0.113725 / 0.14)')
+  assert.equal(result.openPadding, '16px')
+  assert.equal(result.widthHeldOnOpen, true)
+
+  assert.equal(result.eyebrowAfter, 'none', 'the group header is a label and a count, not a rule')
+  assert.equal(result.countGap, 8, 'the count sits beside its label, not pushed to the far edge')
+
   assert.equal(result.summaryDisplay, 'grid')
   assert.match(result.summaryColumns, /^62px /)
   assert.equal(result.stampColor, 'rgb(140, 73, 26)', 'a near band is stamped in the accent')
