@@ -653,6 +653,19 @@ test('bottom navigation focus stays visible against its primary surface', async 
   assert.equal(result.outlineColor, 'rgb(198, 113, 57)')
 })
 
+// The five destinations the app actually ships, wordmark included: the same
+// markup takes both shapes, so both are measured against the same DOM.
+const PRIMARY_NAV_BODY =
+  '<main id="app"><section id="content">Chores</section></main>' +
+  '<nav class="bottom-nav" aria-label="Primary">' +
+    '<p class="nav-wordmark display">Chore Planner</p>' +
+    '<a data-route="today" href="#/today">TODAY</a>' +
+    '<a data-route="inbox" href="#/inbox">INBOX <span class="nav-count fig">12</span></a>' +
+    '<a data-route="chores" href="#/chores">CHORES</a>' +
+    '<a data-route="log" href="#/log" aria-current="page">LOG</a>' +
+    '<a data-route="setup" href="#/setup">SETUP</a>' +
+  '</nav>'
+
 test('bottom primary navigation has phone-sized targets, fixed safe-area placement, and no horizontal overflow', async () => {
   const result = await runBrowserScenario({
     viewport: { width: 390, height: 640 },
@@ -660,13 +673,7 @@ test('bottom primary navigation has phone-sized targets, fixed safe-area placeme
       { name: 'prefers-color-scheme', value: 'light' },
       { name: 'prefers-reduced-motion', value: 'reduce' }
     ],
-    body: '<main id="app"><section id="content">Chores</section></main>' +
-      '<nav class="bottom-nav" aria-label="Primary">' +
-        '<a data-route="today" href="#/today">TODAY</a>' +
-        '<a data-route="inbox" href="#/inbox">INBOX</a>' +
-        '<a data-route="chores" href="#/chores">CHORES</a>' +
-        '<a data-route="log" href="#/log">LOG</a>' +
-      '</nav>',
+    body: PRIMARY_NAV_BODY,
     script: `
       const nav = document.querySelector('.bottom-nav')
       const links = [...nav.querySelectorAll('a')]
@@ -688,6 +695,67 @@ test('bottom primary navigation has phone-sized targets, fixed safe-area placeme
   assert.ok(result.scrollWidth <= result.viewportWidth, JSON.stringify(result))
   assert.ok(Number.parseFloat(result.contentBottomPadding) >= 45, JSON.stringify(result))
   assert.ok(Number.parseFloat(result.transitionDuration) <= 0.001, JSON.stringify(result))
+})
+
+test('the primary navigation turns into a side rail on a desktop and stays a bar on a phone', async () => {
+  const phone = await runBrowserScenario({
+    viewport: { width: 390, height: 640 },
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
+    body: PRIMARY_NAV_BODY,
+    script: `
+      const nav = document.querySelector('.bottom-nav')
+      const links = [...nav.querySelectorAll('a')]
+      const result = {
+        wordmark: getComputedStyle(document.querySelector('.nav-wordmark')).display,
+        tops: links.map(link => Math.round(link.getBoundingClientRect().top)),
+        widths: links.map(link => Math.round(link.getBoundingClientRect().width)),
+        clipped: links.some(link => link.scrollWidth > Math.ceil(link.clientWidth) + 1),
+        scrollWidth: document.documentElement.scrollWidth,
+        viewportWidth: window.innerWidth
+      }
+    `
+  })
+
+  assert.equal(phone.wordmark, 'none', JSON.stringify(phone))
+  assert.equal(new Set(phone.tops).size, 1, JSON.stringify(phone))
+  assert.equal(phone.clipped, false, JSON.stringify(phone))
+  assert.ok(phone.scrollWidth <= phone.viewportWidth, JSON.stringify(phone))
+
+  const desktop = await runBrowserScenario({
+    viewport: { width: 1280, height: 800 },
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
+    body: PRIMARY_NAV_BODY,
+    script: `
+      const nav = document.querySelector('.bottom-nav')
+      const box = nav.getBoundingClientRect()
+      const links = [...nav.querySelectorAll('a')]
+      const app = document.getElementById('app')
+      const result = {
+        wordmark: getComputedStyle(document.querySelector('.nav-wordmark')).display,
+        navWidth: Math.round(box.width),
+        navTop: Math.round(box.top),
+        navHeight: Math.round(box.height),
+        viewportHeight: window.innerHeight,
+        lefts: links.map(link => Math.round(link.getBoundingClientRect().left)),
+        tops: links.map(link => Math.round(link.getBoundingClientRect().top)),
+        appPaddingLeft: getComputedStyle(app).paddingLeft,
+        currentBackground: getComputedStyle(links[3]).backgroundColor,
+        restingBackground: getComputedStyle(links[0]).backgroundColor,
+        scrollWidth: document.documentElement.scrollWidth,
+        viewportWidth: window.innerWidth
+      }
+    `
+  })
+
+  assert.equal(desktop.wordmark, 'block', JSON.stringify(desktop))
+  assert.equal(desktop.navWidth, 188, JSON.stringify(desktop))
+  assert.equal(desktop.navTop, 0, JSON.stringify(desktop))
+  assert.equal(desktop.navHeight, desktop.viewportHeight, JSON.stringify(desktop))
+  assert.equal(new Set(desktop.lefts).size, 1, JSON.stringify(desktop))
+  assert.equal(new Set(desktop.tops).size, desktop.tops.length, JSON.stringify(desktop))
+  assert.ok(Number.parseFloat(desktop.appPaddingLeft) >= 188, JSON.stringify(desktop))
+  assert.notEqual(desktop.currentBackground, desktop.restingBackground, JSON.stringify(desktop))
+  assert.ok(desktop.scrollWidth <= desktop.viewportWidth, JSON.stringify(desktop))
 })
 
 test('contextual work navigation stays in flow with usable targets at phone and desktop widths', async () => {
