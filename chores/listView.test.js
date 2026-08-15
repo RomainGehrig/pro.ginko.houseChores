@@ -96,6 +96,13 @@ test('a row wears its category, and the flag carries the reason when there is no
   assert.match(archived, /<span class="row-cat tag tag-sage">Cleaning<\/span>/,
     'an archived category still names the chore it holds')
   assert.match(archived, /<span class="row-flag">Archived<\/span>/)
+
+  // A category is a name the user typed, and this database holds one carrying
+  // a script probe. It reaches the row as text or not at all.
+  const hostile = ledgerRowHtml(chore(),
+    { categories: [{ _id: 'cat-1', name: 'QA <svg onload="boom()">' }] }, TODAY, {})
+  assert.match(hostile, /QA &lt;svg onload=&quot;boom\(\)&quot;&gt;/)
+  assert.doesNotMatch(hostile, /<svg/)
 })
 
 test('the band stamp repeats the group for the eye, not for the screen reader', () => {

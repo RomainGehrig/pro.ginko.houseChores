@@ -1320,12 +1320,12 @@ label:has(input[type="radio"]) {
   color: var(--graphite);
 }
 
+/* The "Schedule" label already opens this block; the rule under it was a
+   second boundary saying the same thing, and the doc draws neither. */
 .schedule-editor {
-  border-top: 1px solid var(--rule);
   display: grid;
   gap: 10px;
   margin-top: 8px;
-  padding-top: 10px;
 }
 
 .schedule-editor [hidden] {
