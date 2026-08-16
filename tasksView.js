@@ -23,11 +23,12 @@ import {
   ledgerCategoryPillsHtml,
   ledgerGroupsHtml,
   ledgerViewsHtml,
-  rowSummaryHtml,
   unscheduledListHtml
 } from './chores/listView.js'
 import { categoryPillsHtml, locationPillsHtml, referenceStateSuffix } from './chores/fieldPills.js'
+import { editModalHtml, readEditModal } from './chores/editModal.js'
 import { doneLabel, unscheduledTasks } from './chores/ledgerLogic.js'
+import { closeSheetWith, openSheet, sheetBody } from './sheet.js'
 import { optimisticArchive, pendingUndo } from './undoToast.js'
 import { runArchiveAction } from './archiveView.js'
 
@@ -47,8 +48,7 @@ const ledger = {
   categoryId: '',
   openTaskId: null,
   confirmDoneId: null,
-  confirmDeleteId: null,
-  rowError: ''
+  confirmDeleteId: null
 }
 
 export function overlayPendingTaskArchives (tasks, pendingArchives) {
@@ -70,11 +70,13 @@ export async function initTasksView() {
   document.getElementById('proposedCards').addEventListener('input', handleProposedScheduleChange)
 
   for (const id of ['activeCards', 'unscheduledCards']) {
-    const pane = document.getElementById(id)
-    pane.addEventListener('click', handleLedgerClick)
-    pane.addEventListener('change', handleLedgerChange)
-    pane.addEventListener('input', handleLedgerChange)
+    document.getElementById(id).addEventListener('click', handleLedgerClick)
   }
+  // The editor lives in the shared sheet rather than in either pane, so its
+  // controls are reached from the document and filtered to the sheet's body.
+  document.addEventListener('click', handleEditorClick)
+  document.addEventListener('change', handleEditorChange)
+  document.addEventListener('input', handleEditorChange)
   document.getElementById('archivedCards').addEventListener('click', handleArchivedClick)
   document.getElementById('choresViews').addEventListener('click', handleLedgerViewClick)
   document.getElementById('choreCategoryFilter').addEventListener('click', handleLedgerCategoryClick)
@@ -99,7 +101,7 @@ export function setSuggestionsEnabled (enabled) {
 export function selectLedgerView (routeName) {
   const next = routeName === 'archive' ? 'archive' : 'active'
   if (ledger.view === next) return
-  Object.assign(ledger, { view: next, openTaskId: null, confirmDoneId: null, confirmDeleteId: null, rowError: '' })
+  Object.assign(ledger, { view: next, openTaskId: null, confirmDoneId: null, confirmDeleteId: null })
   if (typeof document !== 'undefined') renderLedger()
 }
 
@@ -121,19 +123,16 @@ function renderTasksAfterReferencePublication () {
   restoreTaskEditorDrafts(drafts)
 }
 
+// Only the Inbox cards are repainted underneath a half-finished edit. A chore's
+// editor lives in the sheet, which no repaint of the ledger touches, so its
+// draft survives a rename without having to be carried across.
 function captureTaskEditorDrafts () {
   const drafts = new Map()
-  const containers = [
-    { id: 'proposedCards', accepts: () => true },
-    { id: 'activeCards', accepts: card => Boolean(card.querySelector('.ledger-row-editor')) },
-    { id: 'unscheduledCards', accepts: card => Boolean(card.querySelector('.ledger-row-editor')) }
-  ]
 
-  for (const { id, accepts } of containers) {
+  for (const id of ['proposedCards']) {
     const container = document.getElementById(id)
     if (!container) continue
     for (const card of container.querySelectorAll('.task-card')) {
-      if (!accepts(card)) continue
       const controls = [...card.querySelectorAll('input[name], select[name], textarea[name]')]
       drafts.set(id + ':' + card.dataset.id, {
         controls: controls.map(control => ({
@@ -461,7 +460,6 @@ function ledgerState (snapshot) {
     openTaskId: ledger.openTaskId,
     confirmDoneId: ledger.confirmDoneId,
     confirmDeleteId: ledger.confirmDeleteId,
-    rowError: ledger.rowError,
     filter: { query: ledger.query, category: ledgerFilterCategoryName(snapshot) }
   }
 }
@@ -665,8 +663,7 @@ function handleLedgerViewClick (evt) {
     view: tab.dataset.ledgerView,
     openTaskId: null,
     confirmDoneId: null,
-    confirmDeleteId: null,
-    rowError: ''
+    confirmDeleteId: null
   })
   renderLedger()
 }
@@ -709,140 +706,113 @@ function handleEstimateClick (evt, card) {
   return false
 }
 
-async function markLedgerRowDone (card, task) {
-  if (ledger.confirmDoneId !== task._id) {
-    ledger.confirmDoneId = task._id
-    renderLedger()
-    return
-  }
-  ledger.confirmDoneId = null
+async function markChoreRecentlyDone (task) {
   const now = Date.now()
   const fields = taskUpdateForOutcome(task, 'completed', {
     completedAt: now,
     completionDate: localDateFromDate(new Date(now))
   })
-  setTaskCardBusy(card, true)
   try {
     await updateTask(task._id, fields)
-    ledger.openTaskId = null
     await refreshTasksView()
   } catch {
     showChoresFailure("Couldn't record that. The chore is unchanged.")
-  } finally {
-    if (card.isConnected) setTaskCardBusy(card, false)
   }
 }
 
-// Nothing here has a Save: every control writes through as it is touched, and
-// the row repaints only its own facts so the editor under your finger stays put.
-async function saveLedgerRow (card) {
-  const task = tasksCache.find(item => item._id === card.dataset.id)
-  if (!task) return
-  const errorElement = card.querySelector('.task-card-error')
-  const snapshot = categoryLocationStore.getSnapshot()
-  const scheduleResult = readScheduleEditor(card)
-  if (!scheduleResult.ok) {
-    ledger.rowError = scheduleResult.message
-    if (errorElement) errorElement.textContent = ledger.rowError
-    return
-  }
-  ledger.rowError = ''
-  if (errorElement) errorElement.textContent = ''
-
-  const requestedCategoryId = card.querySelector('.f-category')?.value || null
-  const requestedLocationIds = [...card.querySelectorAll('.f-location:checked')].map(input => input.value)
-  const fields = {
-    ...buildTaskReferenceFields(task, requestedCategoryId, requestedLocationIds, snapshot),
-    ...buildActiveTaskScheduleFields(task, scheduleResult),
-    estimatedDuration: Number(card.querySelector('.est-input')?.value) || null
-  }
-
-  try {
-    await updateTask(task._id, fields)
-    const updated = { ...task, ...fields }
-    tasksCache = tasksCache.map(item => item._id === task._id ? updated : item)
-    const summary = card.querySelector('.ledger-row-summary')
-    if (summary) {
-      summary.innerHTML = rowSummaryHtml(updated, snapshot, localDateFromDate(new Date()), {
-        band: card.dataset.band === '' ? null : card.dataset.band,
-        tag: card.dataset.tag || undefined
-      })
-    }
-  } catch {
-    ledger.rowError = "Couldn't save that. The chore is unchanged."
-    if (errorElement) errorElement.textContent = ledger.rowError
-  }
-}
-
-const savingRows = new Map()
-
-function queueLedgerSave (card, delay = 0) {
-  const id = card.dataset.id
-  clearTimeout(savingRows.get(id))
-  savingRows.set(id, setTimeout(() => {
-    savingRows.delete(id)
-    saveLedgerRow(card)
-  }, delay))
-}
-
-async function handleLedgerClick (evt) {
-  const card = evt.target.closest('.ledger-row')
-  if (!card || card.dataset.saving === 'true') return
-  const id = card.dataset.id
-
-  if (evt.target.closest('.ledger-row-summary')) {
-    Object.assign(ledger, {
-      openTaskId: ledger.openTaskId === id ? null : id,
-      confirmDoneId: null,
-      rowError: ''
-    })
-    renderLedger()
-    return
-  }
-
+// The editor is a dialogue of its own, so an edit can be abandoned without
+// having already been written. Only Save writes, and it writes everything at
+// once — including the name, which the row itself never let you touch.
+async function openChoreEditor (id) {
   const task = tasksCache.find(item => item._id === id)
   if (!task) return
+  const snapshot = categoryLocationStore.getSnapshot()
+  ledger.openTaskId = id
+  ledger.confirmDoneId = null
 
-  if (evt.target.closest('.done-btn')) return markLedgerRowDone(card, task)
+  const choice = await openSheet({
+    title: 'Edit chore',
+    bodyHtml: editModalHtml(task, snapshot),
+    actions: [
+      { label: 'Cancel', value: null, className: 'btn btn-ghost' },
+      { label: 'Save', value: 'save', className: 'btn btn-primary' }
+    ]
+  })
 
-  if (ledger.confirmDoneId) {
-    ledger.confirmDoneId = null
-    const doneButton = card.querySelector('.done-btn')
-    if (doneButton) {
-      doneButton.setAttribute('aria-pressed', 'false')
-      doneButton.textContent = doneLabel(false)
-    }
-  }
-
-  if (evt.target.closest('.archive-btn')) {
-    archiveTaskOptimistically(task, {
+  ledger.openTaskId = null
+  const body = sheetBody()
+  if (choice === 'done') return markChoreRecentlyDone(task)
+  if (choice === 'archive') {
+    return archiveTaskOptimistically(task, {
       replace: replacement => {
         tasksCache = tasksCache.map(item => item._id === id ? replacement : item)
       },
-      clearEditing: () => {
-        if (ledger.openTaskId === id) {
-          ledger.openTaskId = null
-          ledger.rowError = ''
-        }
-      },
+      clearEditing: () => {},
       render: renderTasks,
       showFailure: showChoresFailure,
       pending: pendingTaskArchives
     })
-    return
+  }
+  if (choice !== 'save' || !body) return
+
+  const edit = readEditModal(body, task.name)
+  // The pills can only write a schedule that reads back, so this is the
+  // unreachable case rather than the everyday one. It says so and changes
+  // nothing, instead of writing half a chore.
+  if (!edit.ok) return showChoresFailure(edit.message)
+
+  const fields = {
+    ...buildTaskReferenceFields(task, edit.categoryId, edit.locationIds, snapshot),
+    ...buildActiveTaskScheduleFields(task, edit.schedule),
+    name: edit.name,
+    estimatedDuration: edit.estimatedDuration
   }
 
-  if (handleScheduleChoiceClick(evt)) return queueLedgerSave(card)
-  if (handleEstimateClick(evt, card)) return queueLedgerSave(card)
-  if (evt.target.closest('[data-field="category"]')) {
-    handleInboxPillClick(evt)
-    return queueLedgerSave(card)
+  try {
+    await updateTask(task._id, fields)
+    tasksCache = tasksCache.map(item =>
+      item._id === task._id ? { ...item, ...fields } : item)
+    renderLedger()
+  } catch {
+    showChoresFailure("Couldn't save that. The chore is unchanged.")
   }
 }
 
-function handleLedgerChange (evt) {
-  const card = evt.target.closest('.ledger-row')
+// The chore actions live inside the editor, so they close it: pressing them is
+// leaving the edit, not part of it. Each resolves the sheet with its own value.
+function handleEditorClick (evt) {
+  const body = sheetBody()
+  if (!body?.contains(evt.target)) return
+  const card = body.querySelector('.edit-modal')
   if (!card) return
+
+  const done = evt.target.closest('.done-btn')
+  if (done) {
+    // Marking a chore done is awkward to take back, so it asks a second time
+    // in its own label rather than in a dialogue on top of a dialogue.
+    if (done.getAttribute('aria-pressed') !== 'true') {
+      done.setAttribute('aria-pressed', 'true')
+      done.textContent = doneLabel(true)
+      return
+    }
+    return closeSheetWith('done')
+  }
+  if (evt.target.closest('.archive-btn')) return closeSheetWith('archive')
+
+  const done2 = body.querySelector('.done-btn')
+  if (done2?.getAttribute('aria-pressed') === 'true') {
+    done2.setAttribute('aria-pressed', 'false')
+    done2.textContent = doneLabel(false)
+  }
+
+  if (handleScheduleChoiceClick(evt)) return
+  handleEstimateClick(evt, card)
+  if (evt.target.closest('[data-field="category"]')) handleInboxPillClick(evt)
+}
+
+function handleEditorChange (evt) {
+  const body = sheetBody()
+  if (!body?.contains(evt.target)) return
   const editor = evt.target.closest('.schedule-editor')
   if (editor) {
     syncScheduleEditor(editor, {
@@ -850,12 +820,17 @@ function handleLedgerChange (evt) {
     })
   }
   if (evt.target.closest('.est-input')) {
-    for (const preset of card.querySelectorAll('[data-estimate]')) {
+    for (const preset of body.querySelectorAll('[data-estimate]')) {
       preset.setAttribute('aria-pressed',
         String(Number(preset.dataset.estimate) === Number(evt.target.value)))
     }
   }
-  queueLedgerSave(card, evt.type === 'input' ? 500 : 0)
+}
+
+function handleLedgerClick (evt) {
+  const card = evt.target.closest('.ledger-row')
+  if (!card || !evt.target.closest('.ledger-row-summary')) return
+  openChoreEditor(card.dataset.id)
 }
 
 async function handleArchivedClick (evt) {

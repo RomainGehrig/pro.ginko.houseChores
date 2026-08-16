@@ -203,7 +203,15 @@
     },
     {
       "path": "chores/listView.js",
-      "Description": "Pure active due-first chore ledger and inline-editor markup renderer."
+      "Description": "Renders the Chores ledger: bands, rows, the unscheduled list and the archive."
+    },
+    {
+      "path": "chores/editModal.js",
+      "Description": "Builds the chore edit modal's body and reads the edited values back."
+    },
+    {
+      "path": "chores/editModal.test.js",
+      "Description": "Tests the chore edit modal's markup and the values it reads back."
     },
     {
       "path": "sessionView.js",

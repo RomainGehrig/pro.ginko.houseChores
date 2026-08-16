@@ -1,10 +1,9 @@
-// ABOUTME: Tests the Chores ledger markup — bands, rows, the inline editor and the archive.
+// ABOUTME: Tests the Chores ledger markup — bands, rows, the unscheduled list and the archive.
 // ABOUTME: Guards the rule that a row states facts and never says how far behind the user is.
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
-  ESTIMATE_PRESETS,
   ledgerCategoryPillsHtml,
   ledgerViewsHtml,
   ripeMeterHtml,
@@ -66,12 +65,13 @@ test('a chore with no cadence shows no meter at all', () => {
   assert.equal(ripeMeterHtml(chore({ lastCompletedDate: null }), TODAY), '')
 })
 
-test('a closed row states the facts and carries no editor', () => {
+test('a row states the facts and carries no editor', () => {
   const markup = ledgerRowHtml(chore(), SNAPSHOT, TODAY, {})
   assert.match(markup, /Mop the hall/)
   assert.match(markup, /last done <span class="fig">7<\/span>d ago/)
+  assert.match(markup, /about every <span class="fig">7<\/span> days/)
+  assert.match(markup, /<span class="fig">15<\/span> Aug/)
   assert.match(markup, /15 min/)
-  assert.match(markup, /aria-expanded="false"/)
   assert.doesNotMatch(markup, /ledger-row-editor/)
   assert.doesNotMatch(markup, /overdue|late|behind/i)
 })
@@ -110,54 +110,16 @@ test('the band stamp repeats the group for the eye, not for the screen reader', 
   assert.match(markup, /<span class="row-band" aria-hidden="true">Ready<\/span>/)
 })
 
-test('an open row carries the whole editor, with no Save to press', () => {
+// The row is a statement of fact and a way in. Editing happens in a dialogue of
+// its own, where an edit can be abandoned without having already been written.
+test('a row opens the editor rather than unfolding into one', () => {
   const markup = ledgerRowHtml(chore(), SNAPSHOT, TODAY, { openTaskId: 'task-1' })
-  assert.match(markup, /aria-expanded="true"/)
-  assert.match(markup, /ledger-row-editor/)
-  assert.match(markup, /class="[^"]*est-input/)
-  assert.match(markup, /data-estimate="30"/)
-  assert.match(markup, /schedule-editor/)
-  assert.match(markup, /data-field="category"/)
-  assert.match(markup, /f-location/)
-  assert.match(markup, /archive-btn/)
-  assert.doesNotMatch(markup, /save-task-edit-btn/)
-})
-
-// The unscheduled list is where a chore goes to be given a day, so the row that
-// opens there must carry the same schedule controls as any other. Leaving them
-// out also refused every other edit in that view, because the row reads its
-// schedule back from the editor before it saves anything.
-test('a row opened from the unscheduled list can still be given a day', () => {
-  const loose = chore({ scheduledDate: null, lastCompletedDate: null })
-  const markup = ledgerRowHtml(loose, SNAPSHOT, TODAY, { openTaskId: 'task-1' },
-    { band: null, tag: 'No day set' })
-  assert.match(markup, /schedule-editor/)
-  assert.match(markup, /data-schedule-field="date"/)
-  assert.match(markup, /Leave it blank and the chore waits in Unscheduled\./)
-})
-
-test('every preset the design offers is on the row', () => {
-  const markup = ledgerRowHtml(chore(), SNAPSHOT, TODAY, { openTaskId: 'task-1' })
-  assert.deepEqual(ESTIMATE_PRESETS, [5, 10, 15, 20, 30, 45, 60])
-  for (const preset of ESTIMATE_PRESETS) {
-    assert.match(markup, new RegExp('data-estimate="' + preset + '"'))
-  }
-  assert.match(markup, /data-estimate="15"[^>]*aria-pressed="true"/)
-})
-
-test('marking a chore done asks a second time in its own label', () => {
-  const closed = ledgerRowHtml(chore(), SNAPSHOT, TODAY, { openTaskId: 'task-1' })
-  assert.match(closed, /class="pill done-btn"[^>]*aria-pressed="false"[^>]*>Recently done</)
-
-  const confirming = ledgerRowHtml(chore(), SNAPSHOT, TODAY,
-    { openTaskId: 'task-1', confirmDoneId: 'task-1' })
-  assert.match(confirming, /aria-pressed="true"[^>]*>Tap again to confirm</)
-})
-
-test('a row shows its own error and nothing else does', () => {
-  const markup = ledgerRowHtml(chore(), SNAPSHOT, TODAY,
-    { openTaskId: 'task-1', rowError: 'Give the cadence a number of at least 1.' })
-  assert.match(markup, /Give the cadence a number of at least 1\./)
+  assert.match(markup, /class="ledger-row-summary"[^>]*aria-haspopup="dialog"/)
+  assert.doesNotMatch(markup, /aria-expanded/)
+  assert.doesNotMatch(markup, /ledger-row-editor/)
+  assert.doesNotMatch(markup, /schedule-editor/)
+  assert.doesNotMatch(markup, /est-input/)
+  assert.doesNotMatch(markup, /f-location/)
 })
 
 test('the groups are labelled, counted, and drop the bands that are empty', () => {

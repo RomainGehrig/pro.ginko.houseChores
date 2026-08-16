@@ -89,6 +89,10 @@ function closeSheet (value = null) {
   return true
 }
 
+// A control inside the body can end the sheet too, not only the action bar —
+// a form may carry actions that are about leaving it rather than completing it.
+export const closeSheetWith = value => closeSheet(value)
+
 function finishForReplacement () {
   if (!resolveOpen) return false
   if (!closing) {

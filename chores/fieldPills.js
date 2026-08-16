@@ -1,7 +1,30 @@
-// ABOUTME: The category and location pill groups shared by the Inbox card and the Chores ledger.
+// ABOUTME: The estimate, category and location field controls shared by the Inbox card and the chore editor.
 // ABOUTME: Pills are what you touch; the hidden field and the checkboxes stay the values the app reads.
 
 import { escapeAttribute, escapeHtml } from '../helpers.js'
+
+export const ESTIMATE_PRESETS = [5, 10, 15, 20, 30, 45, 60]
+
+// A typed number and a row of common ones. Neither is a limit: the presets are
+// the estimates that come up, not the estimates allowed.
+export const estimateStepperHtml = task => {
+  const minutes = Number(task?.estimatedDuration) || ''
+  return '<div class="field-group"><span class="eyebrow eyebrow-quiet">Estimate</span>' +
+    '<div class="estimate-stepper">' +
+      '<button type="button" class="pill-icon est-minus" aria-label="Less time">−</button>' +
+      '<input class="input fig est-input" type="number" name="estimatedDuration" min="1" step="1" ' +
+        'inputmode="numeric" aria-label="Estimate in minutes" value="' +
+        escapeAttribute(minutes) + '">' +
+      '<span class="est-unit muted">min</span>' +
+      '<button type="button" class="pill-icon est-plus" aria-label="More time">+</button>' +
+    '</div>' +
+    '<div class="pill-set" role="group" aria-label="Common estimates">' +
+      ESTIMATE_PRESETS.map(preset =>
+        '<button type="button" class="pill pill-compact" data-estimate="' + preset +
+          '" aria-pressed="' + (minutes === preset ? 'true' : 'false') + '">' +
+          preset + ' min</button>').join('') +
+    '</div></div>'
+}
 
 export function referenceStateSuffix (reference) {
   if (reference.status === 'archived') return ' (Archived)'

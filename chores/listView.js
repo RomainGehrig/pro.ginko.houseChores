@@ -1,22 +1,18 @@
-// ABOUTME: Renders the Chores ledger — bands, rows, the inline editor, the unscheduled list and the archive.
+// ABOUTME: Renders the Chores ledger — bands, rows, the unscheduled list and the archive.
 // ABOUTME: A row states facts only: no overdue figure, no red, nothing counting how far behind you are.
 
-import { buildTaskEditorModel } from '../categoryLocationLogic.js'
 import { escapeAttribute, escapeHtml, formatDuration } from '../helpers.js'
 import { buildChoreNoteHtml } from '../taskPresentationLogic.js'
 import { dueGroup } from '../slip.js'
 import { scheduleSummary, localDateFromDate } from '../scheduleLogic.js'
-import { buildScheduleEditorModel, scheduleEditorHtml } from '../scheduleEditor.js'
-import { categoryPillsHtml, locationPillsHtml, referenceStateSuffix } from './fieldPills.js'
+import { referenceStateSuffix } from './fieldPills.js'
 import {
   bandLabel, bandIsNear, cadenceColor, cadenceProgress, cadenceProgressNote,
   buildLedgerGroups, unscheduledTasks,
-  archivedCountLine, unscheduledCountLine, doneLabel, permanentDeleteLabel, ledgerViews
+  archivedCountLine, unscheduledCountLine, permanentDeleteLabel, ledgerViews
 } from './ledgerLogic.js'
 
 export { referenceStateSuffix }
-
-export const ESTIMATE_PRESETS = [5, 10, 15, 20, 30, 45, 60]
 
 // The meter runs 0–2 cadences, so a chore exactly at its cadence sits at the
 // halfway tick. Past that it keeps filling, and the colour stops moving.
@@ -77,56 +73,8 @@ function categoryTagHtml (task, snapshot) {
     (category ? escapeHtml(String(category.name ?? '')) : '—') + '</span>'
 }
 
-const estimateStepperHtml = task => {
-  const minutes = Number(task?.estimatedDuration) || ''
-  return '<div class="field-group"><span class="eyebrow eyebrow-quiet">Estimate</span>' +
-    '<div class="estimate-stepper">' +
-      '<button type="button" class="pill-icon est-minus" aria-label="Less time">−</button>' +
-      '<input class="input fig est-input" type="number" name="estimatedDuration" min="1" step="1" ' +
-        'inputmode="numeric" aria-label="Estimate in minutes" value="' +
-        escapeAttribute(minutes) + '">' +
-      '<span class="est-unit muted">min</span>' +
-      '<button type="button" class="pill-icon est-plus" aria-label="More time">+</button>' +
-    '</div>' +
-    '<div class="pill-set" role="group" aria-label="Common estimates">' +
-      ESTIMATE_PRESETS.map(preset =>
-        '<button type="button" class="pill pill-compact" data-estimate="' + preset +
-          '" aria-pressed="' + (minutes === preset ? 'true' : 'false') + '">' +
-          preset + ' min</button>').join('') +
-    '</div></div>'
-}
-
-// No Save: every control writes through as it is touched. The only two writes
-// that are awkward to take back — done, and delete — ask a second time in their
-// own label instead.
-function rowEditorHtml (task, snapshot, state) {
-  const model = buildTaskEditorModel(task, snapshot)
-  const selectedLocationIds = new Set(model.locationIds)
-  const confirming = state.confirmDoneId === task._id
-
-  return '<div class="ledger-row-editor">' +
-    '<div class="ledger-row-actions">' +
-      '<button type="button" class="pill done-btn" aria-pressed="' +
-        (confirming ? 'true' : 'false') + '">' + doneLabel(confirming) + '</button>' +
-      '<button type="button" class="btn btn-ghost archive-btn">Archive</button>' +
-    '</div>' +
-    estimateStepperHtml(task) +
-    // Every open row carries the schedule, the unscheduled ones most of all:
-    // that list exists precisely to be given a day from.
-    '<div class="field-group"><span class="eyebrow eyebrow-quiet">Schedule</span>' +
-      scheduleEditorHtml(buildScheduleEditorModel(task)) + '</div>' +
-    '<div class="field-group"><span class="eyebrow eyebrow-quiet">Category</span>' +
-      categoryPillsHtml(model) + '</div>' +
-    '<div class="field-group"><span class="eyebrow eyebrow-quiet">Where</span>' +
-      '<fieldset class="f-locations pill-set"><legend class="visually-hidden">Locations</legend>' +
-      locationPillsHtml(model, selectedLocationIds) + '</fieldset></div>' +
-    '<p class="task-card-error" role="alert">' +
-      escapeHtml(state.openTaskId === task._id ? (state.rowError || '') : '') + '</p>' +
-  '</div>'
-}
-
-// Split out so a write-through edit can repaint one row's facts without
-// rebuilding the editor the user is still touching.
+// Split out so a saved edit can repaint one row's facts without rebuilding the
+// list around it.
 export function rowSummaryHtml (task, snapshot, today, { band, tag } = {}) {
   const stamp = band === null
     ? ''
@@ -146,20 +94,18 @@ export function rowSummaryHtml (task, snapshot, today, { band, tag } = {}) {
     ripeMeterHtml(task, today)
 }
 
+// The row states the chore and opens the editor. It does not become the editor:
+// an edit you can abandon needs somewhere of its own to happen.
 export function ledgerRowHtml (task, snapshot, today, state = {}, placement = {}) {
-  const open = state.openTaskId === task._id
   const band = placement.band
 
   return '<li class="task-card ledger-row" data-id="' + escapeAttribute(task._id) + '"' +
       (band === null ? ' data-band=""' : ' data-band="' +
         escapeAttribute(band || bandLabel(dueGroup(task, today))) + '"') +
-      (placement.tag ? ' data-tag="' + escapeAttribute(placement.tag) + '"' : '') +
-      (open ? ' data-open="true"' : '') + '>' +
-    '<button type="button" class="ledger-row-summary" aria-expanded="' +
-      (open ? 'true' : 'false') + '">' +
+      (placement.tag ? ' data-tag="' + escapeAttribute(placement.tag) + '"' : '') + '>' +
+    '<button type="button" class="ledger-row-summary" aria-haspopup="dialog">' +
       rowSummaryHtml(task, snapshot, today, placement) +
     '</button>' +
-    (open ? rowEditorHtml(task, snapshot, state) : '') +
   '</li>'
 }
 

@@ -1192,20 +1192,26 @@ label:has(input[type="radio"]) {
   width: 1px;
 }
 
-.ledger-row-actions {
+/* Recently done and Archive are things you do to the chore, not to the edit, so
+   they sit at the top, away from Save and Cancel in the sheet's own action bar. */
+.edit-actions {
+  border-bottom: 1px solid var(--rule);
   display: flex;
   flex-wrap: wrap;
   gap: var(--s3);
   justify-content: flex-end;
+  padding-bottom: var(--s3);
 }
 
-/* The plate the open row draws is already the boundary; a divider on top of it
-   would be a second line saying the same thing. */
-.ledger-row-editor {
+.edit-modal {
   display: flex;
   flex-direction: column;
   gap: var(--s4);
-  margin-top: var(--s3);
+  text-align: left;
+}
+
+.edit-modal .edit-name {
+  width: 100%;
 }
 
 .done-btn {
@@ -3516,7 +3522,7 @@ textarea {
   margin: 4px 0 0;
 }
 
-.ledger-row-actions .btn {
+.edit-actions .btn {
   font-size: 13px;
   padding: var(--s2) var(--s3);
 }

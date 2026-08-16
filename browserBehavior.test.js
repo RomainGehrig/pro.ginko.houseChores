@@ -211,7 +211,13 @@ test('reference publication preserves every proposed and active task draft contr
       '<span id="choresCountLine"></span><div id="choresViews"></div>' +
       '<div id="choresFilters"><input id="choreSearch"><div id="choreCategoryFilter"></div></div>' +
       '<div id="activeCards"></div><div id="unscheduledCards"></div>' +
-      '<div id="archivedCards"></div><div id="archiveStatus"></div>',
+      '<div id="archivedCards"></div><div id="archiveStatus"></div>' +
+      '<div id="choresStatus"></div>' +
+      '<div id="sheetScrim" hidden></div>' +
+      '<section id="bottomSheet" hidden role="dialog" aria-modal="true" aria-labelledby="bottomSheetTitle">' +
+        '<h2 id="bottomSheetTitle"></h2><p id="bottomSheetMessage"></p>' +
+        '<div id="bottomSheetActions"></div>' +
+      '</section>',
     script: `
       const records = {
         categories: [
@@ -316,9 +322,10 @@ test('reference publication preserves every proposed and active task draft contr
       setValue(proposed, '[data-schedule-field="annual-month"]', '12')
       setValue(proposed, '[data-schedule-field="annual-day"]', '25')
 
+      // An active chore is edited in the sheet, so that is where its draft is.
       document.querySelector('[data-id="task-active"] .ledger-row-summary').click()
       await Promise.resolve()
-      let active = document.querySelector('[data-id="task-active"]')
+      let active = document.querySelector('.edit-modal')
       setValue(active, '.f-category', 'category-2')
       setChecks(active, '.f-location', ['location-2'])
       setValue(active, '[data-schedule-field="date"]', '2026-10-31')
@@ -333,7 +340,7 @@ test('reference publication preserves every proposed and active task draft contr
 
       await categoryLocationStore.renameCategory('category-1', 'House care')
       proposed = document.querySelector('[data-id="task-proposed"]')
-      active = document.querySelector('[data-id="task-active"]')
+      active = document.querySelector('.edit-modal')
       const result = {
         proposed: draftSnapshot(proposed, '.f-category', '.f-location', '.f-duration'),
         active: draftSnapshot(active, '.f-category', '.f-location')
@@ -1007,6 +1014,38 @@ test('bottom sheet keeps focus among its own controls, body fields included', as
     beforeName: 'Save',
     bodyIsMessage: true
   })
+})
+
+test('a control in the sheet body can end the sheet with its own answer', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 640 },
+    body: '<main id="app"><button id="opener">Open</button></main>' +
+      '<div id="sheetScrim" hidden></div>' +
+      '<section id="bottomSheet" hidden role="dialog" aria-modal="true" aria-labelledby="bottomSheetTitle">' +
+        '<h2 id="bottomSheetTitle"></h2><p id="bottomSheetMessage"></p>' +
+        '<div id="bottomSheetActions"></div>' +
+      '</section>',
+    script: `
+      const { openSheet, closeSheetWith } = await import(applicationUrl + 'sheet.js')
+      document.getElementById('opener').focus()
+      const open = openSheet({
+        title: 'Edit',
+        bodyHtml: '<button id="archive">Archive</button>',
+        actions: [{ value: 'save', label: 'Save' }]
+      })
+      document.getElementById('archive').click()
+      closeSheetWith('archive')
+      document.getElementById('bottomSheet').dispatchEvent(
+        new TransitionEvent('transitionend', { propertyName: 'transform', bubbles: true }))
+      const result = {
+        answer: await open,
+        hidden: document.getElementById('bottomSheet').hidden,
+        restored: document.activeElement.id
+      }
+    `
+  })
+
+  assert.deepEqual(result, { answer: 'archive', hidden: true, restored: 'opener' })
 })
 
 test('bottom sheet paints a vertical closed state before transitioning open and closed', async () => {
