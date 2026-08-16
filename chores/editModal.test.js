@@ -42,8 +42,23 @@ test('the modal carries the whole chore, name first', () => {
   assert.match(markup, /data-schedule-field="date"/)
   assert.match(markup, /data-field="category"[^>]*data-value="cat-1"[^>]*aria-pressed="true"/)
   assert.match(markup, /class="f-location"[^>]*value="loc-1"[^>]*checked/)
-  assert.match(markup, /class="pill done-btn"[^>]*>Recently done</)
+  assert.match(markup, /class="btn done-btn"[^>]*>Mark as done</)
   assert.match(markup, /archive-btn/)
+})
+
+// Marking a chore done is the thing you most often come here to do, so it is a
+// button in its own right at the top. Archiving is rare and hard to mistake for
+// an edit, so it waits at the bottom, past everything you might have come for.
+test('done leads the editor and archive closes it', () => {
+  const markup = editModalHtml(chore(), SNAPSHOT, {})
+  const doneAt = markup.indexOf('done-btn')
+  const nameAt = markup.indexOf('edit-name')
+  const archiveAt = markup.indexOf('archive-btn')
+
+  assert.ok(doneAt < nameAt, 'done comes before the fields')
+  assert.ok(archiveAt > markup.indexOf('f-locations'), 'archive comes after them')
+  assert.match(markup, /class="edit-done"/)
+  assert.match(markup, /class="edit-archive"/)
 })
 
 test('a name with markup in it is text, not markup', () => {
@@ -52,7 +67,7 @@ test('a name with markup in it is text, not markup', () => {
   assert.match(markup, /value="&lt;img src=x onerror=alert\(1\)&gt;"/)
 })
 
-test('the confirming Done label and a pending error both come through', () => {
+test('the confirming done label and a pending error both come through', () => {
   const markup = editModalHtml(chore(), SNAPSHOT,
     { confirmDone: true, error: 'Choose a valid schedule.' })
   assert.match(markup, /aria-pressed="true"[^>]*>Tap again to confirm</)

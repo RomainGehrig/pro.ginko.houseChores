@@ -1192,15 +1192,18 @@ label:has(input[type="radio"]) {
   width: 1px;
 }
 
-/* Recently done and Archive are things you do to the chore, not to the edit, so
-   they sit at the top, away from Save and Cancel in the sheet's own action bar. */
-.edit-actions {
-  border-bottom: 1px solid var(--rule);
+/* Marking a chore done is what you most often open it to do, so it leads at
+   full width. Archiving is neither an edit nor common, so it closes the sheet
+   from the far end, behind a rule that separates it from the fields. */
+.edit-done .done-btn {
+  width: 100%;
+}
+
+.edit-archive {
+  border-top: 1px solid var(--rule);
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--s3);
-  justify-content: flex-end;
-  padding-bottom: var(--s3);
+  justify-content: center;
+  padding-top: var(--s4);
 }
 
 .edit-modal {
@@ -1214,17 +1217,20 @@ label:has(input[type="radio"]) {
   width: 100%;
 }
 
+/* Sage is the app's completion colour, and keeping it here leaves the accent to
+   Save alone — two primaries in one sheet would compete for the same glance. */
 .done-btn {
-  border-color: color-mix(in srgb, var(--sage) 45%, transparent);
-  color: var(--sage-ink);
-  font-size: 12.5px;
-  min-height: 45px;
-}
-
-.done-btn[aria-pressed="true"] {
   background: var(--sage);
   border-color: var(--sage);
   color: var(--on-sage);
+  min-height: 45px;
+}
+
+/* Armed, it borrows the accent: the second press is the one that writes. */
+.done-btn[aria-pressed="true"] {
+  background: var(--enamel);
+  border-color: var(--enamel);
+  color: var(--on-enamel);
 }
 
 .estimate-stepper {
@@ -3522,7 +3528,7 @@ textarea {
   margin: 4px 0 0;
 }
 
-.edit-actions .btn {
+.edit-archive .btn {
   font-size: 13px;
   padding: var(--s2) var(--s3);
 }
