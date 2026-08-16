@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   addCalendarPeriod,
+  cadencePhrase,
   localDateFromDate,
   nextScheduledDate,
   normalizeSchedule,
@@ -239,6 +240,23 @@ test('builds outcome-specific task updates', () => {
   assert.equal(taskUpdateForOutcome(oneOff, 'cancelled', {
     completionDate: '2026-08-07', completedAt: 1234
   }), null)
+})
+
+// The row used to print the cadence in days with the unit dropped — "about
+// every 7" for a weekly chore. The rhythm is said the way it was set.
+test('the cadence is a phrase with its unit, and the summary is built from it', () => {
+  assert.equal(cadencePhrase({ type: 'periodic', every: 1, unit: 'week' }), 'about every week')
+  assert.equal(cadencePhrase({ type: 'periodic', every: 2, unit: 'week' }), 'about every 2 weeks')
+  assert.equal(cadencePhrase({ type: 'periodic', every: 3, unit: 'day' }), 'about every 3 days')
+  assert.equal(cadencePhrase({ type: 'periodic', every: 1, unit: 'year' }), 'about every year')
+
+  // Only a flexible cadence has one. A fixed pattern states real dates instead.
+  assert.equal(cadencePhrase({ type: 'one_off' }), '')
+  assert.equal(cadencePhrase({ type: 'fixed', pattern: { kind: 'month_day', day: 5 } }), '')
+  assert.equal(cadencePhrase(null), '')
+
+  assert.equal(scheduleSummary({ type: 'periodic', every: 1, unit: 'week' }),
+    'About every week after completion')
 })
 
 test('describes schedules in household language', () => {

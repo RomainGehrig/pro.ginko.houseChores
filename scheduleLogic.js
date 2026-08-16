@@ -132,13 +132,21 @@ function joinNames (names) {
   return `${names.slice(0, -1).join(', ')} and ${names.at(-1)}`
 }
 
+// The rhythm in the words it was set in. A weekly chore is "about every week",
+// never "about every 7" — the cadence in days with its unit dropped.
+export function cadencePhrase (schedule) {
+  const normalizedSchedule = normalizeSchedule(schedule)
+  if (normalizedSchedule?.type !== 'periodic') return ''
+  const { every, unit } = normalizedSchedule
+  return `about every ${every === 1 ? '' : every + ' '}${unit}${every === 1 ? '' : 's'}`
+}
+
 export function scheduleSummary (schedule) {
   const normalizedSchedule = normalizeSchedule(schedule)
   if (!normalizedSchedule) return ''
   if (normalizedSchedule.type === 'one_off') return 'Once'
   if (normalizedSchedule.type === 'periodic') {
-    const { every, unit } = normalizedSchedule
-    return `About every ${every === 1 ? '' : every + ' '}${unit}${every === 1 ? '' : 's'} after completion`
+    return 'A' + cadencePhrase(normalizedSchedule).slice(1) + ' after completion'
   }
 
   const { pattern } = normalizedSchedule

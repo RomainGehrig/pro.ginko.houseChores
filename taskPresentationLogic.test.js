@@ -274,16 +274,38 @@ test('a one-off chore states its date in the note, once, with nothing counted ag
 test('a fixed chore states its pattern and a periodic one its cadence', () => {
   assert.match(buildChoreNoteHtml({
     scheduledDate: '2026-08-05', schedule: { type: 'fixed', pattern: { kind: 'month_day', day: 5 } }
-  }, '2026-08-08'), /^Monthly on day <span class="fig">5<\/span>$/)
+  }, '2026-08-08'), /^Monthly on day <span class="fig">5<\/span> · <span class="fig">5<\/span> Aug$/)
 
   assert.match(buildChoreNoteHtml({
     lastCompletedDate: Date.UTC(2026, 7, 1, 12),
     schedule: { type: 'periodic', every: 1, unit: 'week' }
-  }, '2026-08-08'), /last done <span class="fig">7<\/span>d ago · about every <span class="fig">7<\/span>/)
+  }, '2026-08-08'), /last done <span class="fig">7<\/span>d ago · about every week/)
 
   assert.match(buildChoreNoteHtml({
     lastCompletedDate: null, schedule: { type: 'periodic', every: 2, unit: 'week' }
-  }, '2026-08-08'), /not yet done · about every <span class="fig">14<\/span>/)
+  }, '2026-08-08'), /not yet done · about every <span class="fig">2<\/span> weeks/)
+})
+
+// The cadence used to print as the number of days with its unit dropped, and
+// only a one-off admitted which day it was on. Both are facts the list is for.
+test('every kind of chore says which day it is on, in the cadence it was set in', () => {
+  const periodic = buildChoreNoteHtml({
+    lastCompletedDate: null,
+    scheduledDate: '2026-08-16',
+    schedule: { type: 'periodic', every: 2, unit: 'week' }
+  }, '2026-08-08')
+  assert.match(periodic, /not yet done · about every <span class="fig">2<\/span> weeks · <span class="fig">16<\/span> Aug$/)
+  assert.doesNotMatch(periodic, /every <span class="fig">14<\/span>/, 'never the day count on its own')
+
+  // Nothing is invented for a chore that has not been given a day.
+  assert.match(buildChoreNoteHtml({
+    lastCompletedDate: null, scheduledDate: null,
+    schedule: { type: 'periodic', every: 1, unit: 'week' }
+  }, '2026-08-08'), /^not yet done · about every week$/)
+
+  // The band and the sort already say where a chore stands; the day is stated
+  // once, as a plain fact, with nothing counted against it.
+  assert.doesNotMatch(periodic, /\b(?:due|late|overdue|behind)\b|\+\d+d/i)
 })
 
 test('a resolved chore offers to be reopened, naming the outcome it would take back', () => {

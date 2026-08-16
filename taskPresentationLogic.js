@@ -8,8 +8,8 @@ import {
   sessionStatusLine, spentLine, tookLabel
 } from './doingLines.js'
 import { normalizeReferenceName, resolveReference } from './categoryLocationLogic.js'
-import { formatScheduledDate, parseLocalDate, scheduleSummary } from './scheduleLogic.js'
-import { cadenceDays, daysSinceCompletion } from './slip.js'
+import { cadencePhrase, formatScheduledDate, parseLocalDate, scheduleSummary } from './scheduleLogic.js'
+import { daysSinceCompletion } from './slip.js'
 
 const SHORT_MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -37,33 +37,26 @@ function compactScheduledDate (value) {
   return date ? `${date.day} ${SHORT_MONTHS[date.month - 1]}` : '—'
 }
 
-function compactCadence (value) {
-  if (!Number.isFinite(value)) return ''
-  return Number.isInteger(value) ? String(value) : String(Math.round(value * 10) / 10)
-}
-
 function scheduleFactHtml (schedule) {
   return formatFactHtml(scheduleSummary(schedule))
 }
 
-// The one phrasing for "where this chore stands": a completion fact and the
-// cadence it is measured against, never a count of how far behind you are.
+// The one phrasing for "where this chore stands": what the rhythm is, when it
+// last happened, and which day it is on — never a count of how far behind you
+// are. The day is stated once, as a plain fact, and only when there is one.
 export function buildChoreNoteHtml (task, today) {
-  const cadenceText = compactCadence(cadenceDays(task?.schedule))
   const completedDaysAgo = daysSinceCompletion(task?.lastCompletedDate, today)
-  if (task?.schedule?.type !== 'periodic') {
-    // A one-off's date is the only thing it knows about itself, so the note
-    // carries it — once, as a plain fact, with no tally against it.
-    const date = task?.schedule?.type === 'one_off' && parseLocalDate(task?.scheduledDate)
-      ? ' · ' + compactScheduledDate(task.scheduledDate)
-      : ''
-    return formatFactHtml(scheduleSummary(task?.schedule) + date)
-  }
+  const rhythm = task?.schedule?.type === 'periodic'
+    ? [
+        completedDaysAgo === null ? 'not yet done' : 'last done ' + completedDaysAgo + 'd ago',
+        cadencePhrase(task.schedule)
+      ]
+    : [scheduleSummary(task?.schedule)]
 
-  return formatFactHtml((completedDaysAgo === null
-    ? 'not yet done'
-    : 'last done ' + completedDaysAgo + 'd ago') +
-    (cadenceText ? ' · about every ' + cadenceText : ''))
+  const day = parseLocalDate(task?.scheduledDate)
+    ? compactScheduledDate(task.scheduledDate)
+    : ''
+  return formatFactHtml(rhythm.concat(day).filter(Boolean).join(' · '))
 }
 
 export function resolveTaskCategoryName (task, categories = []) {
