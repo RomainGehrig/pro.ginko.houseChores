@@ -147,7 +147,7 @@ test('every preset the design offers is on the row', () => {
 
 test('marking a chore done asks a second time in its own label', () => {
   const closed = ledgerRowHtml(chore(), SNAPSHOT, TODAY, { openTaskId: 'task-1' })
-  assert.match(closed, /class="pill done-btn"[^>]*aria-pressed="false"[^>]*>Done</)
+  assert.match(closed, /class="pill done-btn"[^>]*aria-pressed="false"[^>]*>Recently done</)
 
   const confirming = ledgerRowHtml(chore(), SNAPSHOT, TODAY,
     { openTaskId: 'task-1', confirmDoneId: 'task-1' })

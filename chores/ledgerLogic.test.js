@@ -117,7 +117,9 @@ test('the counts read as plain figures', () => {
 })
 
 test('the two writes that are awkward to take back ask again in their own label', () => {
-  assert.equal(doneLabel(false), 'Done')
+  // "Done" reads as an outcome being recorded for right now. The button says
+  // what it actually does: mark that the chore was done recently.
+  assert.equal(doneLabel(false), 'Recently done')
   assert.equal(doneLabel(true), 'Tap again to confirm')
   assert.equal(permanentDeleteLabel(false), 'Delete permanently')
   assert.equal(permanentDeleteLabel(true), 'Tap again to delete permanently')

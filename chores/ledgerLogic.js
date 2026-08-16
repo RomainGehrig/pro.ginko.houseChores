@@ -85,7 +85,7 @@ export const archivedCountLine = count => count + ' archived'
 // Marking a chore done and deleting one for good both write something that is
 // awkward to take back, so each asks a second time — in its own label, not in a
 // dialogue that stops the user dead.
-export const doneLabel = confirming => confirming ? 'Tap again to confirm' : 'Done'
+export const doneLabel = confirming => confirming ? 'Tap again to confirm' : 'Recently done'
 export const permanentDeleteLabel = confirming =>
   confirming ? 'Tap again to delete permanently' : 'Delete permanently'
 

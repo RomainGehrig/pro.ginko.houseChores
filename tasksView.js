@@ -27,7 +27,7 @@ import {
   unscheduledListHtml
 } from './chores/listView.js'
 import { categoryPillsHtml, locationPillsHtml, referenceStateSuffix } from './chores/fieldPills.js'
-import { unscheduledTasks } from './chores/ledgerLogic.js'
+import { doneLabel, unscheduledTasks } from './chores/ledgerLogic.js'
 import { optimisticArchive, pendingUndo } from './undoToast.js'
 import { runArchiveAction } from './archiveView.js'
 
@@ -810,7 +810,7 @@ async function handleLedgerClick (evt) {
     const doneButton = card.querySelector('.done-btn')
     if (doneButton) {
       doneButton.setAttribute('aria-pressed', 'false')
-      doneButton.textContent = 'Done'
+      doneButton.textContent = doneLabel(false)
     }
   }
 
