@@ -350,3 +350,24 @@ test('validation preserves invalid annual values for correction', () => {
   assert.equal(root.node('[data-schedule-field="annual-month"]').value, '2')
   assert.equal(root.node('[data-schedule-field="annual-day"]').value, '99')
 })
+
+// Clearing the box to retype is a moment mid-edit, not a choice to be refused.
+// The cadence falls back to the minimum the field already declares.
+test('an emptied cadence reads as every one, so the save is never refused', () => {
+  const root = scheduleRoot({
+    scheduledDate: '',
+    dateOwner: 'app',
+    type: 'periodic',
+    every: '',
+    unit: 'week',
+    fixedKind: 'weekdays',
+    weekdays: [],
+    monthDay: '1',
+    annualMonth: '1',
+    annualDay: '1'
+  })
+
+  const result = readScheduleEditor(root)
+  assert.equal(result.ok, true)
+  assert.deepEqual(result.schedule, { type: 'periodic', every: 1, unit: 'week' })
+})

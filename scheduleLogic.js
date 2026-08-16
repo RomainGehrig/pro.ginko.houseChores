@@ -213,14 +213,21 @@ export function scheduleMatchesDate (schedule, scheduledDate) {
     date.day === Math.min(pattern.day, daysInMonth(date.year, pattern.month))
 }
 
-export function validateScheduleInput (input = {}) {
-  const date = parseLocalDate(input.scheduledDate)
-  if (!date) return { ok: false, message: 'Enter a valid scheduled date.' }
-
+// The date is never a reason to refuse. Only a one-off is asked for one, so
+// demanding it back from a periodic chore would stop the user on a control
+// they were never shown. When it is missing the schedule supplies it: a fixed
+// chore from its own pattern, anything else from today.
+export function validateScheduleInput (input = {}, today = localDateFromDate()) {
   const schedule = normalizeSchedule(input.schedule)
   if (!schedule) return { ok: false, message: 'Choose a valid schedule.' }
 
-  return { ok: true, scheduledDate: formatLocalDate(date), schedule }
+  const chosen = parseLocalDate(input.scheduledDate)
+  const reference = parseLocalDate(today) ? String(today) : localDateFromDate()
+  const scheduledDate = chosen
+    ? formatLocalDate(chosen)
+    : (suggestScheduledDate(schedule, reference) || reference)
+
+  return { ok: true, scheduledDate, schedule }
 }
 
 function localDateFromTimestamp (timestamp) {

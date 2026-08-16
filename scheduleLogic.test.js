@@ -71,6 +71,49 @@ test('accepts an off-pattern date for a fixed calendar schedule', () => {
   })
 })
 
+// A date the user was never asked for cannot be a reason to refuse their work.
+// The Inbox only offers a date picker for a one-off; a periodic chore is a
+// rhythm, and a fixed one derives its date from its own pattern.
+test('confirming without a date is never refused — the schedule supplies one', () => {
+  const today = '2026-08-16'
+
+  const periodic = validateScheduleInput(
+    { schedule: { type: 'periodic', every: 1, unit: 'week' } }, today)
+  assert.equal(periodic.ok, true)
+  assert.equal(periodic.scheduledDate, '2026-08-16', 'the rhythm starts today')
+
+  const once = validateScheduleInput({ schedule: { type: 'one_off' } }, today)
+  assert.equal(once.ok, true)
+  assert.equal(once.scheduledDate, '2026-08-16')
+
+  // A fixed chore has a real external date, so it takes the next one its
+  // pattern lands on rather than today.
+  const fixed = validateScheduleInput(
+    { schedule: { type: 'fixed', pattern: { kind: 'annual_date', month: 12, day: 1 } } }, today)
+  assert.equal(fixed.ok, true)
+  assert.equal(fixed.scheduledDate, '2026-12-01')
+})
+
+test('a date the user did choose is still the one that is kept', () => {
+  const today = '2026-08-16'
+  for (const schedule of [
+    { type: 'one_off' },
+    { type: 'periodic', every: 2, unit: 'day' },
+    { type: 'fixed', pattern: { kind: 'month_day', day: 3 } }
+  ]) {
+    const result = validateScheduleInput({ scheduledDate: '2026-09-04', schedule }, today)
+    assert.equal(result.scheduledDate, '2026-09-04', JSON.stringify(schedule))
+  }
+})
+
+test('an unreadable date falls back rather than stopping the save', () => {
+  const today = '2026-08-16'
+  const result = validateScheduleInput(
+    { scheduledDate: 'not-a-date', schedule: { type: 'one_off' } }, today)
+  assert.equal(result.ok, true)
+  assert.equal(result.scheduledDate, '2026-08-16')
+})
+
 test('matches fixed calendar dates clamped to February', () => {
   const monthly = { type: 'fixed', pattern: { kind: 'month_day', day: 31 } }
   const annual = { type: 'fixed', pattern: { kind: 'annual_date', month: 2, day: 29 } }

@@ -30,9 +30,13 @@ const FIXED_KINDS = [['weekdays', 'Weekly'], ['month_day', 'Monthly'], ['annual_
 function scheduleFromValues (values = {}) {
   if (values.type === 'one_off') return { type: 'one_off' }
   if (values.type === 'periodic') {
+    // An empty box is someone part-way through retyping, not a decision. It
+    // reads as the minimum the field already declares, and the summary line
+    // says so straight away, so nothing has to be refused.
+    const every = Math.max(1, Math.floor(Number(values.every)) || 1)
     return normalizeSchedule({
       type: 'periodic',
-      every: values.every,
+      every,
       unit: values.unit
     })
   }
