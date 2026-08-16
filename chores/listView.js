@@ -189,18 +189,18 @@ export function ledgerGroupsHtml (tasks, snapshot, today = localDateFromDate(new
 export function unscheduledListHtml (tasks, snapshot, today = localDateFromDate(new Date()), state = {}) {
   const loose = unscheduledTasks(tasks, today, state.filter || {}, snapshot?.categories || [])
   if (!loose.length) {
-    return emptyCard('Everything has a schedule',
-      'Nothing is sitting without a cadence or a date.')
+    return emptyCard('Everything has a day',
+      'Nothing is waiting for a date.')
   }
 
   return '<section class="ledger-group" aria-labelledby="ledger-unscheduled">' +
     '<h3 id="ledger-unscheduled" class="ledger-eyebrow"><span>' +
       escapeHtml(unscheduledCountLine(loose.length)) + '</span></h3>' +
-    '<p class="muted ledger-group-note">No cadence and no date — these sit out of the bands ' +
+    '<p class="muted ledger-group-note">No day set — these sit out of the bands ' +
       'until you give them one.</p>' +
     '<ul class="ledger">' +
       loose.map(task =>
-        ledgerRowHtml(task, snapshot, today, state, { band: null, tag: 'No schedule' })).join('') +
+        ledgerRowHtml(task, snapshot, today, state, { band: null, tag: 'No day set' })).join('') +
     '</ul>' +
   '</section>'
 }

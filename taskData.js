@@ -1,4 +1,4 @@
-import { localDateFromDate, normalizeTaskSchedule } from './scheduleLogic.js'
+import { normalizeTaskSchedule } from './scheduleLogic.js'
 
 export function buildNewTaskRecord (name) {
   return {
@@ -19,8 +19,7 @@ export function buildNewTaskRecord (name) {
 
 export const listAllTasks = async () => {
   const tasks = await freezr.query('tasks', {}, { sort: { _date_modified: -1 } })
-  const today = localDateFromDate(new Date())
-  return tasks.map(task => normalizeTaskSchedule(task, today))
+  return tasks.map(task => normalizeTaskSchedule(task))
 }
 
 export const createTask = name => freezr.create('tasks', buildNewTaskRecord(name))

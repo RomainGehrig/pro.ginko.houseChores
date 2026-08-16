@@ -2,7 +2,6 @@
 // ABOUTME: Normalizes schedule data without DOM, Freezr, or UTC date semantics.
 
 const PERIOD_UNITS = new Set(['day', 'week', 'month', 'year'])
-const ACTIVE_STATUSES = new Set(['active', 'approved_recurring'])
 const WEEKDAY_NAMES = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday']
 const MONTH_NAMES = [
   'January', 'February', 'March', 'April', 'May', 'June',
@@ -213,10 +212,11 @@ export function scheduleMatchesDate (schedule, scheduledDate) {
     date.day === Math.min(pattern.day, daysInMonth(date.year, pattern.month))
 }
 
-// The date is never a reason to refuse. Only a one-off is asked for one, so
-// demanding it back from a periodic chore would stop the user on a control
-// they were never shown. When it is missing the schedule supplies it: a fixed
-// chore from its own pattern, anything else from today.
+// The date is never a reason to refuse, and never invented. A periodic or
+// one-off chore may say today, some later day, or nothing at all — and nothing
+// at all is an answer, not an omission: the chore waits in the unscheduled
+// list until it is given a day. Only a fixed chore derives one, from the
+// pattern that is its whole point.
 export function validateScheduleInput (input = {}, today = localDateFromDate()) {
   const schedule = normalizeSchedule(input.schedule)
   if (!schedule) return { ok: false, message: 'Choose a valid schedule.' }
@@ -225,7 +225,7 @@ export function validateScheduleInput (input = {}, today = localDateFromDate()) 
   const reference = parseLocalDate(today) ? String(today) : localDateFromDate()
   const scheduledDate = chosen
     ? formatLocalDate(chosen)
-    : (suggestScheduledDate(schedule, reference) || reference)
+    : (suggestScheduledDate(schedule, reference) || null)
 
   return { ok: true, scheduledDate, schedule }
 }
@@ -236,7 +236,7 @@ function localDateFromTimestamp (timestamp) {
   return Number.isNaN(date.getTime()) ? null : localDateFromDate(date)
 }
 
-export function normalizeTaskSchedule (task, today) {
+export function normalizeTaskSchedule (task) {
   const normalizedTask = { ...(task || {}) }
   const existingSchedule = normalizeSchedule(normalizedTask.schedule)
   const legacyRecurrence = Number(normalizedTask.recurrence)
@@ -249,15 +249,13 @@ export function normalizeTaskSchedule (task, today) {
   const legacyScheduledDate = normalizedTask.scheduledDate == null
     ? localDateFromTimestamp(normalizedTask.nextDueDate)
     : null
+  // Silence about the day survives the load. Stamping today onto a chore that
+  // never named one would quietly move it into the week and out of the
+  // unscheduled list, which is a decision the user did not make.
   if (existingScheduledDate) {
     normalizedTask.scheduledDate = formatLocalDate(existingScheduledDate)
-  } else if (legacyScheduledDate) {
-    normalizedTask.scheduledDate = legacyScheduledDate
-  } else if (ACTIVE_STATUSES.has(normalizedTask.status)) {
-    const currentDate = parseLocalDate(today)
-    normalizedTask.scheduledDate = currentDate ? formatLocalDate(currentDate) : localDateFromDate()
   } else {
-    normalizedTask.scheduledDate = null
+    normalizedTask.scheduledDate = legacyScheduledDate || null
   }
 
   normalizedTask.suggestedSchedule = normalizeSchedule(normalizedTask.suggestedSchedule)

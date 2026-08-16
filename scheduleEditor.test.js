@@ -91,6 +91,29 @@ test('renders progressive controls and a human summary', () => {
   )
 })
 
+// Whatever the rhythm, the day is the user's to say: today, some later day, or
+// none at all. A control that only appears for one of the three types would
+// make the other two look as though they had no choice.
+test('the day is offered for every kind of schedule, and blank is one of the answers', () => {
+  for (const schedule of [
+    { type: 'one_off' },
+    { type: 'periodic', every: 2, unit: 'week' },
+    { type: 'fixed', pattern: { kind: 'weekdays', weekdays: [7] } }
+  ]) {
+    const row = scheduleEditorHtml({ scheduledDate: '', schedule })
+      .match(/<label class="schedule-row schedule-date"[^>]*>/)?.[0]
+    assert.ok(row, JSON.stringify(schedule))
+    assert.doesNotMatch(row, /\bhidden\b/, JSON.stringify(schedule))
+  }
+
+  assert.match(
+    scheduleEditorHtml({ schedule: { type: 'periodic', every: 2, unit: 'week' } }),
+    /Leave it blank and the chore waits in Unscheduled\./)
+  assert.match(
+    scheduleEditorHtml({ schedule: { type: 'fixed', pattern: { kind: 'month_day', day: 3 } } }),
+    /Suggested from the calendar; choose any date\./)
+})
+
 test('names every schedule form control for browser form semantics', () => {
   const markup = scheduleEditorHtml({
     scheduledDate: '2026-08-16',
@@ -208,6 +231,7 @@ function scheduleRoot (values) {
     ['[data-schedule-fixed-group="weekdays"]', { hidden: false }],
     ['[data-schedule-fixed-group="month_day"]', { hidden: false }],
     ['[data-schedule-fixed-group="annual_date"]', { hidden: false }],
+    ['.schedule-date', { hidden: false }],
     ['.schedule-date-hint', { hidden: false }],
     ['.schedule-summary', { textContent: '', innerHTML: '' }]
   ])
@@ -266,6 +290,10 @@ test('syncs visible schedule groups and summary without changing values', () => 
   )
   assert.equal(root.node('[data-schedule-field="every"]').value, '2')
   assert.equal(root.node('[data-schedule-field="date"]').value, '')
+
+  // A cadence is not a date. The picker stays out, and stays empty, so the
+  // chore goes to Unscheduled unless the user names a day.
+  assert.equal(root.node('.schedule-date').hidden, false)
 })
 
 test('updates a fixed date while it remains app-managed', () => {

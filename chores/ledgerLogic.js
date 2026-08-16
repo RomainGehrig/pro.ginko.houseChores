@@ -63,10 +63,11 @@ export function buildLedgerGroups (tasks, today, filter, categories) {
   }))
 }
 
-// "No cadence and no date": a chore that sits out of the bands entirely because
-// nothing has been said about when it comes round.
+// "No day set": a chore that sits out of the bands entirely because it has not
+// been given one. A cadence does not rescue it — a rhythm says how often, not
+// when to start — so a periodic chore left blank waits here too.
 export function isUnscheduled (task, today) {
-  return !cadenceDays(task?.schedule) && dueGroup(task, today) === 'SOMEDAY'
+  return dueGroup(task, today) === 'SOMEDAY'
 }
 
 export function unscheduledTasks (tasks, today, filter, categories) {
@@ -77,7 +78,7 @@ export function unscheduledTasks (tasks, today, filter, categories) {
 }
 
 export const activeCountLine = count => count + ' active'
-export const unscheduledCountLine = count => count + ' with no schedule'
+export const unscheduledCountLine = count => count + ' with no day set'
 export const archivedCountLine = count => count + ' archived'
 
 // Marking a chore done and deleting one for good both write something that is

@@ -105,13 +105,19 @@ const gridCell = (field, value, label, on, wide) =>
     '" data-schedule-set="' + field + '" data-schedule-value="' + escapeAttribute(value) +
     '" aria-pressed="' + (on ? 'true' : 'false') + '">' + formatFactHtml(label) + '</button>'
 
+// A fixed chore's date comes from its own pattern, so the hint says the app
+// filled it in and the user may still overrule it. Everywhere else the box is
+// genuinely optional, and the hint says where an empty one leaves the chore.
+const dateHintText = type => type === 'fixed'
+  ? 'Suggested from the calendar; choose any date.'
+  : 'Leave it blank and the chore waits in Unscheduled.'
+
 export function scheduleEditorHtml (model = {}) {
   const schedule = normalizeSchedule(model.schedule) || { type: 'one_off' }
   const scheduledDate = model.scheduledDate == null ? '' : String(model.scheduledDate)
   const dateOwner = model.dateOwner === 'app' ? 'app' : 'user'
   const periodic = schedule.type === 'periodic'
   const fixed = schedule.type === 'fixed'
-  const once = schedule.type === 'one_off'
   const pattern = fixed ? schedule.pattern : { kind: 'weekdays', weekdays: [] }
   const fixedKind = pattern.kind
   const weekdays = (fixedKind === 'weekdays' ? pattern.weekdays : []).map(Number)
@@ -133,11 +139,12 @@ export function scheduleEditorHtml (model = {}) {
       TYPES.map(([value, label]) => choicePill('type', value, label, schedule.type === value)).join('') +
     '</div>' +
 
-    '<label class="schedule-row schedule-date"' + (once ? '' : ' hidden') +
-      '>Scheduled date <input type="date" name="scheduledDate" aria-label="Scheduled date" ' +
+    // The day is asked for whatever the rhythm, because the rhythm says how
+    // often and the day says when to start. Blank is one of the answers.
+    '<label class="schedule-row schedule-date">Scheduled date ' +
+      '<input type="date" name="scheduledDate" aria-label="Scheduled date" ' +
       'data-schedule-field="date" value="' + escapeAttribute(scheduledDate) + '"></label>' +
-    '<p class="schedule-date-hint"' + (fixed ? '' : ' hidden') +
-      '>Suggested from the calendar; choose any date.</p>' +
+    '<p class="schedule-date-hint">' + dateHintText(schedule.type) + '</p>' +
 
     '<div class="schedule-cadence" data-schedule-group="periodic"' + (periodic ? '' : ' hidden') + '>' +
       '<span class="schedule-word">Every</span>' +
@@ -236,7 +243,6 @@ export function syncScheduleEditor (root, options = {}) {
   const values = editorValues(root)
   const periodic = root.querySelector('[data-schedule-group="periodic"]')
   const fixed = root.querySelector('[data-schedule-group="fixed"]')
-  const date = root.querySelector('.schedule-date')
   const fixedGroups = {
     weekdays: root.querySelector('[data-schedule-fixed-group="weekdays"]'),
     month_day: root.querySelector('[data-schedule-fixed-group="month_day"]'),
@@ -245,7 +251,6 @@ export function syncScheduleEditor (root, options = {}) {
 
   if (periodic) periodic.hidden = values.type !== 'periodic'
   if (fixed) fixed.hidden = values.type !== 'fixed'
-  if (date) date.hidden = values.type !== 'one_off'
   for (const [kind, group] of Object.entries(fixedGroups)) {
     if (group) group.hidden = values.type !== 'fixed' || values.fixedKind !== kind
   }
@@ -273,7 +278,7 @@ export function syncScheduleEditor (root, options = {}) {
   }
 
   const dateHint = root.querySelector('.schedule-date-hint')
-  if (dateHint) dateHint.hidden = schedule?.type !== 'fixed'
+  if (dateHint) dateHint.textContent = dateHintText(values.type)
 
   const summary = root.querySelector('.schedule-summary')
   if (summary) summary.innerHTML = formatFactHtml(scheduleSummary(schedule))

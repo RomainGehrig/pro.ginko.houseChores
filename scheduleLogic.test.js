@@ -48,7 +48,7 @@ test('discards malformed persisted weekday arrays without aborting task normaliz
       type: 'fixed',
       pattern: { kind: 'weekdays', weekdays: { 0: 1 } }
     }
-  }, '2026-08-07'), {
+  }), {
     _id: 'malformed-task',
     status: 'active',
     scheduledDate: '2026-08-07',
@@ -71,27 +71,38 @@ test('accepts an off-pattern date for a fixed calendar schedule', () => {
   })
 })
 
-// A date the user was never asked for cannot be a reason to refuse their work.
-// The Inbox only offers a date picker for a one-off; a periodic chore is a
-// rhythm, and a fixed one derives its date from its own pattern.
-test('confirming without a date is never refused — the schedule supplies one', () => {
+// No date is one of the three things a periodic or one-off chore can say about
+// when it comes round — the other two being today and some later day. Blank is
+// kept as blank, and the chore waits in the unscheduled list until it is given
+// a day. Only a fixed chore derives one, because its pattern is a real date.
+test('no date is kept as no date, and is never a reason to refuse', () => {
   const today = '2026-08-16'
 
   const periodic = validateScheduleInput(
     { schedule: { type: 'periodic', every: 1, unit: 'week' } }, today)
   assert.equal(periodic.ok, true)
-  assert.equal(periodic.scheduledDate, '2026-08-16', 'the rhythm starts today')
+  assert.equal(periodic.scheduledDate, null, 'a rhythm with no day set stays unscheduled')
 
-  const once = validateScheduleInput({ schedule: { type: 'one_off' } }, today)
+  const once = validateScheduleInput({ scheduledDate: '', schedule: { type: 'one_off' } }, today)
   assert.equal(once.ok, true)
-  assert.equal(once.scheduledDate, '2026-08-16')
+  assert.equal(once.scheduledDate, null)
 
-  // A fixed chore has a real external date, so it takes the next one its
-  // pattern lands on rather than today.
   const fixed = validateScheduleInput(
     { schedule: { type: 'fixed', pattern: { kind: 'annual_date', month: 12, day: 1 } } }, today)
   assert.equal(fixed.ok, true)
   assert.equal(fixed.scheduledDate, '2026-12-01')
+})
+
+test('today and a later day are both kept exactly as chosen', () => {
+  const today = '2026-08-16'
+  for (const schedule of [{ type: 'one_off' }, { type: 'periodic', every: 1, unit: 'week' }]) {
+    assert.equal(
+      validateScheduleInput({ scheduledDate: '2026-08-16', schedule }, today).scheduledDate,
+      '2026-08-16', JSON.stringify(schedule))
+    assert.equal(
+      validateScheduleInput({ scheduledDate: '2026-11-30', schedule }, today).scheduledDate,
+      '2026-11-30', JSON.stringify(schedule))
+  }
 })
 
 test('a date the user did choose is still the one that is kept', () => {
@@ -106,12 +117,12 @@ test('a date the user did choose is still the one that is kept', () => {
   }
 })
 
-test('an unreadable date falls back rather than stopping the save', () => {
+test('an unreadable date reads as none rather than stopping the save', () => {
   const today = '2026-08-16'
   const result = validateScheduleInput(
     { scheduledDate: 'not-a-date', schedule: { type: 'one_off' } }, today)
   assert.equal(result.ok, true)
-  assert.equal(result.scheduledDate, '2026-08-16')
+  assert.equal(result.scheduledDate, null)
 })
 
 test('matches fixed calendar dates clamped to February', () => {
@@ -131,7 +142,7 @@ test('normalizes current local records without writing a migration', () => {
     recurrence: 14,
     nextDueDate: new Date(2026, 7, 20, 12).getTime(),
     status: 'approved_recurring'
-  }, '2026-08-07'), {
+  }), {
     _id: 'legacy-recurring',
     recurrence: 14,
     nextDueDate: new Date(2026, 7, 20, 12).getTime(),
@@ -141,13 +152,15 @@ test('normalizes current local records without writing a migration', () => {
     suggestedSchedule: null
   })
 
+  // An active chore with nothing said about when it comes round keeps that
+  // silence: it belongs in the unscheduled list, not stamped with today.
   assert.equal(normalizeTaskSchedule({
     status: 'active', recurrence: null, nextDueDate: 'invalid'
-  }, '2026-08-07').scheduledDate, '2026-08-07')
+  }).scheduledDate, null)
 
   assert.equal(normalizeTaskSchedule({
     status: 'proposed', schedule: { type: 'one_off' }
-  }, '2026-08-07').scheduledDate, null)
+  }).scheduledDate, null)
 })
 
 test('formats local dates without crossing UTC boundaries', () => {

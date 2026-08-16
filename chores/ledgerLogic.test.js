@@ -88,12 +88,16 @@ test('the groups carry their own counts and drop the bands that are empty', () =
   assert.deepEqual(groups.map(group => [group.label, group.count]), [['Ready', 1], ['Today', 2]])
 })
 
-test('a chore with neither a cadence nor a date sits out of the bands', () => {
+test('a chore with no day set sits out of the bands, cadence or not', () => {
   const loose = chore({ schedule: { type: 'one_off' }, scheduledDate: null, lastCompletedDate: null })
   assert.equal(isUnscheduled(loose, TODAY), true)
   assert.equal(isUnscheduled(chore(), TODAY), false)
   assert.equal(isUnscheduled(chore({ schedule: { type: 'one_off' } }), TODAY), false,
     'a one-off with a date has been given one')
+
+  // A rhythm says how often, not when to start. Until a day is named there is
+  // no band to put the chore in, so it waits in the unscheduled list.
+  assert.equal(isUnscheduled(chore({ scheduledDate: null }), TODAY), true)
 })
 
 test('the unscheduled list is alphabetical and honours the same filter', () => {
@@ -107,7 +111,7 @@ test('the unscheduled list is alphabetical and honours the same filter', () => {
 
 test('the counts read as plain figures', () => {
   assert.equal(activeCountLine(12), '12 active')
-  assert.equal(unscheduledCountLine(3), '3 with no schedule')
+  assert.equal(unscheduledCountLine(3), '3 with no day set')
   assert.equal(archivedCountLine(0), '0 archived')
 })
 

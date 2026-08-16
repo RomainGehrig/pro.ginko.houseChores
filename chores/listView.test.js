@@ -184,17 +184,22 @@ test('a filter that matches nothing says so, and says how to widen it', () => {
 test('the unscheduled list explains why these sit out of the bands', () => {
   const loose = chore({ _id: 'u1', name: 'Sort the loft', schedule: { type: 'one_off' }, scheduledDate: null, lastCompletedDate: null })
   const markup = unscheduledListHtml([loose, chore()], SNAPSHOT, TODAY, {})
-  assert.match(markup, /1 with no schedule/)
-  assert.match(markup, /No cadence and no date — these sit out of the bands until you give them one\./)
+  assert.match(markup, /1 with no day set/)
+  assert.match(markup, /No day set — these sit out of the bands until you give them one\./)
   assert.match(markup, /Sort the loft/)
-  assert.match(markup, /No schedule/)
+  assert.match(markup, /No day set/)
   assert.doesNotMatch(markup, /Mop the hall/)
+
+  // A cadence says how often, not when to start, so a rhythm with no day waits
+  // here too rather than being stamped with one.
+  const rhythm = chore({ _id: 'u2', name: 'Descale the kettle', scheduledDate: null })
+  assert.match(unscheduledListHtml([rhythm], SNAPSHOT, TODAY, {}), /Descale the kettle/)
 })
 
 test('nothing unscheduled reads as a fact, not an achievement', () => {
   const markup = unscheduledListHtml([chore()], SNAPSHOT, TODAY, {})
-  assert.match(markup, /Everything has a schedule/)
-  assert.match(markup, /Nothing is sitting without a cadence or a date\./)
+  assert.match(markup, /Everything has a day/)
+  assert.match(markup, /Nothing is waiting for a date\./)
 })
 
 test('an archived chore offers Restore, and a delete that asks twice', () => {
