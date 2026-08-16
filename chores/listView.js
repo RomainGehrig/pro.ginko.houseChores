@@ -99,7 +99,7 @@ const estimateStepperHtml = task => {
 // No Save: every control writes through as it is touched. The only two writes
 // that are awkward to take back — done, and delete — ask a second time in their
 // own label instead.
-function rowEditorHtml (task, snapshot, state, { withSchedule = true } = {}) {
+function rowEditorHtml (task, snapshot, state) {
   const model = buildTaskEditorModel(task, snapshot)
   const selectedLocationIds = new Set(model.locationIds)
   const confirming = state.confirmDoneId === task._id
@@ -111,10 +111,10 @@ function rowEditorHtml (task, snapshot, state, { withSchedule = true } = {}) {
       '<button type="button" class="btn btn-ghost archive-btn">Archive</button>' +
     '</div>' +
     estimateStepperHtml(task) +
-    (withSchedule
-      ? '<div class="field-group"><span class="eyebrow eyebrow-quiet">Schedule</span>' +
-        scheduleEditorHtml(buildScheduleEditorModel(task)) + '</div>'
-      : '') +
+    // Every open row carries the schedule, the unscheduled ones most of all:
+    // that list exists precisely to be given a day from.
+    '<div class="field-group"><span class="eyebrow eyebrow-quiet">Schedule</span>' +
+      scheduleEditorHtml(buildScheduleEditorModel(task)) + '</div>' +
     '<div class="field-group"><span class="eyebrow eyebrow-quiet">Category</span>' +
       categoryPillsHtml(model) + '</div>' +
     '<div class="field-group"><span class="eyebrow eyebrow-quiet">Where</span>' +
@@ -159,7 +159,7 @@ export function ledgerRowHtml (task, snapshot, today, state = {}, placement = {}
       (open ? 'true' : 'false') + '">' +
       rowSummaryHtml(task, snapshot, today, placement) +
     '</button>' +
-    (open ? rowEditorHtml(task, snapshot, state, { withSchedule: band !== null }) : '') +
+    (open ? rowEditorHtml(task, snapshot, state) : '') +
   '</li>'
 }
 

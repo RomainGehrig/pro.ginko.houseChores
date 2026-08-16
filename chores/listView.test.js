@@ -123,6 +123,19 @@ test('an open row carries the whole editor, with no Save to press', () => {
   assert.doesNotMatch(markup, /save-task-edit-btn/)
 })
 
+// The unscheduled list is where a chore goes to be given a day, so the row that
+// opens there must carry the same schedule controls as any other. Leaving them
+// out also refused every other edit in that view, because the row reads its
+// schedule back from the editor before it saves anything.
+test('a row opened from the unscheduled list can still be given a day', () => {
+  const loose = chore({ scheduledDate: null, lastCompletedDate: null })
+  const markup = ledgerRowHtml(loose, SNAPSHOT, TODAY, { openTaskId: 'task-1' },
+    { band: null, tag: 'No day set' })
+  assert.match(markup, /schedule-editor/)
+  assert.match(markup, /data-schedule-field="date"/)
+  assert.match(markup, /Leave it blank and the chore waits in Unscheduled\./)
+})
+
 test('every preset the design offers is on the row', () => {
   const markup = ledgerRowHtml(chore(), SNAPSHOT, TODAY, { openTaskId: 'task-1' })
   assert.deepEqual(ESTIMATE_PRESETS, [5, 10, 15, 20, 30, 45, 60])
