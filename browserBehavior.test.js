@@ -1309,6 +1309,39 @@ test('active chores render as rounded cards that take an edge and a fill when op
   assert.equal(result.ripeDueLeft, 26, 'the cadence itself sits at the halfway tick')
 })
 
+// An unscheduled chore has no band to stamp, so the 62px the stamp would have
+// taken belongs to the name. Left reserved, it squeezed the name into a column
+// one word wide.
+test('a row with no band gives the stamp column back to the chore name', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 640 },
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
+    body: '<main id="app"><ul class="ledger">' +
+      '<li class="task-card ledger-row" data-band="">' +
+        '<button class="ledger-row-summary">' +
+          '<span class="row-main"><span class="row-name">Appointment to change car tires</span>' +
+          '<span class="row-note">not yet done</span></span>' +
+          '<span class="row-tag">No day set</span>' +
+          '<span class="row-est fig">45 min</span>' +
+        '</button>' +
+      '</li></ul></main>',
+    script: `
+      const summary = document.querySelector('.ledger-row-summary')
+      const name = document.querySelector('.row-name')
+      const result = {
+        columns: getComputedStyle(summary).gridTemplateColumns,
+        nameWidth: Math.round(name.getBoundingClientRect().width),
+        nameLeft: Math.round(name.getBoundingClientRect().left -
+          summary.getBoundingClientRect().left)
+      }
+    `
+  })
+
+  assert.doesNotMatch(result.columns, /^62px /, JSON.stringify(result))
+  assert.equal(result.nameLeft, 0, 'nothing stands where the stamp is not')
+  assert.ok(result.nameWidth > 150, JSON.stringify(result))
+})
+
 const TODAY_BODY =
   '<main id="app"><section id="view-today" class="view">' +
     '<header class="today-head">' +

@@ -1096,6 +1096,12 @@ label:has(input[type="radio"]) {
   width: 100%;
 }
 
+/* An unscheduled chore carries no band stamp, so the column the stamp would
+   have taken belongs to the name instead of standing empty in front of it. */
+.ledger-row[data-band=""] .ledger-row-summary {
+  grid-template-columns: minmax(0, 1fr);
+}
+
 .row-band {
   color: var(--graphite);
   font-size: 10px;
