@@ -8,6 +8,7 @@ const BAND_LABELS = {
   READY: 'Ready',
   TODAY: 'Today',
   'THIS WEEK': 'This week',
+  'THIS MONTH': 'This month',
   LATER: 'Later',
   SOMEDAY: 'Someday'
 }

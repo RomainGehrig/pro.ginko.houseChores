@@ -26,6 +26,7 @@ const chore = (overrides = {}) => ({
 test('the bands read as sentences, and the nearest two are stamped in the accent', () => {
   assert.equal(bandLabel('READY'), 'Ready')
   assert.equal(bandLabel('THIS WEEK'), 'This week')
+  assert.equal(bandLabel('THIS MONTH'), 'This month')
   assert.equal(bandLabel('SOMEDAY'), 'Someday')
   assert.equal(bandIsNear('READY'), true)
   assert.equal(bandIsNear('TODAY'), true)

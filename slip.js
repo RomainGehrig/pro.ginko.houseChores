@@ -5,7 +5,7 @@ import { parseLocalDate } from './scheduleLogic.js'
 
 const PERIOD_DAYS = { day: 1, week: 7, month: 30, year: 365 }
 const DAY_MS = 24 * 60 * 60 * 1000
-const DUE_GROUPS = ['READY', 'TODAY', 'THIS WEEK', 'LATER', 'SOMEDAY']
+const DUE_GROUPS = ['READY', 'TODAY', 'THIS WEEK', 'THIS MONTH', 'LATER', 'SOMEDAY']
 
 function dayNumber (value) {
   const parts = parseLocalDate(value)
@@ -70,12 +70,15 @@ export function slip (task, today) {
     Math.min(Math.max(cadencesLate - 1, 0) / 2, 1)
 }
 
+// Read forward from today rather than off a calendar: the next seven days are
+// this week wherever the week happens to break, the next thirty this month.
 export function dueGroup (task, today) {
   const daysUntil = daysBetween(today, task?.scheduledDate)
   if (daysUntil === null) return 'SOMEDAY'
   if (daysUntil < 0) return 'READY'
   if (daysUntil === 0) return 'TODAY'
   if (daysUntil <= 7) return 'THIS WEEK'
+  if (daysUntil <= 30) return 'THIS MONTH'
   return 'LATER'
 }
 

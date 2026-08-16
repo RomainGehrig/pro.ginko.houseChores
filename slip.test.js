@@ -44,14 +44,19 @@ test('slip saturates recurring ripeness without turning long delays into unbound
   assert.equal(slip({ ...task, schedule: { type: 'one_off' } }, '2026-08-08'), 0)
 })
 
-test('dueGroup assigns calendar bands at today and seven-day boundaries', () => {
+// The bands are read forward from today, not off a calendar: "this week" is the
+// next seven days wherever the week happens to break, and "this month" the next
+// thirty. Anything further out is simply later.
+test('dueGroup assigns calendar bands at today, seven and thirty day boundaries', () => {
   const groupFor = scheduledDate => dueGroup({ scheduledDate }, '2026-08-08')
 
   assert.equal(groupFor('2026-08-07'), 'READY')
   assert.equal(groupFor('2026-08-08'), 'TODAY')
   assert.equal(groupFor('2026-08-09'), 'THIS WEEK')
   assert.equal(groupFor('2026-08-15'), 'THIS WEEK')
-  assert.equal(groupFor('2026-08-16'), 'LATER')
+  assert.equal(groupFor('2026-08-16'), 'THIS MONTH')
+  assert.equal(groupFor('2026-09-07'), 'THIS MONTH')
+  assert.equal(groupFor('2026-09-08'), 'LATER')
   assert.equal(groupFor(null), 'SOMEDAY')
 })
 
@@ -71,7 +76,8 @@ test('groupAndSort orders groups by date band, active ripeness, then drafts', ()
     },
     { _id: 'today', name: 'Today', status: 'active', scheduledDate: '2026-08-08', schedule: { type: 'one_off' } },
     { _id: 'week', name: 'This week', status: 'active', scheduledDate: '2026-08-15', schedule: { type: 'one_off' } },
-    { _id: 'later', name: 'Later', status: 'active', scheduledDate: '2026-08-16', schedule: { type: 'one_off' } },
+    { _id: 'month', name: 'This month', status: 'active', scheduledDate: '2026-08-16', schedule: { type: 'one_off' } },
+    { _id: 'later', name: 'Later', status: 'active', scheduledDate: '2026-09-08', schedule: { type: 'one_off' } },
     { _id: 'someday', name: 'Someday', status: 'active', scheduledDate: null, schedule: { type: 'one_off' } }
   ]
 
@@ -84,6 +90,7 @@ test('groupAndSort orders groups by date band, active ripeness, then drafts', ()
       { name: 'READY', taskIds: ['short', 'annual', 'draft'] },
       { name: 'TODAY', taskIds: ['today'] },
       { name: 'THIS WEEK', taskIds: ['week'] },
+      { name: 'THIS MONTH', taskIds: ['month'] },
       { name: 'LATER', taskIds: ['later'] },
       { name: 'SOMEDAY', taskIds: ['someday'] }
     ]
