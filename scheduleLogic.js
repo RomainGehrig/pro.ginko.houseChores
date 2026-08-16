@@ -238,33 +238,25 @@ export function validateScheduleInput (input = {}, today = localDateFromDate()) 
   return { ok: true, scheduledDate, schedule }
 }
 
-function localDateFromTimestamp (timestamp) {
+export function localDateFromTimestamp (timestamp) {
   if (typeof timestamp !== 'number' || !Number.isFinite(timestamp)) return null
   const date = new Date(timestamp)
   return Number.isNaN(date.getTime()) ? null : localDateFromDate(date)
 }
 
+// Reads a record in the current shape and makes it safe to use: an unusable
+// schedule or date becomes a stated absence rather than a surprise downstream.
+// The old field names are gone by the time this runs — taskMigration.js erases
+// them on the way in — so nothing here has to know them.
 export function normalizeTaskSchedule (task) {
   const normalizedTask = { ...(task || {}) }
-  const existingSchedule = normalizeSchedule(normalizedTask.schedule)
-  const legacyRecurrence = Number(normalizedTask.recurrence)
-  normalizedTask.schedule = existingSchedule || (normalizedTask.schedule == null &&
-    Number.isInteger(legacyRecurrence) && legacyRecurrence > 0
-    ? { type: 'periodic', every: legacyRecurrence, unit: 'day' }
-    : { type: 'one_off' })
+  normalizedTask.schedule = normalizeSchedule(normalizedTask.schedule) || { type: 'one_off' }
 
-  const existingScheduledDate = parseLocalDate(normalizedTask.scheduledDate)
-  const legacyScheduledDate = normalizedTask.scheduledDate == null
-    ? localDateFromTimestamp(normalizedTask.nextDueDate)
-    : null
   // Silence about the day survives the load. Stamping today onto a chore that
   // never named one would quietly move it into the week and out of the
   // unscheduled list, which is a decision the user did not make.
-  if (existingScheduledDate) {
-    normalizedTask.scheduledDate = formatLocalDate(existingScheduledDate)
-  } else {
-    normalizedTask.scheduledDate = legacyScheduledDate || null
-  }
+  const scheduledDate = parseLocalDate(normalizedTask.scheduledDate)
+  normalizedTask.scheduledDate = scheduledDate ? formatLocalDate(scheduledDate) : null
 
   normalizedTask.suggestedSchedule = normalizeSchedule(normalizedTask.suggestedSchedule)
   return normalizedTask

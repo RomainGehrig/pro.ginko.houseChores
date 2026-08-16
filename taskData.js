@@ -1,4 +1,5 @@
 import { normalizeTaskSchedule } from './scheduleLogic.js'
+import { upgradeLegacyTasks } from './taskMigration.js'
 
 export function buildNewTaskRecord (name) {
   return {
@@ -17,9 +18,14 @@ export function buildNewTaskRecord (name) {
   }
 }
 
+// Records carrying the old field names are rewritten as they are read, so the
+// upgrade needs no query of its own and stops happening once nothing is left to
+// upgrade. Everything downstream may then assume the current shape.
 export const listAllTasks = async () => {
   const tasks = await freezr.query('tasks', {}, { sort: { _date_modified: -1 } })
-  return tasks.map(task => normalizeTaskSchedule(task))
+  const upgraded = await upgradeLegacyTasks(tasks, (id, fields) =>
+    freezr.update('tasks', id, fields))
+  return upgraded.map(task => normalizeTaskSchedule(task))
 }
 
 export const createTask = name => freezr.create('tasks', buildNewTaskRecord(name))

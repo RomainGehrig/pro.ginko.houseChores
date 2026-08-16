@@ -114,6 +114,14 @@
       "Description": "Node tests covering proposed-task defaults, idempotent creation, and permanent deletion."
     },
     {
+      "path": "taskMigration.js",
+      "Description": "Rewrites stored task records from the retired field names into the current schedule shape."
+    },
+    {
+      "path": "taskMigration.test.js",
+      "Description": "Node tests covering the one-way upgrade of retired task fields and its write payload."
+    },
+    {
       "path": "executionData.js",
       "Description": "DB calls for deterministic task-execution upserts and session-scoped execution reads."
     },
@@ -418,17 +426,9 @@
           "type": "Object",
           "description": "Typed one_off, periodic, or fixed calendar rule used to generate later occurrences."
         },
-        "recurrence": {
-          "type": "String",
-          "description": "Legacy compatibility field for the approved recurrence interval in days, or null for a one-off task (numeric)."
-        },
         "lastCompletedDate": {
           "type": "String",
           "description": "Timestamp (ms) the task was last completed, or null."
-        },
-        "nextDueDate": {
-          "type": "String",
-          "description": "Legacy compatibility field for the timestamp (ms) previously used as the task's next planning date (numeric)."
         },
         "status": {
           "type": "String",
@@ -445,10 +445,6 @@
         "suggestedSchedule": {
           "type": "Object",
           "description": "Validated AI-proposed schedule rule pending explicit user review, or null."
-        },
-        "suggestedRecurrenceDays": {
-          "type": "String",
-          "description": "Legacy compatibility field for AI-suggested recurrence in days, pending user approval (numeric)."
         }
       }
     },

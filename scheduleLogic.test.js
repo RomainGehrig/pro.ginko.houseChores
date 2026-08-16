@@ -137,31 +137,39 @@ test('matches fixed calendar dates clamped to February', () => {
   assert.equal(validateScheduleInput({ scheduledDate: '2026-02-28', schedule: annual }).ok, true)
 })
 
-test('normalizes current local records without writing a migration', () => {
+test('reads a stored record as it stands, stating absences rather than inventing them', () => {
   assert.deepEqual(normalizeTaskSchedule({
-    _id: 'legacy-recurring',
-    recurrence: 14,
-    nextDueDate: new Date(2026, 7, 20, 12).getTime(),
+    _id: 'recurring',
+    schedule: { type: 'periodic', every: 2, unit: 'week' },
+    scheduledDate: '2026-08-20',
     status: 'approved_recurring'
   }), {
-    _id: 'legacy-recurring',
-    recurrence: 14,
-    nextDueDate: new Date(2026, 7, 20, 12).getTime(),
+    _id: 'recurring',
     status: 'approved_recurring',
     scheduledDate: '2026-08-20',
-    schedule: { type: 'periodic', every: 14, unit: 'day' },
+    schedule: { type: 'periodic', every: 2, unit: 'week' },
     suggestedSchedule: null
   })
 
   // An active chore with nothing said about when it comes round keeps that
   // silence: it belongs in the unscheduled list, not stamped with today.
   assert.equal(normalizeTaskSchedule({
-    status: 'active', recurrence: null, nextDueDate: 'invalid'
+    status: 'active', scheduledDate: null
   }).scheduledDate, null)
 
   assert.equal(normalizeTaskSchedule({
     status: 'proposed', schedule: { type: 'one_off' }
   }).scheduledDate, null)
+
+  // Unusable stored values are read as absences, never carried forward as-is.
+  const unusable = normalizeTaskSchedule({
+    schedule: { type: 'periodic', every: 0, unit: 'day' },
+    scheduledDate: '2026-02-30',
+    suggestedSchedule: { type: 'periodic', every: 'weekly' }
+  })
+  assert.deepEqual(unusable.schedule, { type: 'one_off' })
+  assert.equal(unusable.scheduledDate, null)
+  assert.equal(unusable.suggestedSchedule, null)
 })
 
 test('formats local dates without crossing UTC boundaries', () => {
