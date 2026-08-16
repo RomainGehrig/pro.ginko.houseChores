@@ -398,8 +398,9 @@ test('the modal writes a category, an estimate and a name through to the record'
       '<div id="choresStatus"></div>' +
       '<div id="sheetScrim" hidden></div>' +
       '<section id="bottomSheet" hidden role="dialog" aria-modal="true" aria-labelledby="bottomSheetTitle">' +
-        '<h2 id="bottomSheetTitle"></h2><p id="bottomSheetMessage"></p>' +
-        '<div id="bottomSheetActions"></div>' +
+        '<div id="bottomSheetHead"><h2 id="bottomSheetTitle"></h2>' +
+        '<div id="bottomSheetHeadAction"></div></div>' +
+        '<p id="bottomSheetMessage"></p><div id="bottomSheetActions"></div>' +
       '</section>',
     script: `
       const records = {
@@ -469,6 +470,109 @@ test('the modal writes a category, an estimate and a name through to the record'
       categoryId: 'category-2',
       estimatedDuration: 45
     }
+  })
+})
+
+// Marking done is about the chore, not about the edit, so it sits in the title
+// row. Archiving is about the chore too, but a misfire costs you a chore off the
+// list — it stays a quiet aside at the far end, well clear of Cancel and Save.
+test('the editor completes from its header and keeps archiving out of the action path', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 640 },
+    body: '<button id="addTasksBtn"></button><button id="enrichBtn"></button>' +
+      '<span id="enrichStatus"></span><div id="proposedCards"></div>' +
+      '<span id="choresCountLine"></span><div id="choresViews"></div>' +
+      '<div id="choresFilters"><input id="choreSearch"><div id="choreCategoryFilter"></div></div>' +
+      '<div id="activeCards"></div><div id="unscheduledCards"></div>' +
+      '<div id="archivedCards"></div><div id="archiveStatus"></div>' +
+      '<div id="choresStatus"></div>' +
+      '<div id="sheetScrim" hidden></div>' +
+      '<section id="bottomSheet" hidden role="dialog" aria-modal="true" aria-labelledby="bottomSheetTitle">' +
+        '<div id="bottomSheetHead"><h2 id="bottomSheetTitle"></h2>' +
+        '<div id="bottomSheetHeadAction"></div></div>' +
+        '<p id="bottomSheetMessage"></p><div id="bottomSheetActions"></div>' +
+      '</section>',
+    script: `
+      const records = {
+        categories: [],
+        locations: [],
+        tasks: [{
+          _id: 'task-active', name: 'Clean kitchen', status: 'approved_recurring',
+          categoryId: null, locationIds: [], estimatedDuration: 20,
+          scheduledDate: '2026-08-21', schedule: { type: 'periodic', every: 1, unit: 'week' },
+          lastCompletedDate: null
+        }]
+      }
+      const clone = value => structuredClone(value)
+      window.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async () => ({}),
+        updateFields: async (collection, id, fields) => {
+          const record = records[collection].find(item => item._id === id)
+          Object.assign(record, clone(fields))
+          return clone(record)
+        }
+      }
+
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      await categoryLocationStore.initialize()
+      await initTasksView()
+
+      document.querySelector('[data-id="task-active"] .ledger-row-summary').click()
+      await Promise.resolve()
+
+      const head = document.getElementById('bottomSheetHeadAction')
+      const done = head.querySelector('.done-btn')
+      const archive = document.querySelector('.archive-btn')
+      const actions = document.getElementById('bottomSheetActions')
+      const save = [...actions.querySelectorAll('button')].find(b => b.textContent === 'Save')
+      const body = document.getElementById('bottomSheetMessage')
+
+      const placement = {
+        doneIsInTheHeader: Boolean(done),
+        noDoneInTheBody: !body.querySelector('.done-btn'),
+        // A quiet control keeps its own size; a peer of Save would match it.
+        archiveIsNarrowerThanSave:
+          archive.getBoundingClientRect().width < save.getBoundingClientRect().width * 0.75,
+        archiveClearsTheActionBar:
+          actions.getBoundingClientRect().top - archive.getBoundingClientRect().bottom >= 16,
+        archiveStartsAtTheBodyEdge:
+          Math.abs(archive.getBoundingClientRect().left - body.getBoundingClientRect().left) < 2
+      }
+
+      // The header control asks a second time in its own label, then writes.
+      done.click()
+      const armedLabel = head.querySelector('.done-btn').textContent
+      head.querySelector('.done-btn').click()
+      await new Promise(resolve => setTimeout(resolve, 60))
+
+      const result = {
+        ...placement,
+        armedLabel,
+        completed: typeof records.tasks[0].lastCompletedDate === 'number',
+        movedOn: records.tasks[0].scheduledDate
+      }
+    `
+  })
+
+  assert.deepEqual(result, {
+    doneIsInTheHeader: true,
+    noDoneInTheBody: true,
+    archiveIsNarrowerThanSave: true,
+    archiveClearsTheActionBar: true,
+    archiveStartsAtTheBodyEdge: true,
+    armedLabel: 'Tap again to confirm',
+    completed: true,
+    movedOn: (() => {
+      const today = new Date()
+      const week = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 7, 12)
+      return [
+        String(week.getFullYear()).padStart(4, '0'),
+        String(week.getMonth() + 1).padStart(2, '0'),
+        String(week.getDate()).padStart(2, '0')
+      ].join('-')
+    })()
   })
 })
 
@@ -1103,6 +1207,66 @@ test('bottom sheet keeps focus among its own controls, body fields included', as
     afterLastAction: 'archive',
     beforeName: 'Save',
     bodyIsMessage: true
+  })
+})
+
+// A sheet's title row can carry one control of its own, for an action that is
+// about the thing being edited rather than about the edit. It has to sit on the
+// title's line and stay inside the focus trap, and a sheet that asks for none
+// must not be left holding the last one.
+test('the sheet header carries its action on the title line, inside the trap', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 640 },
+    body: '<div id="sheetScrim" hidden></div>' +
+      '<section id="bottomSheet" hidden role="dialog" aria-modal="true" aria-labelledby="bottomSheetTitle">' +
+        '<div id="bottomSheetHead"><h2 id="bottomSheetTitle"></h2>' +
+        '<div id="bottomSheetHeadAction"></div></div>' +
+        '<p id="bottomSheetMessage"></p><div id="bottomSheetActions"></div>' +
+      '</section>',
+    script: `
+      const { openSheet } = await import(applicationUrl + 'sheet.js')
+      openSheet({
+        title: 'Edit chore',
+        headerActionHtml: '<button id="done" class="btn done-btn">Mark as done</button>',
+        bodyHtml: '<input id="name" value="Mop">',
+        actions: [{ value: null, label: 'Cancel' }, { value: 'save', label: 'Save' }]
+      })
+
+      const sheet = document.getElementById('bottomSheet')
+      const title = document.getElementById('bottomSheetTitle').getBoundingClientRect()
+      const done = document.getElementById('done').getBoundingClientRect()
+      const shell = sheet.getBoundingClientRect()
+
+      const sheet2 = { opensOn: document.activeElement.id }
+      document.getElementById('done').focus()
+      const forward = new KeyboardEvent('keydown',
+        { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true })
+      sheet.dispatchEvent(forward)
+      const wrapsBackTo = document.activeElement.textContent
+
+      openSheet({ title: 'Plain', message: 'No action here', actions: [{ value: 'ok', label: 'OK' }] })
+
+      const result = {
+        opensOnField: sheet2.opensOn,
+        onTheTitleLine: Math.abs((done.top + done.bottom) / 2 - (title.top + title.bottom) / 2) < 12,
+        toTheRightOfTheTitle: done.left >= title.right,
+        // Right-aligned in the sheet, and nowhere near full width.
+        holdsTheRightEdge: shell.right - done.right < 32,
+        notFullWidth: done.width < shell.width / 2,
+        wrapsBackTo,
+        clearedForASheetWithoutOne: document.getElementById('bottomSheetHeadAction').innerHTML
+      }
+    `
+  })
+
+  assert.deepEqual(result, {
+    opensOnField: 'name',
+    onTheTitleLine: true,
+    toTheRightOfTheTitle: true,
+    holdsTheRightEdge: true,
+    notFullWidth: true,
+    wrapsBackTo: 'Save',
+    clearedForASheetWithoutOne: ''
   })
 })
 

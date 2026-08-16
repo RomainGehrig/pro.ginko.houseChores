@@ -30,6 +30,11 @@ function focusableControls () {
 // its content after the sheet closes, which is what makes Save readable.
 export const sheetBody = () => elements?.message ?? null
 
+// The title row's own control, for an action about the thing being edited
+// rather than about the edit. A caller that listens for clicks inside the sheet
+// needs this as well as the body, since the two are siblings.
+export const sheetHeadAction = () => elements?.headAction ?? null
+
 const scheduleFrame = callback => typeof requestAnimationFrame === 'function'
   ? requestAnimationFrame(callback)
   : setTimeout(callback, 0)
@@ -138,7 +143,10 @@ export function initSheet () {
   const actions = document.getElementById('bottomSheetActions')
   if (!scrim || !sheet || !title || !message || !actions) return false
 
-  elements = { scrim, sheet, title, message, actions }
+  // Optional: a sheet is complete without a header action, and the older
+  // markup that has no slot for one simply never gets offered it.
+  const headAction = document.getElementById('bottomSheetHeadAction')
+  elements = { scrim, sheet, title, message, actions, headAction }
   sheet.addEventListener('keydown', handleKeydown)
   sheet.addEventListener('transitionend', event => {
     if (closing && event.propertyName === 'transform' && sheet.dataset.state === 'closed') finishClose()
@@ -148,12 +156,20 @@ export function initSheet () {
   return true
 }
 
-export function openSheet ({ title, message, bodyHtml = null, actions = [] }) {
+export function openSheet ({
+  title, message, bodyHtml = null, headerActionHtml = null, actions = []
+}) {
   if (!initSheet()) return Promise.resolve(null)
   finishForReplacement()
 
   priorFocus = document.activeElement
   elements.title.textContent = String(title ?? '')
+  // Cleared for every sheet, so one that asks for no header action is never
+  // left holding the last sheet's.
+  if (elements.headAction) {
+    elements.headAction.innerHTML = headerActionHtml ? String(headerActionHtml) : ''
+    elements.headAction.hidden = !headerActionHtml
+  }
   // bodyHtml comes from the app's own builders, which escape every chore-supplied
   // value. Controls stay in `actions` so the focus trap still sees all of them.
   if (bodyHtml === null) elements.message.textContent = String(message ?? '')

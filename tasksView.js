@@ -26,9 +26,9 @@ import {
   unscheduledListHtml
 } from './chores/listView.js'
 import { categoryPillsHtml, locationPillsHtml, referenceStateSuffix } from './chores/fieldPills.js'
-import { editModalHtml, readEditModal } from './chores/editModal.js'
+import { choreDoneButtonHtml, editModalHtml, readEditModal } from './chores/editModal.js'
 import { doneLabel, unscheduledTasks } from './chores/ledgerLogic.js'
-import { closeSheetWith, openSheet, sheetBody } from './sheet.js'
+import { closeSheetWith, openSheet, sheetBody, sheetHeadAction } from './sheet.js'
 import { optimisticArchive, pendingUndo } from './undoToast.js'
 import { runArchiveAction } from './archiveView.js'
 
@@ -734,6 +734,7 @@ async function openChoreEditor (id) {
 
   const choice = await openSheet({
     title: 'Edit chore',
+    headerActionHtml: choreDoneButtonHtml(),
     bodyHtml: editModalHtml(task, snapshot),
     actions: [
       { label: 'Cancel', value: null, className: 'btn btn-ghost' },
@@ -784,8 +785,12 @@ async function openChoreEditor (id) {
 // leaving the edit, not part of it. Each resolves the sheet with its own value.
 function handleEditorClick (evt) {
   const body = sheetBody()
-  if (!body?.contains(evt.target)) return
-  const card = body.querySelector('.edit-modal')
+  const head = sheetHeadAction()
+  // Marking done sits in the title row, so the editor listens to both halves of
+  // the sheet — they are siblings, not one inside the other.
+  const inEditor = body?.contains(evt.target) || head?.contains(evt.target)
+  if (!inEditor) return
+  const card = body?.querySelector('.edit-modal')
   if (!card) return
 
   const done = evt.target.closest('.done-btn')
@@ -801,10 +806,12 @@ function handleEditorClick (evt) {
   }
   if (evt.target.closest('.archive-btn')) return closeSheetWith('archive')
 
-  const done2 = body.querySelector('.done-btn')
-  if (done2?.getAttribute('aria-pressed') === 'true') {
-    done2.setAttribute('aria-pressed', 'false')
-    done2.textContent = doneLabel(false)
+  // Anything else you touch is you carrying on editing, so the armed
+  // confirmation stands down rather than waiting for a stray second press.
+  const armed = head?.querySelector('.done-btn')
+  if (armed?.getAttribute('aria-pressed') === 'true') {
+    armed.setAttribute('aria-pressed', 'false')
+    armed.textContent = doneLabel(false)
   }
 
   if (handleScheduleChoiceClick(evt)) return

@@ -3,7 +3,7 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { editModalHtml, readEditModal } from './editModal.js'
+import { choreDoneButtonHtml, editModalHtml, readEditModal } from './editModal.js'
 
 const SNAPSHOT = {
   categories: [
@@ -42,23 +42,29 @@ test('the modal carries the whole chore, name first', () => {
   assert.match(markup, /data-schedule-field="date"/)
   assert.match(markup, /data-field="category"[^>]*data-value="cat-1"[^>]*aria-pressed="true"/)
   assert.match(markup, /class="f-location"[^>]*value="loc-1"[^>]*checked/)
-  assert.match(markup, /class="btn done-btn"[^>]*>Mark as done</)
   assert.match(markup, /archive-btn/)
 })
 
-// Marking a chore done is the thing you most often come here to do, so it is a
-// button in its own right at the top. Archiving is rare and hard to mistake for
-// an edit, so it waits at the bottom, past everything you might have come for.
-test('done leads the editor and archive closes it', () => {
+// Marking a chore done is not an edit, so it belongs beside the title rather
+// than at the head of the fields, where it pushed the actual editing down.
+test('the body holds the fields alone, the completion control living in the header', () => {
   const markup = editModalHtml(chore(), SNAPSHOT, {})
-  const doneAt = markup.indexOf('done-btn')
-  const nameAt = markup.indexOf('edit-name')
-  const archiveAt = markup.indexOf('archive-btn')
+  assert.doesNotMatch(markup, /done-btn/)
+  assert.match(choreDoneButtonHtml(), /class="btn done-btn"[^>]*>Mark as done</)
+  assert.match(choreDoneButtonHtml(false), /aria-pressed="false"/)
+  assert.match(choreDoneButtonHtml(true), /aria-pressed="true"[^>]*>Tap again to confirm</)
+})
 
-  assert.ok(doneAt < nameAt, 'done comes before the fields')
-  assert.ok(archiveAt > markup.indexOf('f-locations'), 'archive comes after them')
-  assert.match(markup, /class="edit-done"/)
+// Archiving is neither an edit nor common, and a misfired one is a chore
+// vanishing from the list. It reads as a quiet aside at the far end, never as a
+// third answer sitting in the path of Cancel and Save.
+test('archive waits past the fields as a quiet control, not a peer of the actions', () => {
+  const markup = editModalHtml(chore(), SNAPSHOT, {})
+  assert.ok(markup.indexOf('archive-btn') > markup.indexOf('f-locations'),
+    'archive comes after the fields')
   assert.match(markup, /class="edit-archive"/)
+  assert.match(markup, /class="btn btn-text archive-btn"/)
+  assert.doesNotMatch(markup, /btn-primary|btn-ghost/)
 })
 
 test('a name with markup in it is text, not markup', () => {
@@ -67,10 +73,8 @@ test('a name with markup in it is text, not markup', () => {
   assert.match(markup, /value="&lt;img src=x onerror=alert\(1\)&gt;"/)
 })
 
-test('the confirming done label and a pending error both come through', () => {
-  const markup = editModalHtml(chore(), SNAPSHOT,
-    { confirmDone: true, error: 'Choose a valid schedule.' })
-  assert.match(markup, /aria-pressed="true"[^>]*>Tap again to confirm</)
+test('a pending error is stated in the body, beside the fields it is about', () => {
+  const markup = editModalHtml(chore(), SNAPSHOT, { error: 'Choose a valid schedule.' })
   assert.match(markup, /class="task-card-error" role="alert">Choose a valid schedule\./)
 })
 

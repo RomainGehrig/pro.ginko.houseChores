@@ -652,6 +652,25 @@ label:has(input[type="radio"]) {
   margin-top: 0;
 }
 
+/* The title row can carry one control of its own, for an action about the thing
+   being edited rather than about the edit. It holds the right edge so it never
+   reads as one of the answers waiting at the bottom. */
+#bottomSheetHead {
+  align-items: center;
+  display: flex;
+  gap: var(--s3);
+  justify-content: space-between;
+  margin-bottom: var(--s3);
+}
+
+#bottomSheetHead h2 {
+  margin-bottom: 0;
+}
+
+#bottomSheetHeadAction {
+  flex: 0 0 auto;
+}
+
 #bottomSheetActions {
   display: grid;
   gap: var(--s2);
@@ -1192,17 +1211,15 @@ label:has(input[type="radio"]) {
   width: 1px;
 }
 
-/* Marking a chore done is what you most often open it to do, so it leads at
-   full width. Archiving is neither an edit nor common, so it closes the sheet
-   from the far end, behind a rule that separates it from the fields. */
-.edit-done .done-btn {
-  width: 100%;
-}
-
+/* Archiving is neither an edit nor common, and a misfire takes a chore off the
+   list. It sits at the far end as a quiet aside — small, at the near edge,
+   behind a rule, and with room left below it so a thumb reaching for Save
+   cannot find it instead. */
 .edit-archive {
   border-top: 1px solid var(--rule);
   display: flex;
-  justify-content: center;
+  justify-content: flex-start;
+  padding-bottom: var(--s4);
   padding-top: var(--s4);
 }
 
@@ -3528,7 +3545,11 @@ textarea {
   margin: 4px 0 0;
 }
 
+/* A quiet control keeps its own width — anything wider starts to read as a
+   third answer beside Cancel and Save, which is exactly what it is not. It
+   keeps the full tap-target height all the same: small is not the same as
+   fiddly, and the distance from the action bar is what stops the misfire. */
 .edit-archive .btn {
   font-size: 13px;
-  padding: var(--s2) var(--s3);
+  padding: var(--s2) 0;
 }

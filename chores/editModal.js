@@ -7,19 +7,20 @@ import { buildScheduleEditorModel, scheduleEditorHtml, readScheduleEditor } from
 import { categoryPillsHtml, estimateStepperHtml, locationPillsHtml } from './fieldPills.js'
 import { doneLabel } from './ledgerLogic.js'
 
+// Recording a completion is not an edit — it is the other thing you open a
+// chore to do — so it rides in the sheet's title row rather than at the head of
+// the fields. It still asks a second time in its own label, being awkward to
+// take back.
+export function choreDoneButtonHtml (confirming = false) {
+  return '<button type="button" class="btn done-btn" aria-pressed="' +
+    (confirming ? 'true' : 'false') + '">' + doneLabel(confirming) + '</button>'
+}
+
 export function editModalHtml (task, snapshot, state = {}) {
   const model = buildTaskEditorModel(task, snapshot)
   const selectedLocationIds = new Set(model.locationIds)
-  const confirmDone = Boolean(state.confirmDone)
 
   return '<div class="edit-modal" data-id="' + escapeAttribute(task?._id ?? '') + '">' +
-    // Recording a completion is what you most often open a chore to do, so it
-    // leads — a button in its own right, not a scrap floating beside the title.
-    // It still asks a second time in its own label, being awkward to take back.
-    '<div class="edit-done">' +
-      '<button type="button" class="btn done-btn" aria-pressed="' +
-        (confirmDone ? 'true' : 'false') + '">' + doneLabel(confirmDone) + '</button>' +
-    '</div>' +
     '<label class="field-group"><span class="eyebrow eyebrow-quiet">Name</span>' +
       '<input type="text" class="input edit-name" name="name" aria-label="Chore name" ' +
       'autocomplete="off" value="' +
@@ -33,10 +34,11 @@ export function editModalHtml (task, snapshot, state = {}) {
       '<fieldset class="f-locations pill-set"><legend class="visually-hidden">Locations</legend>' +
       locationPillsHtml(model, selectedLocationIds) + '</fieldset></div>' +
     '<p class="task-card-error" role="alert">' + escapeHtml(state.error || '') + '</p>' +
-    // Archiving is not an edit and is rarely what you came for, so it waits at
-    // the end, past everything that is.
+    // Archiving is not an edit, is rarely what you came for, and a misfired one
+    // takes a chore off the list. It waits at the far end as a quiet aside —
+    // never as a third answer standing in the path of Cancel and Save.
     '<div class="edit-archive">' +
-      '<button type="button" class="btn btn-ghost archive-btn">Archive</button>' +
+      '<button type="button" class="btn btn-text archive-btn">Archive this chore</button>' +
     '</div>' +
   '</div>'
 }
