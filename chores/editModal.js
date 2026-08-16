@@ -24,7 +24,8 @@ export function editModalHtml (task, snapshot, state = {}) {
   return '<div class="edit-modal" data-id="' + escapeAttribute(task?._id ?? '') + '">' +
     choreActionsHtml(Boolean(state.confirmDone)) +
     '<label class="field-group"><span class="eyebrow eyebrow-quiet">Name</span>' +
-      '<input type="text" class="input edit-name" name="name" aria-label="Chore name" value="' +
+      '<input type="text" class="input edit-name" name="name" aria-label="Chore name" ' +
+      'autocomplete="off" value="' +
       escapeAttribute(String(task?.name ?? '')) + '"></label>' +
     estimateStepperHtml(task) +
     '<div class="field-group"><span class="eyebrow eyebrow-quiet">Schedule</span>' +

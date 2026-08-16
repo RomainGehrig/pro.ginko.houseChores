@@ -13,7 +13,7 @@ export const estimateStepperHtml = task => {
     '<div class="estimate-stepper">' +
       '<button type="button" class="pill-icon est-minus" aria-label="Less time">−</button>' +
       '<input class="input fig est-input" type="number" name="estimatedDuration" min="1" step="1" ' +
-        'inputmode="numeric" aria-label="Estimate in minutes" value="' +
+        'inputmode="numeric" autocomplete="off" aria-label="Estimate in minutes" value="' +
         escapeAttribute(minutes) + '">' +
       '<span class="est-unit muted">min</span>' +
       '<button type="button" class="pill-icon est-plus" aria-label="More time">+</button>' +
