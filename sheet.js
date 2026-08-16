@@ -182,7 +182,11 @@ export function openSheet ({ title, message, bodyHtml = null, actions = [] }) {
     openingFrame = null
     if (activeOpen === open && resolveOpen) elements.sheet.dataset.state = 'open'
   })
-  // A form begins at its first field; a plain confirmation at its first action.
-  ;(focusableControls()[0] || enabledActions()[0])?.focus()
+  // A form begins at its first field, whatever else the body puts above it — a
+  // sheet must never open on a button that starts a confirmation. A sheet with
+  // no fields is a plain confirmation, and begins at its first action.
+  const field = elements.message.querySelector(
+    'input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])')
+  ;(field || enabledActions()[0] || focusableControls()[0])?.focus()
   return promise
 }

@@ -971,7 +971,9 @@ test('bottom sheet keeps focus among its own controls, body fields included', as
       const { openSheet, sheetBody } = await import(applicationUrl + 'sheet.js')
       openSheet({
         title: 'Edit',
-        bodyHtml: '<input id="name" value="Mop"><button id="archive">Archive</button>',
+        // The chore's own actions come first in the markup; focus must still
+        // land on the field, never on a button that starts a confirmation.
+        bodyHtml: '<button id="archive">Archive</button><input id="name" value="Mop">',
         actions: [
           { value: null, label: 'Cancel' },
           { value: 'save', label: 'Save' }
@@ -996,7 +998,7 @@ test('bottom sheet keeps focus among its own controls, body fields included', as
       sheet.querySelector('#bottomSheetActions button:last-child').focus()
       tab(false)
       const afterLastAction = document.activeElement.id
-      document.getElementById('name').focus()
+      document.getElementById('archive').focus()
       tab(true)
       const beforeName = document.activeElement.textContent
 
@@ -1010,7 +1012,7 @@ test('bottom sheet keeps focus among its own controls, body fields included', as
   assert.deepEqual(result, {
     opensOn: 'name',
     heldAtName: false,
-    afterLastAction: 'name',
+    afterLastAction: 'archive',
     beforeName: 'Save',
     bodyIsMessage: true
   })
