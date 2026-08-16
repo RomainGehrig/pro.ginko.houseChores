@@ -15,6 +15,21 @@ function enabledActions () {
   return [...elements.actions.querySelectorAll('button:not([disabled])')]
 }
 
+// A sheet carrying a form must hold focus over the fields too, not only the
+// action buttons, or Tab walks out of the dialog and into the page behind it.
+const FOCUSABLE = 'button:not([disabled]), input:not([disabled]):not([type="hidden"]), ' +
+  'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+function focusableControls () {
+  return [...elements.sheet.querySelectorAll(FOCUSABLE)]
+    .filter(control => !control.closest('[hidden]') &&
+      (control.offsetWidth > 0 || control.offsetHeight > 0 || control === document.activeElement))
+}
+
+// The body element, so a caller that opened a form can read it back. It keeps
+// its content after the sheet closes, which is what makes Save readable.
+export const sheetBody = () => elements?.message ?? null
+
 const scheduleFrame = callback => typeof requestAnimationFrame === 'function'
   ? requestAnimationFrame(callback)
   : setTimeout(callback, 0)
@@ -95,7 +110,7 @@ function handleKeydown (event) {
   }
   if (event.key !== 'Tab') return
 
-  const controls = enabledActions()
+  const controls = focusableControls()
   if (!controls.length) return
   const first = controls[0]
   const last = controls[controls.length - 1]
@@ -163,6 +178,7 @@ export function openSheet ({ title, message, bodyHtml = null, actions = [] }) {
     openingFrame = null
     if (activeOpen === open && resolveOpen) elements.sheet.dataset.state = 'open'
   })
-  enabledActions()[0]?.focus()
+  // A form begins at its first field; a plain confirmation at its first action.
+  ;(focusableControls()[0] || enabledActions()[0])?.focus()
   return promise
 }

@@ -948,6 +948,67 @@ test('bottom sheet traps focus, renders safe text, dismisses, and restores prior
   assert.ok(result.minActionHeights.every(height => height >= 44.5), JSON.stringify(result))
 })
 
+// Once a sheet carries a form, the controls the user actually types into live
+// in the body. A trap that only knew about the action buttons let Tab walk out
+// of the dialog and into the page behind it.
+test('bottom sheet keeps focus among its own controls, body fields included', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 640 },
+    body: '<main id="app"><button id="behind">Behind</button></main>' +
+      '<div id="sheetScrim" hidden></div>' +
+      '<section id="bottomSheet" hidden role="dialog" aria-modal="true" aria-labelledby="bottomSheetTitle">' +
+        '<h2 id="bottomSheetTitle"></h2><p id="bottomSheetMessage"></p>' +
+        '<div id="bottomSheetActions"></div>' +
+      '</section>',
+    script: `
+      const { openSheet, sheetBody } = await import(applicationUrl + 'sheet.js')
+      openSheet({
+        title: 'Edit',
+        bodyHtml: '<input id="name" value="Mop"><button id="archive">Archive</button>',
+        actions: [
+          { value: null, label: 'Cancel' },
+          { value: 'save', label: 'Save' }
+        ]
+      })
+      const sheet = document.getElementById('bottomSheet')
+      const tab = (shiftKey) => {
+        const event = new KeyboardEvent('keydown',
+          { key: 'Tab', shiftKey, bubbles: true, cancelable: true })
+        sheet.dispatchEvent(event)
+        return event.defaultPrevented
+      }
+
+      // The first field, not the first action, is where a form begins.
+      const opensOn = document.activeElement.id
+
+      // Mid-list, the browser's own tab order is left alone.
+      document.getElementById('name').focus()
+      const heldAtName = tab(false)
+
+      // Forward from the last control wraps to the first, and back again.
+      sheet.querySelector('#bottomSheetActions button:last-child').focus()
+      tab(false)
+      const afterLastAction = document.activeElement.id
+      document.getElementById('name').focus()
+      tab(true)
+      const beforeName = document.activeElement.textContent
+
+      const result = {
+        opensOn, heldAtName, afterLastAction, beforeName,
+        bodyIsMessage: sheetBody() === document.getElementById('bottomSheetMessage')
+      }
+    `
+  })
+
+  assert.deepEqual(result, {
+    opensOn: 'name',
+    heldAtName: false,
+    afterLastAction: 'name',
+    beforeName: 'Save',
+    bodyIsMessage: true
+  })
+})
+
 test('bottom sheet paints a vertical closed state before transitioning open and closed', async () => {
   const result = await runBrowserScenario({
     viewport: { width: 390, height: 640 },
