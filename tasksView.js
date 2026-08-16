@@ -401,10 +401,12 @@ function proposedCardHtml(task, snapshot) {
 
 // Pills write to the field the rest of the app already reads, then repaint
 // their own group so the pressed state and the value never disagree.
+// The same pills serve the Inbox card and the chore editor, so they climb to
+// whichever of the two they are inside rather than assuming the Inbox's card.
 function handleInboxPillClick (evt) {
   const pill = evt.target.closest('[data-field]')
   if (!pill) return
-  const card = pill.closest('.task-card')
+  const card = pill.closest('.task-card, .edit-modal')
   if (!card) return
 
   const field = pill.dataset.field

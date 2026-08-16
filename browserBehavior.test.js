@@ -384,6 +384,94 @@ test('reference publication preserves every proposed and active task draft contr
   })
 })
 
+// The pills resolve the editor they belong to by climbing to its root. When the
+// chore editor moved into the sheet that root stopped being a .task-card, and
+// every category pill silently stopped writing anything.
+test('the modal writes a category, an estimate and a name through to the record', async () => {
+  const result = await runBrowserScenario({
+    body: '<button id="addTasksBtn"></button><button id="enrichBtn"></button>' +
+      '<span id="enrichStatus"></span><div id="proposedCards"></div>' +
+      '<span id="choresCountLine"></span><div id="choresViews"></div>' +
+      '<div id="choresFilters"><input id="choreSearch"><div id="choreCategoryFilter"></div></div>' +
+      '<div id="activeCards"></div><div id="unscheduledCards"></div>' +
+      '<div id="archivedCards"></div><div id="archiveStatus"></div>' +
+      '<div id="choresStatus"></div>' +
+      '<div id="sheetScrim" hidden></div>' +
+      '<section id="bottomSheet" hidden role="dialog" aria-modal="true" aria-labelledby="bottomSheetTitle">' +
+        '<h2 id="bottomSheetTitle"></h2><p id="bottomSheetMessage"></p>' +
+        '<div id="bottomSheetActions"></div>' +
+      '</section>',
+    script: `
+      const records = {
+        categories: [
+          { _id: 'category-1', name: 'Cleaning', normalizedName: 'cleaning', status: 'active', displayOrder: 0 },
+          { _id: 'category-2', name: 'Admin', normalizedName: 'admin', status: 'active', displayOrder: 1 }
+        ],
+        locations: [
+          { _id: 'location-1', name: 'Kitchen', normalizedName: 'kitchen', status: 'active', displayOrder: 0 }
+        ],
+        tasks: [{
+          _id: 'task-active', name: 'Clean kitchen', status: 'approved_recurring',
+          categoryId: 'category-1', locationIds: [], estimatedDuration: 20,
+          scheduledDate: '2026-08-21', schedule: { type: 'one_off' }
+        }]
+      }
+      const clone = value => structuredClone(value)
+      window.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async () => ({}),
+        updateFields: async (collection, id, fields) => {
+          const record = records[collection].find(item => item._id === id)
+          Object.assign(record, clone(fields))
+          return clone(record)
+        }
+      }
+
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      await categoryLocationStore.initialize()
+      await initTasksView()
+
+      document.querySelector('[data-id="task-active"] .ledger-row-summary').click()
+      await Promise.resolve()
+      const modal = document.querySelector('.edit-modal')
+
+      modal.querySelector('[data-field="category"][data-value="category-2"]').click()
+      const writtenToField = modal.querySelector('.f-category').value
+      const pressed = [...modal.querySelectorAll('[data-field="category"]')]
+        .filter(pill => pill.getAttribute('aria-pressed') === 'true')
+        .map(pill => pill.dataset.value)
+
+      modal.querySelector('[data-estimate="45"]').click()
+      modal.querySelector('.edit-name').value = 'Clean the whole kitchen'
+
+      ;[...document.querySelectorAll('#bottomSheetActions button')]
+        .find(button => button.textContent === 'Save').click()
+      await new Promise(resolve => setTimeout(resolve, 50))
+
+      const result = {
+        writtenToField,
+        pressed,
+        stored: {
+          name: records.tasks[0].name,
+          categoryId: records.tasks[0].categoryId,
+          estimatedDuration: records.tasks[0].estimatedDuration
+        }
+      }
+    `
+  })
+
+  assert.deepEqual(result, {
+    writtenToField: 'category-2',
+    pressed: ['category-2'],
+    stored: {
+      name: 'Clean the whole kitchen',
+      categoryId: 'category-2',
+      estimatedDuration: 45
+    }
+  })
+})
+
 test('infers a fixed date then approves a manual off-pattern override', async () => {
   const result = await runBrowserScenario({
     body: '<button id="addTasksBtn"></button><button id="enrichBtn"></button>' +
