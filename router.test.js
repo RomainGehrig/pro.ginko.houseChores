@@ -69,9 +69,11 @@ function installRouterDom (hash = '') {
 
 test('parseRoute recognizes every final route and decodes its parameter', () => {
   const routes = [
-    ['', { name: 'today', param: null }],
-    ['#', { name: 'today', param: null }],
-    ['#/', { name: 'today', param: null }],
+    // A cold open lands on the ledger: the chore you are looking for is more
+    // often a chore you already have than a round you are about to start.
+    ['', { name: 'chores', param: null }],
+    ['#', { name: 'chores', param: null }],
+    ['#/', { name: 'chores', param: null }],
     ['#/today', { name: 'today', param: null }],
     ['#/inbox', { name: 'inbox', param: null }],
     ['#/chores', { name: 'chores', param: null }],
@@ -86,12 +88,12 @@ test('parseRoute recognizes every final route and decodes its parameter', () => 
   for (const [hash, expected] of routes) assert.deepEqual(parseRoute(hash), expected, hash)
 })
 
-test('parseRoute falls back to today for malformed, missing, unknown, and extra routes', () => {
+test('parseRoute falls back to chores for malformed, missing, unknown, and extra routes', () => {
   for (const hash of [
     '#/unknown', '#/chore', '#/receipt', '#/chore/', '#/receipt/',
     '#/chore/a/extra', '#/today/extra', 'today', '#/chore/%E0%A4%A'
   ]) {
-    assert.deepEqual(parseRoute(hash), { name: 'today', param: null }, hash)
+    assert.deepEqual(parseRoute(hash), { name: 'chores', param: null }, hash)
   }
 })
 
@@ -112,9 +114,9 @@ test('each final route shows its Stage 3 screen, focuses its heading, and canoni
 
   const fallback = installRouterDom('#/not-a-route')
   initRouter()
-  assert.equal(window.location.hash, '#/today')
-  assert.equal(fallback.views.get('today').style.display, '')
-  assert.equal(fallback.views.get('today').heading.focusCalls, 1)
+  assert.equal(window.location.hash, '#/chores')
+  assert.equal(fallback.views.get('chores').style.display, '')
+  assert.equal(fallback.views.get('chores').heading.focusCalls, 1)
 })
 
 test('primary navigation maps routes to the sole factual current destination', () => {
@@ -220,10 +222,10 @@ test('boot fallback replaces empty and invalid history without creating a Back b
     const dom = installRouterDom(hash)
     initRouter()
 
-    assert.deepEqual(dom.replaces, ['#/today'], hash)
+    assert.deepEqual(dom.replaces, ['#/chores'], hash)
     assert.deepEqual(dom.pushes, [], hash)
     dom.listeners.get('hashchange')()
-    assert.deepEqual(dom.replaces, ['#/today'], hash)
+    assert.deepEqual(dom.replaces, ['#/chores'], hash)
     assert.deepEqual(dom.pushes, [], hash)
   }
 })

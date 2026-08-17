@@ -28,6 +28,7 @@ The visual world is the printed household artefact: the **appliance rating plate
 What changes about how it feels:
 
 - **Opening the app is not a decision.** Today shows a round that is already built for the budget you used last time. There is no "Propose" button anywhere in the app.
+  *Amended 2026-08-17: the app now opens on the library (`#/chores`), not on Today. Opening it turned out to be more often "what have I got" than "start something now". The round is still built without being asked for; it is one tap away rather than underfoot.*
 - **Nothing is ever blocked on a form.** A captured chore is a working record from the instant you type it — it has a duration, a cadence and a date, and it is eligible for today's round immediately, wearing a pencil mark that says so.
 - **The app is allowed to be wrong out loud, but never silently.** It marks its guesses, refuses to guess where being wrong costs money, and corrects itself from measurement the first time you actually do the chore.
 - **Finishing pays you in facts, not adjectives.** No confetti, no "Great job!". A ruled-through line, the measured time, and one thing you did not previously know.
@@ -118,7 +119,8 @@ they tend to, what it costs) keep it, in `--graphite`, stated once.
 One person. A developer. Single household. He will close the tab on synthetic enthusiasm and he will not fill in a form to record his own housework.
 
 **Moment 1 — "I've got half an hour before people come over."** (most common)
-He opens the app wanting concrete work, not a list. Today shows the round already built, filled to about 85% of the budget, ordered by how far behind each chore actually is. Target: from cold open to first chore in **one tap**.
+He opens the app wanting concrete work, not a list. Today shows the round already built, filled to about 85% of the budget, ordered by how far behind each chore actually is.
+*Amended 2026-08-17: since the app opens on the library, this moment costs one tap to reach Today and one to start — cold open to first chore in **two taps**, not one.*
 
 **Moment 2 — "Three things occurred to me walking around."**
 He wants them out of his head with zero ceremony. He types or dictates lines; they save instantly and are already usable. Confirming them later is a glance and one tap per chore, not a form.
@@ -165,9 +167,9 @@ The 4,406px Tasks screen was four unrelated jobs sharing one scroll position. It
 Hash routing — no `pushState`, because freezr serves the app under `/apps/<appname>/index` and a history-API route would 404 on refresh. `location.hash` + `hashchange` is CSP-clean and survives reload exactly.
 
 ```
-#/today                default; the round + what's ready + capture
+#/today                the round + what's ready + capture
 #/inbox                unconfirmed drafts (nav item hidden when count is 0)
-#/chores               the library: search, filter, grouped ledger, year band
+#/chores               default; the library: search, filter, grouped ledger, year band
 #/chore/:id            one chore: the plate, the record, the occurrence strip
 #/archive              archived chores: Restore / Delete permanently
 #/doing                the active round (resumes on reload)
@@ -176,7 +178,7 @@ Hash routing — no `pushState`, because freezr serves the app under `/apps/<app
 #/setup                categories, places, guessing, export
 ```
 
-`router.js` owns exactly one exported pure function, `parseRoute(hash) -> { name, param }`, plus a subscribe/dispatch shell. Unknown routes fall back to `#/today`. Every route change moves focus to the new screen's `<h1 tabindex="-1">` and sets `aria-current="page"` on the nav item.
+`router.js` owns exactly one exported pure function, `parseRoute(hash) -> { name, param }`, plus a subscribe/dispatch shell. Unknown routes fall back to `#/chores`. Every route change moves focus to the new screen's `<h1 tabindex="-1">` and sets `aria-current="page"` on the nav item.
 
 ```
                        ┌──────────────────────────────┐

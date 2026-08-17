@@ -1,6 +1,9 @@
 // ABOUTME: Parses final hash routes independently from the DOM and app data.
 
-const TODAY = { name: 'today', param: null }
+// Where the app opens, and where an unreadable hash lands. The ledger, not the
+// round: opening the app is more often "what have I got" than "start something
+// now", and the round is one tap away when it is the answer.
+const DEFAULT_ROUTE = { name: 'chores', param: null }
 const SIMPLE_ROUTES = new Set(['today', 'inbox', 'chores', 'archive', 'doing', 'log', 'setup'])
 const PARAMETER_ROUTES = new Set(['chore', 'receipt'])
 const SCREEN_NAMES = ['today', 'inbox', 'chores', 'setup', 'doing', 'review', 'log']
@@ -58,14 +61,14 @@ function recognizedRoute (hash) {
 }
 
 export function parseRoute (hash) {
-  return recognizedRoute(hash) || { ...TODAY }
+  return recognizedRoute(hash) || { ...DEFAULT_ROUTE }
 }
 
 function hashForRoute (route) {
   if (PARAMETER_ROUTES.has(route.name) && route.param) {
     return '#/' + route.name + '/' + encodeURIComponent(route.param)
   }
-  return '#/' + (SIMPLE_ROUTES.has(route.name) ? route.name : 'today')
+  return '#/' + (SIMPLE_ROUTES.has(route.name) ? route.name : DEFAULT_ROUTE.name)
 }
 
 function routeForView (name, param) {
@@ -114,7 +117,7 @@ function renderContextualNavigation (route) {
 }
 
 function renderRoute (route) {
-  const screenName = ROUTE_SCREENS[route.name] || ROUTE_SCREENS.today
+  const screenName = ROUTE_SCREENS[route.name] || ROUTE_SCREENS[DEFAULT_ROUTE.name]
   if (typeof document === 'undefined') return route
 
   for (const name of SCREEN_NAMES) {
