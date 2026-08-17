@@ -1874,6 +1874,98 @@ const TODAY_SCRIPT = `
   }
 `
 
+// Fill it is help with the rest of the session, not a verdict on the part you
+// chose. What you put in stays in, and the app works out what fits around it.
+test('Fill it builds around the chores already picked instead of replacing them', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 1280, height: 900 },
+    body: '<main id="app"><section id="view-today" class="view">' +
+      '<span id="budgetHeadline"></span><span id="todayDate"></span>' +
+      '<button id="proposeBundleBtn" type="button">Fill it</button>' +
+      '<button id="startSessionBtn" type="button">Start</button>' +
+      '<input id="customMinutes" type="number">' +
+      '<div id="vesselColumn"><div id="vesselLine"><span id="vesselLineLabel"></span></div>' +
+      '<div id="vesselFill"></div></div>' +
+      '<ol id="vesselList"></ol><p id="vesselIdle"></p>' +
+      '<p id="bundleTotalLine"></p><p id="bundleFitLine"></p>' +
+      '<div id="sessionStatus"></div><div id="doingStatus"></div>' +
+      '<div id="categoryFilter"></div><div id="poolChips"></div>' +
+      '</section>' +
+      // The pool is fed from the chore list, so its screen has to be present too.
+      '<button id="addTasksBtn"></button><button id="enrichBtn"></button>' +
+      '<span id="enrichStatus"></span><div id="proposedCards"></div>' +
+      '<span id="choresCountLine"></span><div id="choresViews"></div>' +
+      '<div id="choresFilters"><input id="choreSearch"><div id="choreCategoryFilter"></div></div>' +
+      '<div id="activeCards"></div><div id="unscheduledCards"></div>' +
+      '<div id="archivedCards"></div><div id="archiveStatus"></div>' +
+      '<div id="choresStatus"></div>' +
+      '</main>',
+    script: `
+      const records = {
+        categories: [], locations: [],
+        tasks: [
+          { _id: 'long', name: 'Descale the machine', status: 'active', categoryId: null,
+            locationIds: [], estimatedDuration: 20, scheduledDate: '2026-08-25',
+            schedule: { type: 'one_off' } },
+          { _id: 'early', name: 'Water the plants', status: 'active', categoryId: null,
+            locationIds: [], estimatedDuration: 5, scheduledDate: '2026-08-10',
+            schedule: { type: 'one_off' } },
+          { _id: 'next', name: 'Wipe the sills', status: 'active', categoryId: null,
+            locationIds: [], estimatedDuration: 5, scheduledDate: '2026-08-11',
+            schedule: { type: 'one_off' } }
+        ]
+      }
+      const clone = value => structuredClone(value)
+      window.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async () => ({}),
+        updateFields: async () => ({})
+      }
+
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      const { initSessionView } = await import(applicationUrl + 'sessionView.js')
+      await categoryLocationStore.initialize()
+      await initTasksView()
+      initSessionView()
+
+      const names = () => [...document.querySelectorAll('#vesselList .vessel-entry-name')]
+        .map(node => node.textContent.trim())
+
+      // Hand-pick the one the app would never reach first: it is the latest
+      // dated, so a fresh proposal would order the other two ahead of it.
+      document.querySelector('[data-pick-id="long"]').click()
+      const afterPick = names()
+
+      document.getElementById('proposeBundleBtn').click()
+      const afterFill = names()
+
+      // A fill that adds something says nothing at all — and clears whatever the
+      // last one said, so the line never describes a state that has passed.
+      const statusAfterFill = document.getElementById('sessionStatus').textContent
+
+      // Filling again with the budget already spent adds nothing and removes
+      // nothing, and says so without calling it a mistake.
+      document.getElementById('proposeBundleBtn').click()
+      const afterSecondFill = names()
+
+      const result = {
+        afterPick, afterFill, afterSecondFill, statusAfterFill,
+        status: document.getElementById('sessionStatus').textContent
+      }
+    `
+  })
+
+  assert.deepEqual(result.afterPick, ['Descale the machine'])
+  assert.deepEqual(result.afterFill,
+    ['Descale the machine', 'Water the plants', 'Wipe the sills'],
+    'the pick leads, and the fill works around it')
+  assert.equal(result.statusAfterFill, '', 'a fill that worked says nothing')
+  assert.deepEqual(result.afterSecondFill, result.afterFill, 'nothing is lost or duplicated')
+  assert.equal(result.status,
+    'Nothing else fits alongside what you picked. Add anything you like anyway.')
+})
+
 test('Today sets its budget and its two controls on one desktop row, the session beside the pool', async () => {
   const result = await runBrowserScenario({
     viewport: { width: 1280, height: 900 },

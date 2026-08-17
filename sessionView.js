@@ -125,22 +125,37 @@ function pickChore (id) {
   renderToday()
 }
 
-// The app's own proposal is the one thing that stays inside the budget.
+// The app's own proposal is the one thing that stays inside the budget. It
+// builds around what you already put in rather than replacing it: filling is
+// help with the rest of the session, not a verdict on the part you chose.
 function fillBundle () {
+  const before = pickedIds
   const proposal = buildBundleProposal(
     eligibleTasks(),
     selectedMinutes,
     selectedCategoryId || null,
-    selectableReferences(categoryLocationStore.getSnapshot().categories)
+    selectableReferences(categoryLocationStore.getSnapshot().categories),
+    before
   )
   pickedIds = proposal.tasks.map(task => task._id)
   renderToday()
-  if (!pickedIds.length) {
-    const status = element('sessionStatus')
-    status.textContent = 'Nothing here fits ' + formatDuration(selectedMinutes) +
-      '. Try a longer stretch, or pick something anyway.'
-    status.setAttribute('data-state', 'info')
+
+  const status = element('sessionStatus')
+  // A fill that found something says nothing, and takes back whatever the last
+  // one said: the line describes what just happened, never what used to be true.
+  if (pickedIds.length > before.length) {
+    status.textContent = ''
+    status.removeAttribute('data-state')
+    return
   }
+
+  // Nothing was added. Which fact that is depends on whether the user had
+  // already put something in — and neither of them is a complaint.
+  status.textContent = before.length
+    ? 'Nothing else fits alongside what you picked. Add anything you like anyway.'
+    : 'Nothing here fits ' + formatDuration(selectedMinutes) +
+      '. Try a longer stretch, or pick something anyway.'
+  status.setAttribute('data-state', 'info')
 }
 
 function handleHoldStart (event) {

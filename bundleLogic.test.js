@@ -28,6 +28,43 @@ test('filler selection uses the stable category id', () => {
   assert.equal(findFillerTask(tasks, [], 5, 'c2')._id, 't2')
 })
 
+// Filling is help, not a reset. What the user put in stays in, in the order they
+// put it there, and the app works out what else fits around it.
+const fillTasks = [
+  { _id: 'a', categoryId: 'c1', estimatedDuration: 5, scheduledDate: '2026-08-10' },
+  { _id: 'b', categoryId: 'c1', estimatedDuration: 5, scheduledDate: '2026-08-11' },
+  { _id: 'c', categoryId: 'c2', estimatedDuration: 20, scheduledDate: '2026-08-12' }
+]
+
+test('a bundle is built around what is already picked, never over it', () => {
+  // 'c' is kept and its 20 minutes are spent, so only 10 of the 30 remain.
+  assert.deepEqual(
+    buildBundle(fillTasks, 30, null, ['c']).map(task => task._id),
+    ['c', 'a', 'b'])
+
+  // The kept one is not offered to itself a second time.
+  assert.deepEqual(
+    buildBundle(fillTasks, 10, null, ['a']).map(task => task._id),
+    ['a', 'b'])
+})
+
+// A pick is a statement of intent, so neither the budget nor the filter may
+// overturn it: the app only ever decides what to add.
+test('a pick survives a filter it does not match and a budget it does not fit', () => {
+  assert.deepEqual(
+    buildBundle(fillTasks, 30, 'c1', ['c']).map(task => task._id),
+    ['c', 'a', 'b'], 'kept although the filter is c1')
+
+  const overflowing = buildBundle(fillTasks, 10, null, ['c'])
+  assert.deepEqual(overflowing.map(task => task._id), ['c'],
+    'nothing is added once the budget is spent, and nothing is taken away')
+})
+
+test('the proposal carries the picks through with everything else', () => {
+  const proposal = buildBundleProposal(fillTasks, 30, null, [], ['c'])
+  assert.deepEqual(proposal.tasks.map(task => task._id), ['c', 'a', 'b'])
+})
+
 test('session draft keeps the parameters captured with its proposed bundle', () => {
   let selectedCategoryId = 'c1'
   const proposal = buildBundleProposal(tasks, 5, selectedCategoryId, [

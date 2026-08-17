@@ -7,14 +7,25 @@ export function prioritizeTasks(tasks) {
   })
 }
 
-export function buildBundle(tasks, budgetMinutes, categoryFilterId) {
+// Filling is help, not a reset. Anything already picked stays picked, in the
+// order it was picked, whatever it totals and whatever the filter says — a pick
+// is the user's statement of intent, and the app only decides what to add
+// around it. Once the budget is spent nothing more is added, but nothing that
+// was there is ever taken away.
+export function buildBundle(tasks, budgetMinutes, categoryFilterId, keptIds = []) {
+  const byId = new Map(tasks.map(task => [task._id, task]))
+  const kept = (keptIds || []).map(id => byId.get(id)).filter(Boolean)
+  const keptIdSet = new Set(kept.map(task => task._id))
+
   const eligible = tasks.filter(t => {
+    if (keptIdSet.has(t._id)) return false
     if (categoryFilterId && t.categoryId !== categoryFilterId) return false
     return t.estimatedDuration && t.estimatedDuration > 0
   })
   const prioritized = prioritizeTasks(eligible)
-  const bundle = []
-  let remaining = budgetMinutes
+  const bundle = [...kept]
+  let remaining = kept.reduce(
+    (left, task) => left - (Number(task.estimatedDuration) || 0), budgetMinutes)
   for (const task of prioritized) {
     if (task.estimatedDuration <= remaining) {
       bundle.push(task)
@@ -24,11 +35,11 @@ export function buildBundle(tasks, budgetMinutes, categoryFilterId) {
   return bundle
 }
 
-export function buildBundleProposal (tasks, budgetMinutes, categoryFilterId, categories) {
+export function buildBundleProposal (tasks, budgetMinutes, categoryFilterId, categories, keptIds = []) {
   const capturedCategoryId = categoryFilterId || null
   const category = categories.find(item => item._id === capturedCategoryId)
   return {
-    tasks: buildBundle(tasks, budgetMinutes, capturedCategoryId).map(task => ({ ...task })),
+    tasks: buildBundle(tasks, budgetMinutes, capturedCategoryId, keptIds).map(task => ({ ...task })),
     timeBudgetMinutes: budgetMinutes,
     categoryFilterId: capturedCategoryId,
     categoryFilter: category?.name || null
