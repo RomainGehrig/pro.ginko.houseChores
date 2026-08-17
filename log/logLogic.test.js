@@ -117,6 +117,15 @@ test('a chore states what it took and how that compares, as one plain fact', () 
   assert.equal(driftLine({ outcome: 'done', actualDuration: 10, estimatedDuration: null }), '')
 })
 
+// A chore whose time was omitted on the Receipt was still done. The Log says so
+// and stops there: no figure invented, and nothing compared against a figure
+// that was never recorded.
+test('a chore with no recorded time states that, rather than taking no time', () => {
+  assert.equal(tookLine({ outcome: 'done', actualDuration: null }), 'Time not recorded')
+  assert.equal(driftLine({ outcome: 'done', actualDuration: null, estimatedDuration: 10 }), '')
+  assert.equal(driftFillPercent({ outcome: 'done', actualDuration: null, estimatedDuration: 10 }), 0)
+})
+
 test('the drift bar fills against the larger of what it took and what was guessed', () => {
   assert.equal(driftFillPercent({ outcome: 'done', actualDuration: 5, estimatedDuration: 10 }), 50)
   assert.equal(driftFillPercent({ outcome: 'done', actualDuration: 20, estimatedDuration: 10 }), 100)

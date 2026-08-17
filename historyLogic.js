@@ -14,9 +14,16 @@ const STATUS_LABELS = {
 const hasRawDuration = value => (typeof value === 'number' ||
   (typeof value === 'string' && value.trim() !== '')) && Number.isFinite(Number(value))
 
-const executionMinutes = execution => hasRawDuration(execution.rawDurationMs)
-  ? Number(execution.rawDurationMs) / 60000
-  : Number(execution.actualDuration || 0)
+// Omitting the time on the Receipt is a decision about the log, not about the
+// clock: the measurement stays on the record for the Receipt to show, and the
+// Log declines to read it. An absence, never a zero — a zero would read as
+// "Took 0 min" and would teach the estimate that the chore takes no time.
+const executionMinutes = execution => {
+  if (execution.timeOmitted) return null
+  return hasRawDuration(execution.rawDurationMs)
+    ? Number(execution.rawDurationMs) / 60000
+    : Number(execution.actualDuration || 0)
+}
 
 // Older records carry a difficulty the Receipt no longer asks for. The Log
 // still reads what was written rather than dropping it on the floor.

@@ -83,13 +83,20 @@ export function budgetLine (session) {
 
 const OUTCOME_TOOK = { cancelled: 'Skipped', already_done: 'Already done' }
 
+// A time omitted on the Receipt arrives here as an absence. The chore was still
+// done, so the row says what happened and stops — it does not invent a figure.
+const hasRecordedTime = entry => entry?.actualDuration != null
+
 export function tookLine (entry) {
-  return OUTCOME_TOOK[entry?.outcome] ||
-    'Took ' + formatDuration(displayMinutes(entry?.actualDuration))
+  if (OUTCOME_TOOK[entry?.outcome]) return OUTCOME_TOOK[entry.outcome]
+  return hasRecordedTime(entry)
+    ? 'Took ' + formatDuration(displayMinutes(entry.actualDuration))
+    : 'Time not recorded'
 }
 
 export function driftLine (entry) {
   if (!isResolved(entry) || entry?.outcome === 'already_done') return ''
+  if (!hasRecordedTime(entry)) return ''
   const estimate = Number(entry?.estimatedDuration)
   if (!Number.isFinite(estimate) || estimate <= 0) return ''
   const actual = displayMinutes(entry?.actualDuration)

@@ -21,6 +21,26 @@ test('sorts sessions newest first, missing startTime last', () => {
   assert.deepEqual(result.map(s => s.id), ['s2', 's4', 's1', 's3'])
 })
 
+// The Receipt says "Nothing goes to the log for this one" when the time is
+// omitted, and it keeps the clock's own figure on the record because that
+// honesty is what the estimate learns from. So the Log has to be the one that
+// declines to read it — an omitted time is an absence, not a zero, or it would
+// arrive as "Took 0 min" and drag the estimate down with it.
+test('an omitted time is an absence, however the clock measured it', () => {
+  const sessions = [{ _id: 's1', startTime: 1000, status: 'completed' }]
+  const executions = [
+    {
+      _id: 'e1', sessionId: 's1', taskId: 't1', startTime: 1000, outcome: 'done',
+      rawDurationMs: 23 * 60000, actualSeconds: 23 * 60, actualDuration: null, timeOmitted: true
+    },
+    { _id: 'e2', sessionId: 's1', taskId: 't2', startTime: 2000, actualDuration: 12, outcome: 'done' }
+  ]
+  const [summary] = buildHistory(sessions, executions, tasks)
+
+  assert.equal(summary.entries[0].actualDuration, null)
+  assert.equal(summary.totalActualMinutes, 12, 'the omitted figure is not in the total')
+})
+
 test('counts outcomes and totals actual minutes including cancelled', () => {
   const sessions = [{ _id: 's1', startTime: 1000, status: 'completed' }]
   const executions = [
