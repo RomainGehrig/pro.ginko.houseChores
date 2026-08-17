@@ -6,7 +6,7 @@ import assert from 'node:assert/strict'
 import { hasRequestedRoute, initRouter, parseRoute, setNavVisible, showView } from './router.js'
 
 const screenNames = ['today', 'inbox', 'chores', 'setup', 'doing', 'review', 'log']
-const primaryRoutes = ['today', 'inbox', 'chores', 'log', 'setup']
+const primaryRoutes = ['today', 'chores', 'inbox', 'log', 'setup']
 
 function installRouterDom (hash = '') {
   const views = new Map(screenNames.map(name => {

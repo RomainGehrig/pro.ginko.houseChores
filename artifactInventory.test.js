@@ -67,10 +67,12 @@ test('route shell declares four primary canonical anchors, seven focus headings,
   const routeHeadings = [...html.matchAll(/<h1[^>]*class="route-heading[^"]*"[^>]*tabindex="-1"[^>]*>/g)]
   const allH1Headings = [...html.matchAll(/<h1\b[^>]*>/g)]
 
+  // Chores sits second, next to the screen the app now opens on; capture is a
+  // thing you do occasionally, not a place you steer by.
   assert.deepEqual(nav, [
     ['today', '#/today'],
-    ['inbox', '#/inbox'],
     ['chores', '#/chores'],
+    ['inbox', '#/inbox'],
     ['log', '#/log'],
     ['setup', '#/setup']
   ])

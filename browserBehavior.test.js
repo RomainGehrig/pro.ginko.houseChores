@@ -946,8 +946,8 @@ const PRIMARY_NAV_BODY =
   '<nav class="bottom-nav" aria-label="Primary">' +
     '<p class="nav-wordmark display">Chore Planner</p>' +
     '<a data-route="today" href="#/today">Quick session</a>' +
-    '<a data-route="inbox" href="#/inbox">Capture <span class="nav-count fig">12</span></a>' +
     '<a data-route="chores" href="#/chores">Chores</a>' +
+    '<a data-route="inbox" href="#/inbox">Capture <span class="nav-count fig">12</span></a>' +
     '<a data-route="log" href="#/log" aria-current="page">Log</a>' +
     '<a data-route="setup" href="#/setup">Setup</a>' +
   '</nav>'
@@ -978,7 +978,7 @@ test('the navigation names destinations as the design writes them and marks the 
     `
   })
 
-  assert.deepEqual(result.labels, ['Quick session', 'Capture', 'Chores', 'Log', 'Setup'])
+  assert.deepEqual(result.labels, ['Quick session', 'Chores', 'Capture', 'Log', 'Setup'])
   assert.ok(result.transform.every(value => value === 'none'), JSON.stringify(result.transform))
   assert.deepEqual(result.countBefore, [0x22, 0xb7, 0x20, 0x22],
     'the capture count reads "Capture · 12", as in the doc')
