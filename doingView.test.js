@@ -54,12 +54,19 @@ function createControl (id = '') {
 function createDoingDocument ({ failFirstReviewDisplay = false } = {}) {
   const nodes = new Map()
   const navControls = new Map()
+  const contextualControls = new Map(['doing', 'review'].map(route => {
+    const control = createControl('context-' + route)
+    control.dataset.contextRoute = route
+    control.setAttribute = (name, value) => { control[name] = value }
+    return [route, control]
+  }))
   const dynamicIds = new Set()
   let controls = []
   let shouldFailReviewDisplay = failFirstReviewDisplay
   const content = createControl('doingContent')
   content._dynamicChildren = []
   nodes.set('doingContent', content)
+  nodes.set('workNav', createControl('workNav'))
   const reviewList = createControl('reviewList')
   reviewList.querySelectorAll = () => []
   reviewList.onBeforeChildren = () => {
@@ -72,7 +79,11 @@ function createDoingDocument ({ failFirstReviewDisplay = false } = {}) {
   })
   nodes.set('reviewList', reviewList)
   nodes.set('finishReviewBtn', createControl('finishReviewBtn'))
-  for (const id of ['proposedCards', 'activeCards', 'archivedCards', 'enrichBtn', 'enrichStatus']) {
+  for (const id of [
+    'proposedCards', 'activeCards', 'unscheduledCards', 'archivedCards',
+    'choresViews', 'choreCategoryFilter', 'choresFilters', 'choresCountLine',
+    'enrichBtn', 'enrichStatus'
+  ]) {
     nodes.set(id, createControl(id))
   }
   for (const view of ['tasks', 'session', 'doing', 'review', 'history']) {
@@ -158,7 +169,9 @@ function createDoingDocument ({ failFirstReviewDisplay = false } = {}) {
 
   Object.defineProperty(content, 'innerHTML', {
     configurable: true,
+    get () { return content._markup || '' },
     set (markup) {
+      content._markup = markup
       for (const child of content._dynamicChildren) unregister(child)
       content._dynamicChildren = []
       dynamicIds.forEach(id => nodes.delete(id))
@@ -180,6 +193,8 @@ function createDoingDocument ({ failFirstReviewDisplay = false } = {}) {
       return control
     },
     querySelector: selector => {
+      const contextRoute = selector.match(/^\[data-context-route="([^"]+)"\]$/)?.[1]
+      if (contextRoute) return contextualControls.get(contextRoute) || null
       const view = selector.match(/^\.nav-btn\[data-view="([^"]+)"\]$/)?.[1]
       return view ? navControls.get(view) || null : null
     },
@@ -223,7 +238,8 @@ function createDoingDocument ({ failFirstReviewDisplay = false } = {}) {
       return content.dispatch('click', { target })
     },
     dispatchStaleControl: target => content.dispatch('click', { target }),
-    control: id => nodes.get(id) || null
+    control: id => nodes.get(id) || null,
+    contextControl: route => contextualControls.get(route) || null
   }
   return document
 }
@@ -523,7 +539,7 @@ test('stale outcome applies a completed authoritative aggregate without writes',
     assert.equal(persistence.sessionUpdateCalls, 0)
     assert.equal(persistence.session.status, 'completed')
     assert.equal(state.currentSession.status, 'completed')
-    assert.equal(document.control('view-review').style.display, 'block')
+    assert.equal(document.control('view-review').style.display, '')
   })
 })
 
@@ -574,6 +590,7 @@ test('stale outcome applies a paused authoritative aggregate without writes', as
     persistedTasks: [task1],
     bundle: [task1]
   }, async ({ document, persistence }) => {
+    assert.equal(document.contextControl('doing').dataset.available, 'true')
     const staleDone = document.outcomeControl('task-1', 'done')
     persistence.patchSession({
       status: 'paused', accumulatedActiveMs: 9000,
@@ -586,7 +603,7 @@ test('stale outcome applies a paused authoritative aggregate without writes', as
     assert.equal(persistence.taskUpdates.length, 0)
     assert.equal(persistence.sessionUpdateCalls, 0)
     assert.equal(state.currentSession.status, 'paused')
-    assert.equal(document.control('doingDecisionPanel').hidden, false)
+    assert.equal(document.control('doingContinuePanel').hidden, false)
   })
 })
 
@@ -641,7 +658,7 @@ test('stale Pause applies completed state without a session write', async () => 
 
     assert.equal(persistence.sessionUpdateCalls, 0)
     assert.equal(state.currentSession.status, 'completed')
-    assert.equal(document.control('view-review').style.display, 'block')
+    assert.equal(document.control('view-review').style.display, '')
   })
 })
 
@@ -669,6 +686,8 @@ test('stale Conclude renders interrupted state without a session write', async (
 
     assert.equal(persistence.sessionUpdateCalls, 0)
     assert.equal(state.currentSession.status, 'interrupted')
+    assert.equal(document.contextControl('doing').dataset.available, 'false')
+    assert.equal(document.contextControl('doing').hidden, true)
     assert.match(
       document.control('doingContent').children[0].textContent,
       /superseded by newer unfinished work/
@@ -701,7 +720,7 @@ test('stale Conclude applies a resumed authoritative session without a write', a
     assert.equal(persistence.session.status, 'active')
     assert.equal(persistence.session.activeStartedAt, 30000)
     assert.equal(state.currentSession.status, 'active')
-    assert.equal(document.control('doingDecisionPanel').hidden, true)
+    assert.equal(document.control('doingContinuePanel').hidden, true)
   })
 })
 
@@ -874,7 +893,7 @@ test('failed pause keeps the session visible and retries after reporting the err
     assert.equal(persistence.session.status, 'paused')
     assert.equal(persistence.session.accumulatedActiveMs, 9000)
     assert.equal(document.control('sessionTimerDisplay').textContent, '00:09')
-    assert.equal(document.control('doingDecisionPanel').hidden, false)
+    assert.equal(document.control('doingContinuePanel').hidden, false)
   })
 })
 
@@ -928,7 +947,7 @@ test('focus refresh applies a pause written by another device', async () => {
 
     assert.equal(state.currentSession.status, 'paused')
     assert.equal(document.control('sessionTimerDisplay').textContent, '00:09')
-    assert.equal(document.control('doingDecisionPanel').hidden, false)
+    assert.equal(document.control('doingContinuePanel').hidden, false)
   })
 })
 
@@ -955,8 +974,10 @@ test('focus refresh does not navigate away from a different active view', async 
     await window.dispatch('focus')
 
     assert.equal(state.currentSession.status, 'completed')
+    // The router hides every screen it is not showing, so a view left visible
+    // is proof it never ran and the user was not moved.
     assert.equal(document.control('view-tasks').style.display, 'block')
-    assert.notEqual(document.control('view-review').style.display, 'block')
+    assert.notEqual(document.control('view-doing').style.display, '')
   })
 })
 
@@ -1002,15 +1023,17 @@ test('paused picker attaches suggestions and search, quick-adds a proposed task,
       executions
     }, async ({ document, persistence, clock }) => {
       clock.setNow(900000)
-      await document.clickControl('openContinueBtn')
 
       assert.equal(document.control('doingContinuePanel').hidden, false)
-      assert.equal(document.control('resumeSessionBtn').disabled, true)
+      // Everything is resolved. The note says so; Resume is still offered,
+      // because adding one more chore is a reason to resume.
+      assert.match(document.control('doingContent').innerHTML, /doing-auto-note/)
+      assert.equal(document.control('pauseSessionBtn').disabled, false)
 
       await document.checkSuggestion('suggested-5m')
       await document.inputControl('continueSearchInput', 'garage')
       await document.clickSearchResult('searched-30m')
-      await document.inputControl('continueQuickTitle', 'Replace hallway bulb')
+      await document.inputControl('continueSearchInput', 'Replace hallway bulb')
       await document.clickControl('continueQuickAddBtn')
 
       assert.deepEqual(attachedTaskIds, ['suggested-5m', 'searched-30m'])
@@ -1020,7 +1043,7 @@ test('paused picker attaches suggestions and search, quick-adds a proposed task,
       assert.equal(persistence.session.accumulatedActiveMs, elapsedBeforePicker)
 
       clock.setNow(resumeClickedAt)
-      await document.clickControl('resumeSessionBtn')
+      await document.clickControl('pauseSessionBtn')
 
       assert.equal(persistence.session.accumulatedActiveMs, elapsedBeforePicker)
       assert.equal(persistence.session.activeStartedAt, resumeClickedAt)
@@ -1035,7 +1058,7 @@ test('paused picker attaches suggestions and search, quick-adds a proposed task,
       await document.clickOutcome(quickTaskId, 'done')
 
       assert.equal(persistence.session.status, 'paused')
-      assert.equal(document.control('doingDecisionPanel').hidden, false)
+      assert.equal(document.control('doingContinuePanel').hidden, false)
       assert.equal(persistence.getTask(quickTaskId).status, 'proposed')
     })
   } finally {
@@ -1043,7 +1066,57 @@ test('paused picker attaches suggestions and search, quick-adds a proposed task,
   }
 })
 
-test('suggestion failure reconciliation preserves the authoritative pause and disabled Resume', async () => {
+test('explicitly selected suggestions beyond the remaining estimate use unrestricted attachment', async () => {
+  const original = task('original-task')
+  const first = { ...task('suggestion-a'), estimatedDuration: 4 }
+  const second = { ...task('suggestion-b'), estimatedDuration: 4 }
+  const session = {
+    _id: 'over-estimate-selection', status: 'paused', startTime: 10000,
+    taskBundle: ['original-task'], timeBudgetMinutes: 10,
+    accumulatedActiveMs: 5 * 60000, activeStartedAt: null,
+    pausedAt: 310000, checkpointElapsedMs: 5 * 60000,
+    pendingAddition: null
+  }
+  const executions = [{
+    taskId: 'original-task', sessionId: session._id, outcome: 'done',
+    startTime: 10000, endTime: 310000, rawDurationMs: 5 * 60000,
+    activeElapsedMs: 5 * 60000, actualDuration: 5
+  }]
+  const originalAttachTasks = sessionStore.attachTasks
+  const attachCalls = []
+  sessionStore.attachTasks = async (...args) => {
+    attachCalls.push(args)
+    return originalAttachTasks(...args)
+  }
+
+  try {
+    await withDoingEnvironment({
+      session,
+      persistedTasks: [original, first, second],
+      bundle: [original],
+      executions
+    }, async ({ document, persistence }) => {
+      await document.checkSuggestion('suggestion-a')
+      await document.checkSuggestion('suggestion-b')
+
+      assert.deepEqual(attachCalls, [
+        [session._id, ['suggestion-a']],
+        [session._id, ['suggestion-b']]
+      ])
+      assert.deepEqual(persistence.session.taskBundle, [
+        'original-task', 'suggestion-a', 'suggestion-b'
+      ])
+      assert.doesNotMatch(
+        document.control('continueRemaining').textContent,
+        /exceed|warning|error/i
+      )
+    })
+  } finally {
+    sessionStore.attachTasks = originalAttachTasks
+  }
+})
+
+test('explicit suggestion selection follows the authoritative pause without budget refusal', async () => {
   const original = task('original-task')
   const suggested = {
     ...task('suggested-5m'), estimatedDuration: 5, scheduledDate: '2026-08-01'
@@ -1067,7 +1140,6 @@ test('suggestion failure reconciliation preserves the authoritative pause and di
     bundle: [original],
     executions
   }, async ({ document, persistence }) => {
-    await document.clickControl('openContinueBtn')
     persistence.patchSession({
       accumulatedActiveMs: 9 * 60000,
       checkpointElapsedMs: 5 * 60000
@@ -1075,10 +1147,10 @@ test('suggestion failure reconciliation preserves the authoritative pause and di
 
     await document.checkSuggestion('suggested-5m')
 
-    assert.deepEqual(persistence.session.taskBundle, ['original-task'])
+    assert.deepEqual(persistence.session.taskBundle, ['original-task', 'suggested-5m'])
     assert.equal(state.currentSession.accumulatedActiveMs, 9 * 60000)
-    assert.equal(document.control('resumeSessionBtn').disabled, true)
-    assert.match(
+    assert.equal(document.control('pauseSessionBtn').disabled, false)
+    assert.doesNotMatch(
       document.control('doingStatus').textContent,
       /exceed the remaining session budget/
     )
@@ -1107,8 +1179,7 @@ test('Quick add treats an attached staged task as successful after its response 
     executions,
     loseQuickAddAttachmentResponse: true
   }, async ({ document, persistence }) => {
-    await document.clickControl('openContinueBtn')
-    await document.inputControl('continueQuickTitle', 'Replace hallway bulb')
+    await document.inputControl('continueSearchInput', 'Replace hallway bulb')
     await document.clickControl('continueQuickAddBtn')
 
     assert.equal(persistence.quickCreates.length, 1)
@@ -1146,12 +1217,11 @@ test('Quick add Retry preserves a new title across ambiguous recovery of an olde
     executions,
     loseQuickAddAttachmentResponse: true
   }, async ({ document, persistence }) => {
-    await document.clickControl('openContinueBtn')
-    await document.inputControl('continueQuickTitle', 'Wipe the mirror')
+    await document.inputControl('continueSearchInput', 'Wipe the mirror')
     await document.clickControl('continueQuickAddBtn')
 
     assert.ok(document.control('retrySessionMutationBtn'))
-    assert.equal(document.control('continueQuickTitle').value, '')
+    assert.equal(document.control('continueSearchInput').value, '')
     await document.clickControl('retrySessionMutationBtn')
 
     assert.deepEqual(
@@ -1208,7 +1278,6 @@ test('suggestion inputs are disabled while an attachment is in flight', async ()
       bundle: [original],
       executions
     }, async ({ document }) => {
-      await document.clickControl('openContinueBtn')
       const checkbox = document.suggestionControl('suggested-2m')
       const attachment = document.checkSuggestion('suggested-2m')
       await attachmentStarted
@@ -1269,7 +1338,6 @@ test('a later suggestion reconciles and drops an unattached ambiguous selection'
       bundle: [original],
       executions
     }, async ({ document, persistence }) => {
-      await document.clickControl('openContinueBtn')
       await document.checkSuggestion('suggested-2m')
       assert.ok(document.control('retrySessionMutationBtn'))
 
@@ -1286,7 +1354,7 @@ test('a later suggestion reconciles and drops an unattached ambiguous selection'
   }
 })
 
-test('ambiguous suggestion attachment retains allowance and ignores repeated change events', async () => {
+test('ambiguous suggestion attachment reconciles once and leaves later explicit selection unrestricted', async () => {
   const original = task('original-task')
   const first = { ...task('suggested-2m'), estimatedDuration: 2 }
   const second = { ...task('suggested-4m'), estimatedDuration: 4 }
@@ -1347,7 +1415,6 @@ test('ambiguous suggestion attachment retains allowance and ignores repeated cha
       executions
     }, async ({ document, persistence }) => {
       persistenceRef = persistence
-      await document.clickControl('openContinueBtn')
       const firstCheckbox = document.suggestionControl('suggested-2m')
       const firstAttachment = document.checkSuggestion('suggested-2m')
       await attachmentStarted
@@ -1359,11 +1426,11 @@ test('ambiguous suggestion attachment retains allowance and ignores repeated cha
 
       await document.checkSuggestion('suggested-4m')
 
-      assert.deepEqual(attachCalls, ['suggested-2m'])
+      assert.deepEqual(attachCalls, ['suggested-2m', 'suggested-4m'])
       assert.deepEqual(persistence.session.taskBundle, [
-        'original-task', 'suggested-2m'
+        'original-task', 'suggested-2m', 'suggested-4m'
       ])
-      assert.match(
+      assert.doesNotMatch(
         document.control('continueRemaining').textContent,
         /exceed the remaining session budget/
       )
@@ -1374,7 +1441,7 @@ test('ambiguous suggestion attachment retains allowance and ignores repeated cha
   }
 })
 
-test('reopened paused picker honors persisted suggestion allowance after reload', async () => {
+test('reopened paused picker does not turn persisted suggestion estimates into a user gate', async () => {
   const original = task('original-task')
   const selected = { ...task('selected-4m'), estimatedDuration: 4 }
   const candidate = { ...task('candidate-2m'), estimatedDuration: 2 }
@@ -1399,18 +1466,19 @@ test('reopened paused picker honors persisted suggestion allowance after reload'
       activeElapsedMs: 5 * 60000, actualDuration: 5
     }]
   }, async ({ document, persistence }) => {
-    await document.clickControl('openContinueBtn')
     await document.checkSuggestion('candidate-2m')
 
-    assert.deepEqual(persistence.session.taskBundle, ['original-task', 'selected-4m'])
-    assert.match(
+    assert.deepEqual(persistence.session.taskBundle, [
+      'original-task', 'selected-4m', 'candidate-2m'
+    ])
+    assert.doesNotMatch(
       document.control('continueRemaining').textContent,
       /exceed the remaining session budget/
     )
   })
 })
 
-test('paused picker sends only the clicked suggestion as its request source', async () => {
+test('paused picker sends an explicit suggestion through the unrestricted attachment path', async () => {
   const original = task('original-task')
   const selected = { ...task('selected-3m'), estimatedDuration: 3 }
   const candidate = { ...task('candidate-2m'), estimatedDuration: 2 }
@@ -1442,17 +1510,14 @@ test('paused picker sends only the clicked suggestion as its request source', as
         activeElapsedMs: 5 * 60000, actualDuration: 5
       }]
     }, async ({ document, persistence }) => {
-      await document.clickControl('openContinueBtn')
       await document.checkSuggestion('candidate-2m')
 
       assert.deepEqual(attachCalls, [[
         session._id,
-        ['candidate-2m'],
-        { suggestionTaskIds: ['candidate-2m'] }
+        ['candidate-2m']
       ]])
       assert.deepEqual(persistence.session.continuationSuggestionEntries, [
-        { taskId: 'selected-3m', estimatedDurationMinutes: 3 },
-        { taskId: 'candidate-2m', estimatedDurationMinutes: 2 }
+        { taskId: 'selected-3m', estimatedDurationMinutes: 3 }
       ])
     })
   } finally {
@@ -1479,7 +1544,7 @@ test('conclude stores the unassigned tail and enters Review', async () => {
 
     assert.equal(persistence.session.status, 'completed')
     assert.equal(persistence.session.unassignedDurationMs, 12000)
-    assert.equal(document.control('view-review').style.display, 'block')
+    assert.equal(document.control('view-review').style.display, '')
   })
 })
 
@@ -1508,14 +1573,17 @@ test('terminal Review loading retries without re-entering the active-session ref
     await document.clickControl('concludeSessionBtn')
 
     assert.equal(persistence.session.status, 'completed')
-    assert.equal(document.control('view-review').style.display, 'block')
+    assert.equal(document.control('view-review').style.display, '')
     assert.ok(document.control('retryReviewLoadBtn'))
     assert.equal(document.control('finishReviewBtn').disabled, true)
     assert.equal(document.control('concludeSessionBtn').disabled, false)
 
     await document.control('retryReviewLoadBtn').dispatch('click')
 
-    assert.match(document.control('reviewList').innerHTML, /task-1/)
+    assert.match(
+      document.control('reviewList').innerHTML,
+      /task-<span class="fig">1<\/span>/
+    )
     assert.equal(document.control('finishReviewBtn').disabled, false)
     assert.equal(persistence.sessionUpdateCalls, 1)
   })
@@ -1553,7 +1621,7 @@ test('display retry reapplies a durable conclusion without repeating persistence
       await document.clickControl('retrySessionMutationBtn')
 
       assert.equal(concludeCalls, 1)
-      assert.equal(document.control('view-review').style.display, 'block')
+      assert.equal(document.control('view-review').style.display, '')
     })
   } finally {
     sessionStore.conclude = originalConclude
@@ -1608,7 +1676,7 @@ test('terminal Review errors cannot invalidate a newer queued Review load', asyn
     await sessionALoad
 
     assert.ok(sessionBLoad)
-    assert.equal(document.control('reviewList').children[0].textContent, 'Loading review…')
+    assert.equal(document.control('reviewList').children[0].textContent, 'Loading receipt…')
     assert.equal(document.control('retryReviewLoadBtn'), null)
     assert.equal(document.control('finishReviewBtn').disabled, true)
 

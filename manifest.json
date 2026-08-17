@@ -5,142 +5,628 @@
     "index": {
       "page_title": "Chore Planner",
       "html_file": "index.html",
-      "css_files": ["index.css"],
-      "modules": ["index.js"],
+      "css_files": [
+        "index.css"
+      ],
+      "modules": [
+        "index.js"
+      ],
       "Description": "Single-page chore planner with calendar-scheduled task intake and review, user-managed category/location assignments, scheduled-date-prioritized sessions, timer-based doing mode, post-session review, and read-only history."
     }
   },
   "display_name": "houseChores",
-  "description": "# Build Brief: Household Chore Planner\n\nBuild a small household chore and admin-task planner. The primary goal is to help one or more people turn available time into a realistic, focused bundle of tasks.\n\n## Core user flow\n- A user adds chores or admin tasks, individually or as a batch.\n- AI can propose missing task details, such as category, estimated duration, and a typed schedule rule.\n- The user reviews and approves suggested details and chooses the current scheduled date before tasks become active.\n- The user selects available time: 5, 15, 30 minutes, or a custom duration; they may optionally filter by category.\n- The app proposes a task bundle that fits the time and orders eligible tasks by scheduled date.\n- The user enters a focused “doing” mode with a timer.\n- Each task can be marked done, cancelled, or already completed.\n- The app records the actual duration and completion outcome, advancing repeating schedules only after completion.\n- After a session, the user can correct time taken and optionally rate task difficulty. AI may suggest updated future duration estimates based on past executions.\n\n## Core data\n\n### Task\n- Name\n- Category\n- Estimated duration\n- Current scheduled date\n- Typed one-off, periodic, or fixed calendar schedule\n- Last completed date\n- Status: proposed, approved recurring, active, or archived\n\n### Task execution\n- Task reference\n- Session reference\n- Start and end time\n- Actual duration\n- Outcome: done, cancelled, already done\n- Optional difficulty rating\n- Notes\n\n### Work session\n- Selected time budget\n- Optional category filter\n- Generated task bundle\n- Start and end time\n\n### Categories\n- Admin\n- Clean / Reset\n- Fix\n- Plan\n- Organize\n- Run Errands\n\nMeals and groceries can initially be treated as subcategories of Run Errands.\n\n## AI behavior\n- AI may enrich raw task names with likely category, estimated duration, and a typed schedule rule.\n- AI schedule suggestions must always be reviewable and editable before saving, and AI never selects the current scheduled date.\n- After enough execution history exists, AI may suggest revised duration estimates.\n- Do not let AI silently change approved task data.\n\n## Prioritization rules\n- Include active tasks even when they are scheduled for the future.\n- Prefer earlier scheduled dates before later scheduled dates.\n- Fit as many suitable tasks as possible within the chosen time budget.\n- Avoid exceeding the chosen budget unless the user explicitly opts in.\n- If a task is completed early, optionally show an additional task that fits the remaining time.\n\n## First-version scope\nInclude task intake, approval, calendar-scheduled tasks, time-based bundles, a timer-based doing mode, completion tracking, and basic AI enrichment.\n\nKeep accounts, permissions, notifications, external calendar integration, gamification, complex household assignment, and advanced optimization out of the first version unless they are essentially free in the framework.",
+  "description": "# Build Brief: Household Chore Planner\n\nBuild a small household chore and admin-task planner. The primary goal is to help one or more people turn available time into a realistic, focused bundle of tasks.\n\n## Core user flow\n- A user adds chores or admin tasks, individually or as a batch.\n- AI can propose missing task details, such as category, estimated duration, and a typed schedule rule.\n- The user reviews and approves suggested details and chooses the current scheduled date before tasks become active.\n- The user selects available time: 5, 15, 30 minutes, or a custom duration; they may optionally filter by category.\n- The app proposes a task bundle that fits the time and orders eligible tasks by scheduled date.\n- The user enters a focused \u201cdoing\u201d mode with a timer.\n- Each task can be marked done, cancelled, or already completed.\n- The app records the actual duration and completion outcome, advancing repeating schedules only after completion.\n- After a session, the user can correct time taken and optionally rate task difficulty. AI may suggest updated future duration estimates based on past executions.\n\n## Core data\n\n### Task\n- Name\n- Category\n- Estimated duration\n- Current scheduled date\n- Typed one-off, periodic, or fixed calendar schedule\n- Last completed date\n- Status: proposed, approved recurring, active, or archived\n\n### Task execution\n- Task reference\n- Session reference\n- Start and end time\n- Actual duration\n- Outcome: done, cancelled, already done\n- Optional difficulty rating\n- Notes\n\n### Work session\n- Selected time budget\n- Optional category filter\n- Generated task bundle\n- Start and end time\n\n### Categories\n- Admin\n- Clean / Reset\n- Fix\n- Plan\n- Organize\n- Run Errands\n\nMeals and groceries can initially be treated as subcategories of Run Errands.\n\n## AI behavior\n- AI may enrich raw task names with likely category, estimated duration, and a typed schedule rule.\n- AI schedule suggestions must always be reviewable and editable before saving, and AI never selects the current scheduled date.\n- After enough execution history exists, AI may suggest revised duration estimates.\n- Do not let AI silently change approved task data.\n\n## Prioritization rules\n- Include active tasks even when they are scheduled for the future.\n- Prefer earlier scheduled dates before later scheduled dates.\n- Fit as many suitable tasks as possible within the chosen time budget.\n- Avoid exceeding the chosen budget unless the user explicitly opts in.\n- If a task is completed early, optionally show an additional task that fits the remaining time.\n\n## First-version scope\nInclude task intake, approval, calendar-scheduled tasks, time-based bundles, a timer-based doing mode, completion tracking, and basic AI enrichment.\n\nKeep accounts, permissions, notifications, external calendar integration, gamification, complex household assignment, and advanced optimization out of the first version unless they are essentially free in the framework.",
   "files": [
-    { "path": "index.js", "Description": "Entry point that initializes category/location data, restores unfinished session work, and wires the app views." },
-    { "path": "viewRouter.js", "Description": "Shows/hides the four top-level views and toggles nav button visibility/highlighting." },
-    { "path": "state.js", "Description": "Shared mutable state for the in-progress session and task bundle." },
-    { "path": "helpers.js", "Description": "Formatting utilities for dates, durations, timer text, and HTML escaping." },
-    { "path": "taskPresentationLogic.js", "Description": "Pure task presentation helpers that render scheduled dates and typed schedule summaries, resolve stable category names, and safely escape stored values." },
-    { "path": "taskPresentationLogic.test.js", "Description": "Node tests covering scheduled task markup, safe stored values, and renamed stable-category display." },
-    { "path": "taskSaveLogic.js", "Description": "Pure task-save orchestration that distinguishes write failures from post-write refresh failures." },
-    { "path": "taskSaveLogic.test.js", "Description": "Node tests covering task write and post-write refresh failure boundaries." },
-    { "path": "scheduleLogic.js", "Description": "Pure calendar-scheduling rules for normalization, validation, summaries, matching fixed dates, and advancing completed occurrences." },
-    { "path": "scheduleLogic.test.js", "Description": "Node tests covering schedule normalization, legacy compatibility, validation, summaries, matching, and completion advancement." },
-    { "path": "scheduleEditor.js", "Description": "Pure helpers that build, render, validate, and progressively disclose the task schedule editor." },
-    { "path": "scheduleEditor.test.js", "Description": "Node tests covering schedule-editor models, controls, validation messages, and typed schedule serialization." },
-    { "path": "browserBehavior.test.js", "Description": "Headless Chromium regressions covering computed schedule visibility, hidden-value preservation, and task drafts across reference publications." },
-    { "path": "completionSaveLogic.js", "Description": "Pure completion-save coordinator for staged deterministic execution, task schedule, and session checkpoint writes." },
-    { "path": "completionSaveLogic.test.js", "Description": "Node tests covering staged execution, task-schedule, and session-checkpoint persistence retry boundaries." },
-    { "path": "doingCompletionLogic.js", "Description": "Pure doing-mode helpers for refreshed completion preparation and stage-specific retry dispatch." },
-    { "path": "doingCompletionLogic.test.js", "Description": "Node tests covering refreshed completion preparation and stage-specific retry dispatch." },
-    { "path": "taskData.js", "Description": "DB calls for the tasks collection that normalize legacy and typed schedule fields on read and initialize proposed tasks without a scheduled date." },
-    { "path": "taskData.test.js", "Description": "Node tests covering proposed-task scheduling defaults and normalized task-list reads." },
-    { "path": "executionData.js", "Description": "DB calls for deterministic task-execution upserts and session-scoped execution reads." },
-    { "path": "executionData.test.js", "Description": "Node test covering idempotent execution upserts by stable completion-attempt ID." },
-    { "path": "sessionData.js", "Description": "DB calls for creating, reading, updating, and locating durable sessions." },
-    { "path": "sessionLogic.js", "Description": "Pure session timing and transition rules derived from persisted active-time checkpoints." },
-    { "path": "sessionLogic.test.js", "Description": "Node tests covering reload-safe timing, pause/resume transitions, outcome deltas, and legacy checkpoints." },
-    { "path": "sessionStore.js", "Description": "Coordinates authoritative session restore, repair, persistence, continuation, and title-only additions." },
-    { "path": "sessionStore.test.js", "Description": "Node tests covering durable session lifecycle, recovery, continuation, and idempotent title-only additions." },
-    { "path": "continuationLogic.js", "Description": "Pure rules for budget-aware continuation suggestions and unrestricted task search." },
-    { "path": "continuationLogic.test.js", "Description": "Node tests covering continuation suggestions, search, exclusions, ordering, and budget selection." },
-    { "path": "bundleLogic.js", "Description": "Pure functions that prioritize eligible tasks by scheduled date and build category-ID-filtered time-boxed bundles and filler suggestions." },
-    { "path": "bundleLogic.test.js", "Description": "Node tests covering scheduled-date ordering, future-task eligibility, and stable category-ID filtering for bundles and filler suggestions." },
-    { "path": "aiEnrich.js", "Description": "Calls the LLM to suggest category, duration, and a validated typed schedule for new tasks, plus a duration-history heuristic." },
-    { "path": "aiEnrich.test.js", "Description": "Node tests covering dynamic AI enrichment prompt construction." },
-    { "path": "tasksView.js", "Description": "Renders and wires task intake, explicit scheduled-date and schedule review, active category/location assignments, AI enrichment, approval, and task editing." },
-    { "path": "tasksView.test.js", "Description": "Node tests covering task-view scheduling editor integration, approved payloads, and edit preservation." },
-    { "path": "sessionView.js", "Description": "Renders the time budget and active-category picker, builds filtered bundles, and starts durable sessions." },
-    { "path": "sessionView.test.js", "Description": "Node tests covering restored-session start notices when a proposed bundle cannot replace unfinished work." },
-    { "path": "doingView.js", "Description": "Renders all session tasks, persists exact outcome checkpoints, and supports pause, continuation, and conclusion." },
-    { "path": "doingView.test.js", "Description": "Production DOM tests covering authoritative refresh, any-order outcomes, persistence retries, pause, and continuation." },
-    { "path": "reviewView.js", "Description": "Renders the post-session review for correcting durations/ratings and suggesting updated duration estimates." },
-    { "path": "reviewView.test.js", "Description": "Node tests covering post-session duration correction persistence and exact-time compatibility mirrors." },
-    { "path": "historyLogic.js", "Description": "Pure functions joining sessions, rounded raw or legacy execution durations, and tasks into status-aware history summaries." },
-    { "path": "historyLogic.test.js", "Description": "Node tests covering status-aware history summaries and rounded raw-duration compatibility." },
-    { "path": "historyView.js", "Description": "Renders status-aware session history with rounded raw or legacy durations and expand/collapse controls." },
-    { "path": "categoryLocationLogic.js", "Description": "Pure rules for stable category and location references, seeding, migration, and assignment validation." },
-    { "path": "categoryLocationLogic.test.js", "Description": "Node tests covering category and location reference rules and legacy migration plans." },
-    { "path": "categoryLocationData.js", "Description": "DB calls for user-managed category and location reference collections." },
-    { "path": "categoryLocationData.test.js", "Description": "Node test covering stable category object IDs and datastore upsert option translation." },
-    { "path": "categoryLocationStore.js", "Description": "Loads, seeds, and migrates category/location references before dependent views render." },
-    { "path": "categoryLocationStore.test.js", "Description": "Node tests covering idempotent reference initialization and degraded data loading." },
-    { "path": "categoryLocationView.js", "Description": "Renders and wires the category and location management panel." },
-    { "path": "categoryLocationView.test.js", "Description": "Node tests covering category and location management-list helpers." },
-    { "path": "artifactInventory.test.js", "Description": "Node tests ensuring the manifest inventories every JavaScript artifact and static selectors contain no legacy fixed choices." }
+    {
+      "path": "index.js",
+      "Description": "Initializes views, Archive actions, shared overlays, hash routing, unfinished-session recovery, and on-demand history."
+    },
+    {
+      "path": "router.js",
+      "Description": "Parses, dispatches, and canonicalizes final hash routes while bridging current screens."
+    },
+    {
+      "path": "router.test.js",
+      "Description": "Node tests covering final hash-route parsing, fallback, dispatch, focus, and canonicalization."
+    },
+    {
+      "path": "state.js",
+      "Description": "Shared mutable state for the in-progress session and task bundle."
+    },
+    {
+      "path": "helpers.js",
+      "Description": "Formatting utilities for dates, durations, timer text, and HTML escaping."
+    },
+    {
+      "path": "taskPresentationLogic.js",
+      "Description": "Pure task presentation helpers for neutral ledger facts, schedule summaries, stable reference labels, and safe stored-value markup."
+    },
+    {
+      "path": "taskPresentationLogic.test.js",
+      "Description": "Node tests covering neutral ledger facts, scheduled task markup, safe stored values, and stable-reference display."
+    },
+    {
+      "path": "taskSaveLogic.js",
+      "Description": "Pure task-save orchestration that distinguishes write failures from post-write refresh failures."
+    },
+    {
+      "path": "taskSaveLogic.test.js",
+      "Description": "Node tests covering task write and post-write refresh failure boundaries."
+    },
+    {
+      "path": "scheduleLogic.js",
+      "Description": "Pure calendar-scheduling rules for normalization, validation, summaries, matching fixed dates, and advancing completed occurrences."
+    },
+    {
+      "path": "scheduleLogic.test.js",
+      "Description": "Node tests covering schedule normalization, legacy compatibility, validation, summaries, matching, and completion advancement."
+    },
+    {
+      "path": "slip.js",
+      "Description": "Pure due-group assignment and saturating ripeness ordering for chores."
+    },
+    {
+      "path": "slip.test.js",
+      "Description": "Node tests covering cadence normalization, saturating ripeness, due groups, and draft-safe ordering."
+    },
+    {
+      "path": "scheduleEditor.js",
+      "Description": "Pure helpers that build, render, validate, and progressively disclose the task schedule editor."
+    },
+    {
+      "path": "scheduleEditor.test.js",
+      "Description": "Node tests covering schedule-editor models, controls, validation messages, and typed schedule serialization."
+    },
+    {
+      "path": "browserBehavior.test.js",
+      "Description": "Headless Chromium regressions covering the enamel foundation, ledger geometry, draft preservation, accessible sheets, and undo layout."
+    },
+    {
+      "path": "completionSaveLogic.js",
+      "Description": "Pure completion-save coordinator for staged deterministic execution, task schedule, and session checkpoint writes."
+    },
+    {
+      "path": "completionSaveLogic.test.js",
+      "Description": "Node tests covering staged execution, task-schedule, and session-checkpoint persistence retry boundaries."
+    },
+    {
+      "path": "doingCompletionLogic.js",
+      "Description": "Pure doing-mode helpers for refreshed completion preparation and stage-specific retry dispatch."
+    },
+    {
+      "path": "doingCompletionLogic.test.js",
+      "Description": "Node tests covering refreshed completion preparation and stage-specific retry dispatch."
+    },
+    {
+      "path": "doingLines.js",
+      "Description": "The lines Doing states about a session — status, progress, budget, spent and conclusion."
+    },
+    {
+      "path": "doingLines.test.js",
+      "Description": "Node tests covering the Doing session lines and their neutral over-budget wording."
+    },
+    {
+      "path": "taskData.js",
+      "Description": "DB calls for creating, reading, updating, and permanently deleting normalized task records."
+    },
+    {
+      "path": "taskData.test.js",
+      "Description": "Node tests covering proposed-task defaults, idempotent creation, and permanent deletion."
+    },
+    {
+      "path": "taskMigration.js",
+      "Description": "Rewrites stored task records from the retired field names into the current schedule shape."
+    },
+    {
+      "path": "taskMigration.test.js",
+      "Description": "Node tests covering the one-way upgrade of retired task fields and its write payload."
+    },
+    {
+      "path": "executionData.js",
+      "Description": "DB calls for deterministic task-execution upserts and session-scoped execution reads."
+    },
+    {
+      "path": "executionData.test.js",
+      "Description": "Node test covering idempotent execution upserts by stable completion-attempt ID."
+    },
+    {
+      "path": "sessionData.js",
+      "Description": "DB calls for creating, reading, updating, and locating durable sessions."
+    },
+    {
+      "path": "sessionLogic.js",
+      "Description": "Pure session timing and transition rules derived from persisted active-time checkpoints."
+    },
+    {
+      "path": "sessionLogic.test.js",
+      "Description": "Node tests covering reload-safe timing, pause/resume transitions, outcome deltas, and legacy checkpoints."
+    },
+    {
+      "path": "sessionStore.js",
+      "Description": "Coordinates authoritative session restore, repair, persistence, continuation, and title-only additions."
+    },
+    {
+      "path": "sessionStore.test.js",
+      "Description": "Node tests covering durable session lifecycle, recovery, continuation, and idempotent title-only additions."
+    },
+    {
+      "path": "continuationLogic.js",
+      "Description": "Pure rules for budget-aware continuation suggestions and unrestricted task search."
+    },
+    {
+      "path": "continuationLogic.test.js",
+      "Description": "Node tests covering continuation suggestions, search, exclusions, ordering, and budget selection."
+    },
+    {
+      "path": "bundleLogic.js",
+      "Description": "Pure functions that prioritize eligible tasks by scheduled date and build category-ID-filtered time-boxed bundles and filler suggestions."
+    },
+    {
+      "path": "bundleLogic.test.js",
+      "Description": "Node tests covering scheduled-date ordering, future-task eligibility, and stable category-ID filtering for bundles and filler suggestions."
+    },
+    {
+      "path": "undoToast.js",
+      "Description": "Optimistic archive transactions, a serialized one-action undo queue, and its shared status-bar renderer."
+    },
+    {
+      "path": "undoToast.test.js",
+      "Description": "Node tests covering archive round-trips, serialized queue settlement, expiry, and idempotent status-bar rendering."
+    },
+    {
+      "path": "sheet.js",
+      "Description": "Controls the shared accessible bottom sheet with safe actions, focus trapping, dismissal, and focus restoration."
+    },
+    {
+      "path": "archiveView.js",
+      "Description": "Renders archived chores and coordinates undo-aware restore and confirmed permanent deletion."
+    },
+    {
+      "path": "archiveView.test.js",
+      "Description": "Node tests covering safe Archive markup, inferred restore status, action sequencing, dismissal, and failure feedback."
+    },
+    {
+      "path": "aiEnrich.js",
+      "Description": "Calls the LLM to suggest category, duration, and a validated typed schedule for new tasks, plus a duration-history heuristic."
+    },
+    {
+      "path": "aiEnrich.test.js",
+      "Description": "Node tests covering dynamic AI enrichment prompt construction."
+    },
+    {
+      "path": "tasksView.js",
+      "Description": "Renders task destinations and wires intake, approval, editing, and optimistic archive transactions."
+    },
+    {
+      "path": "tasksView.test.js",
+      "Description": "Node tests covering task approval/edit helpers, due-first ledgers, and optimistic archive commit and recovery."
+    },
+    {
+      "path": "chores/ledgerLogic.js",
+      "Description": "Pure view model for the Chores ledger: bands, counts, filters and ripeness."
+    },
+    {
+      "path": "chores/ledgerLogic.test.js",
+      "Description": "Tests the Chores ledger bands, filters and ripeness arithmetic."
+    },
+    {
+      "path": "chores/listView.js",
+      "Description": "Renders the Chores ledger: bands, rows, the unscheduled list and the archive."
+    },
+    {
+      "path": "chores/editModal.js",
+      "Description": "Builds the chore edit modal's body and reads the edited values back."
+    },
+    {
+      "path": "chores/editModal.test.js",
+      "Description": "Tests the chore edit modal's markup and the values it reads back."
+    },
+    {
+      "path": "sessionView.js",
+      "Description": "Renders time-budget and category choices, inline input feedback, bundle proposals, and durable session starts."
+    },
+    {
+      "path": "sessionView.test.js",
+      "Description": "Node tests covering restored-session notices and non-blocking inline budget feedback."
+    },
+    {
+      "path": "doingView.js",
+      "Description": "Renders all session tasks, persists exact outcome checkpoints, and supports pause, continuation, and conclusion."
+    },
+    {
+      "path": "doingView.test.js",
+      "Description": "Production DOM tests covering authoritative refresh, any-order outcomes, persistence retries, pause, and continuation."
+    },
+    {
+      "path": "reopenLogic.js",
+      "Description": "Pure rules for taking back an outcome: which task fields to restore and what time returns."
+    },
+    {
+      "path": "reopenLogic.test.js",
+      "Description": "Node tests covering reopen snapshots, checkpoint return, and records saved before snapshots existed."
+    },
+    {
+      "path": "receiptGauge.js",
+      "Description": "Geometry for the Receipt gauge \u2014 scale, ticks and label placement."
+    },
+    {
+      "path": "receiptGauge.test.js",
+      "Description": "Tests the Receipt gauge geometry."
+    },
+    {
+      "path": "receiptLogic.js",
+      "Description": "Pure Receipt copy: drift from an estimate, difficulty words, headline, offers line and save label."
+    },
+    {
+      "path": "receiptLogic.test.js",
+      "Description": "Node tests holding the Receipt's phrasing neutral and its counts correct."
+    },
+    {
+      "path": "reviewView.js",
+      "Description": "Renders post-session execution edits and stale-safe named offers for explicit duration-estimate updates."
+    },
+    {
+      "path": "reviewView.test.js",
+      "Description": "Node tests covering review persistence, named duration offers, explicit decisions, and stale-load protection."
+    },
+    {
+      "path": "historyLogic.js",
+      "Description": "Pure functions joining sessions, rounded raw or legacy execution durations, and tasks into status-aware history summaries."
+    },
+    {
+      "path": "historyLogic.test.js",
+      "Description": "Node tests covering status-aware history summaries and rounded raw-duration compatibility."
+    },
+    {
+      "path": "historyView.js",
+      "Description": "Drives the Log screen: loads the record, filters it by range and opens one session at a time."
+    },
+    {
+      "path": "log/logLogic.js",
+      "Description": "Pure view model for the Log: its ranges, chart geometry and per-session copy."
+    },
+    {
+      "path": "log/logLogic.test.js",
+      "Description": "Tests the Log's ranges, chart geometry and per-session copy."
+    },
+    {
+      "path": "log/logScreen.js",
+      "Description": "Renders the Log: the range control, the active-time chart and the session cards."
+    },
+    {
+      "path": "log/logScreen.test.js",
+      "Description": "Tests the Log's range control, chart and session card markup."
+    },
+    {
+      "path": "categoryLocationLogic.js",
+      "Description": "Pure rules for stable category and location references, seeding, migration, and assignment validation."
+    },
+    {
+      "path": "categoryLocationLogic.test.js",
+      "Description": "Node tests covering category and location reference rules and legacy migration plans."
+    },
+    {
+      "path": "categoryLocationData.js",
+      "Description": "DB calls for user-managed category and location reference collections."
+    },
+    {
+      "path": "categoryLocationData.test.js",
+      "Description": "Node test covering stable category object IDs and datastore upsert option translation."
+    },
+    {
+      "path": "categoryLocationStore.js",
+      "Description": "Loads, seeds, and migrates category/location references before dependent views render."
+    },
+    {
+      "path": "categoryLocationStore.test.js",
+      "Description": "Node tests covering idempotent reference initialization and degraded data loading."
+    },
+    {
+      "path": "artifactInventory.test.js",
+      "Description": "Node tests enforcing JavaScript inventory, route and overlay markup, control geometry, and zero native dialogs."
+    },
+    {
+      "path": "ripenessLogic.js",
+      "Description": "Ripeness as a 0..1 warmth fraction, its themed colour ramp, and ripest-first pool order."
+    },
+    {
+      "path": "ripenessLogic.test.js",
+      "Description": "Unit tests for the ripeness fraction, colour ramp and pool order."
+    },
+    {
+      "path": "palette.test.js",
+      "Description": "Pins the colour tokens to the Organic design system's tonal ramp."
+    },
+    {
+      "path": "pickingLogic.js",
+      "Description": "Hand-picking chores into a bundle, with the total, fit and vessel geometry readouts."
+    },
+    {
+      "path": "pickingLogic.test.js",
+      "Description": "Unit tests for picking, the bundle readouts and the vessel geometry."
+    },
+    {
+      "path": "vesselPresentation.js",
+      "Description": "Markup for the Today vessel, its pool chips, category tabs and chore detail."
+    },
+    {
+      "path": "vesselPresentation.test.js",
+      "Description": "Unit tests for the Today vessel and pool markup."
+    },
+    {
+      "path": "chores/fieldPills.js",
+      "Description": "Category and location pill groups shared by the Inbox card and the Chores ledger."
+    },
+    {
+      "path": "chores/listView.test.js",
+      "Description": "Tests the Chores ledger markup \u2014 bands, rows, the inline editor and the archive."
+    },
+    {
+      "path": "theme.js",
+      "Description": "The light/dark/system choice: its default, its copy, and how it reaches the document."
+    },
+    {
+      "path": "theme.test.js",
+      "Description": "Tests the theme default, its copy and how an override reaches the document."
+    },
+    {
+      "path": "settingsData.js",
+      "Description": "Reads and writes the single app-settings record behind the Setup switches."
+    },
+    {
+      "path": "settingsData.test.js",
+      "Description": "Tests the single app-settings record behind the Setup switches."
+    },
+    {
+      "path": "setup/vocabularyLogic.js",
+      "Description": "Pure view model for Setup \u2014 the vocabulary tabs, usage counts and switch copy."
+    },
+    {
+      "path": "setup/vocabularyLogic.test.js",
+      "Description": "Tests the Setup screen's vocabulary arithmetic and copy."
+    },
+    {
+      "path": "setup/setupView.js",
+      "Description": "Renders and wires Setup \u2014 the vocabulary of categories and locations, and the AI switch."
+    },
+    {
+      "path": "setup/setupView.test.js",
+      "Description": "Tests the Setup screen markup \u2014 the vocabulary tabs, term rows and the AI switch."
+    }
   ],
   "app_tables": {
     "tasks": {
       "description": "Chores/admin tasks, from raw intake through approval and ongoing scheduling.",
       "schema": {
-        "name": { "type": "String", "description": "Task name as entered by the user." },
-        "category": { "type": "String", "description": "Compatibility snapshot of the assigned category name, retained for legacy consumers." },
-        "categoryId": { "type": "String", "description": "Stable _id of the approved category, initialized to null when unassigned." },
-        "locationIds": { "type": "Array", "description": "Distinct stable _ids of approved locations, initialized empty when unassigned." },
-        "estimatedDuration": { "type": "String", "description": "Approved estimated duration in minutes (numeric)." },
-        "scheduledDate": { "type": "String", "description": "Local YYYY-MM-DD planning date for the current task occurrence, or null while proposed." },
-        "schedule": { "type": "Object", "description": "Typed one_off, periodic, or fixed calendar rule used to generate later occurrences." },
-        "recurrence": { "type": "String", "description": "Legacy compatibility field for the approved recurrence interval in days, or null for a one-off task (numeric)." },
-        "lastCompletedDate": { "type": "String", "description": "Timestamp (ms) the task was last completed, or null." },
-        "nextDueDate": { "type": "String", "description": "Legacy compatibility field for the timestamp (ms) previously used as the task's next planning date (numeric)." },
-        "status": { "type": "String", "description": "One of: proposed, approved_recurring, active, archived." },
-        "suggestedCategory": { "type": "String", "description": "AI-suggested active category name, pending user approval." },
-        "suggestedDuration": { "type": "String", "description": "AI-suggested duration in minutes, pending user approval (numeric)." },
-        "suggestedSchedule": { "type": "Object", "description": "Validated AI-proposed schedule rule pending explicit user review, or null." },
-        "suggestedRecurrenceDays": { "type": "String", "description": "Legacy compatibility field for AI-suggested recurrence in days, pending user approval (numeric)." }
+        "name": {
+          "type": "String",
+          "description": "Task name as entered by the user."
+        },
+        "category": {
+          "type": "String",
+          "description": "Compatibility snapshot of the assigned category name, retained for legacy consumers."
+        },
+        "categoryId": {
+          "type": "String",
+          "description": "Stable _id of the approved category, initialized to null when unassigned."
+        },
+        "locationIds": {
+          "type": "Array",
+          "description": "Distinct stable _ids of approved locations, initialized empty when unassigned."
+        },
+        "estimatedDuration": {
+          "type": "String",
+          "description": "Approved estimated duration in minutes (numeric)."
+        },
+        "scheduledDate": {
+          "type": "String",
+          "description": "Local YYYY-MM-DD planning date for the current task occurrence, or null while proposed."
+        },
+        "schedule": {
+          "type": "Object",
+          "description": "Typed one_off, periodic, or fixed calendar rule used to generate later occurrences."
+        },
+        "lastCompletedDate": {
+          "type": "String",
+          "description": "Timestamp (ms) the task was last completed, or null."
+        },
+        "status": {
+          "type": "String",
+          "description": "One of: proposed, approved_recurring, active, archived."
+        },
+        "suggestedCategory": {
+          "type": "String",
+          "description": "AI-suggested active category name, pending user approval."
+        },
+        "suggestedDuration": {
+          "type": "String",
+          "description": "AI-suggested duration in minutes, pending user approval (numeric)."
+        },
+        "suggestedSchedule": {
+          "type": "Object",
+          "description": "Validated AI-proposed schedule rule pending explicit user review, or null."
+        }
       }
     },
     "categories": {
       "description": "User-managed task categories, including seeded defaults and archived values.",
       "schema": {
-        "name": { "type": "String", "description": "Trimmed category display name." },
-        "normalizedName": { "type": "String", "description": "Lowercase whitespace-normalized category uniqueness key." },
-        "status": { "type": "String", "description": "One of: active, archived." },
-        "displayOrder": { "type": "String", "description": "Numeric ordering value; newly added records append." },
-        "seedKey": { "type": "String", "description": "Stable built-in default key, or null for custom categories." }
+        "name": {
+          "type": "String",
+          "description": "Trimmed category display name."
+        },
+        "normalizedName": {
+          "type": "String",
+          "description": "Lowercase whitespace-normalized category uniqueness key."
+        },
+        "status": {
+          "type": "String",
+          "description": "One of: active, archived."
+        },
+        "displayOrder": {
+          "type": "String",
+          "description": "Numeric ordering value; newly added records append."
+        },
+        "seedKey": {
+          "type": "String",
+          "description": "Stable built-in default key, or null for custom categories."
+        }
       }
     },
     "locations": {
       "description": "User-managed flat location references for task assignments.",
       "schema": {
-        "name": { "type": "String", "description": "Trimmed location display name." },
-        "normalizedName": { "type": "String", "description": "Lowercase whitespace-normalized location uniqueness key." },
-        "status": { "type": "String", "description": "One of: active, archived." },
-        "displayOrder": { "type": "String", "description": "Numeric ordering value; newly added records append." }
+        "name": {
+          "type": "String",
+          "description": "Trimmed location display name."
+        },
+        "normalizedName": {
+          "type": "String",
+          "description": "Lowercase whitespace-normalized location uniqueness key."
+        },
+        "status": {
+          "type": "String",
+          "description": "One of: active, archived."
+        },
+        "displayOrder": {
+          "type": "String",
+          "description": "Numeric ordering value; newly added records append."
+        }
       }
     },
     "taskExecutions": {
       "description": "One record per task tackled during a doing-mode session.",
       "schema": {
-        "taskId": { "type": "String", "description": "_id of the related task." },
-        "sessionId": { "type": "String", "description": "_id of the related work session." },
-        "startTime": { "type": "String", "description": "Timestamp (ms) the task was started (numeric)." },
-        "endTime": { "type": "String", "description": "Timestamp (ms) the task was ended (numeric)." },
-        "actualDuration": { "type": "String", "description": "Actual minutes spent, editable during review (numeric)." },
-        "rawDurationMs": { "type": "String", "description": "Authoritative active-time delta allocated to this outcome in milliseconds (numeric)." },
-        "activeElapsedMs": { "type": "String", "description": "Cumulative session active milliseconds at this outcome, used for checkpoint repair (numeric)." },
-        "actualSeconds": { "type": "String", "description": "Exact-seconds compatibility mirror derived from rawDurationMs (numeric)." },
-        "outcome": { "type": "String", "description": "One of: done, cancelled, already_done." },
-        "difficultyRating": { "type": "String", "description": "Optional 1-5 difficulty rating set during review (numeric)." },
-        "notes": { "type": "String", "description": "Optional free-text notes set during review." },
-        "completionAttemptId": { "type": "String", "description": "Stable client-generated ID reused to upsert one logical execution across lost-response retries." },
-        "taskUpdateSnapshot": { "type": "Object", "description": "Exact task fields intended by this outcome, used for idempotent recovery after an interrupted task update, or null." }
+        "taskId": {
+          "type": "String",
+          "description": "_id of the related task."
+        },
+        "sessionId": {
+          "type": "String",
+          "description": "_id of the related work session."
+        },
+        "startTime": {
+          "type": "String",
+          "description": "Timestamp (ms) the task was started (numeric)."
+        },
+        "endTime": {
+          "type": "String",
+          "description": "Timestamp (ms) the task was ended (numeric)."
+        },
+        "actualDuration": {
+          "type": "String",
+          "description": "Actual minutes spent, editable during review (numeric)."
+        },
+        "rawDurationMs": {
+          "type": "String",
+          "description": "Authoritative active-time delta allocated to this outcome in milliseconds (numeric)."
+        },
+        "activeElapsedMs": {
+          "type": "String",
+          "description": "Cumulative session active milliseconds at this outcome, used for checkpoint repair (numeric)."
+        },
+        "actualSeconds": {
+          "type": "String",
+          "description": "Exact-seconds compatibility mirror derived from rawDurationMs (numeric)."
+        },
+        "outcome": {
+          "type": "String",
+          "description": "One of: done, cancelled, already_done."
+        },
+        "difficultyRating": {
+          "type": "String",
+          "description": "Optional 1-5 difficulty rating set during review (numeric)."
+        },
+        "notes": {
+          "type": "String",
+          "description": "Optional free-text notes set during review."
+        },
+        "completionAttemptId": {
+          "type": "String",
+          "description": "Stable client-generated ID reused to upsert one logical execution across lost-response retries."
+        },
+        "taskUpdateSnapshot": {
+          "type": "Object",
+          "description": "Exact task fields intended by this outcome, used for idempotent recovery after an interrupted task update, or null."
+        },
+        "timeOmitted": {
+          "type": "String",
+          "description": "True when the user chose to leave this chore's time out of the log (boolean)."
+        }
       }
     },
     "sessions": {
       "description": "A single time-boxed doing-mode session.",
       "schema": {
-        "timeBudgetMinutes": { "type": "String", "description": "Selected time budget in minutes (numeric)." },
-        "categoryFilterId": { "type": "String", "description": "Stable _id of the optional category filter applied when the bundle was generated." },
-        "categoryFilter": { "type": "String", "description": "Display-name snapshot of the optional category filter, retained for history compatibility." },
-        "taskBundle": { "type": "Array", "description": "Ordered array of every task _id attached to this session; IDs remain after outcomes." },
-        "startTime": { "type": "String", "description": "Timestamp (ms) the session started (numeric)." },
-        "endTime": { "type": "String", "description": "Timestamp (ms) the session ended (numeric)." },
-        "accumulatedActiveMs": { "type": "String", "description": "Counted milliseconds from completed active runs (numeric)." },
-        "activeStartedAt": { "type": "String", "description": "Timestamp when the current active run began, or null while paused/completed (numeric)." },
-        "checkpointElapsedMs": { "type": "String", "description": "Cumulative active milliseconds allocated through the latest outcome (numeric)." },
-        "pausedAt": { "type": "String", "description": "Timestamp when the session most recently paused, or null (numeric)." },
-        "unassignedDurationMs": { "type": "String", "description": "Counted milliseconds not allocated to a task when concluded (numeric)." },
-        "pendingAddition": { "type": "Object", "description": "Recoverable marker for one title-only create-and-attach operation, or null." },
-        "continuationSuggestionEntries": { "type": "Array", "description": "Per-pause suggestion selections with taskId and captured estimatedDurationMinutes, reset on resume or a new pause." },
-        "status": { "type": "String", "description": "One of: active, paused, completed, or interrupted." }
+        "timeBudgetMinutes": {
+          "type": "String",
+          "description": "Selected time budget in minutes (numeric)."
+        },
+        "categoryFilterId": {
+          "type": "String",
+          "description": "Stable _id of the optional category filter applied when the bundle was generated."
+        },
+        "categoryFilter": {
+          "type": "String",
+          "description": "Display-name snapshot of the optional category filter, retained for history compatibility."
+        },
+        "taskBundle": {
+          "type": "Array",
+          "description": "Ordered array of every task _id attached to this session; IDs remain after outcomes."
+        },
+        "startTime": {
+          "type": "String",
+          "description": "Timestamp (ms) the session started (numeric)."
+        },
+        "endTime": {
+          "type": "String",
+          "description": "Timestamp (ms) the session ended (numeric)."
+        },
+        "accumulatedActiveMs": {
+          "type": "String",
+          "description": "Counted milliseconds from completed active runs (numeric)."
+        },
+        "activeStartedAt": {
+          "type": "String",
+          "description": "Timestamp when the current active run began, or null while paused/completed (numeric)."
+        },
+        "checkpointElapsedMs": {
+          "type": "String",
+          "description": "Cumulative active milliseconds allocated through the latest outcome (numeric)."
+        },
+        "pausedAt": {
+          "type": "String",
+          "description": "Timestamp when the session most recently paused, or null (numeric)."
+        },
+        "unassignedDurationMs": {
+          "type": "String",
+          "description": "Counted milliseconds not allocated to a task when concluded (numeric)."
+        },
+        "pendingAddition": {
+          "type": "Object",
+          "description": "Recoverable marker for one title-only create-and-attach operation, or null."
+        },
+        "continuationSuggestionEntries": {
+          "type": "Array",
+          "description": "Per-pause suggestion selections with taskId and captured estimatedDurationMinutes, reset on resume or a new pause."
+        },
+        "status": {
+          "type": "String",
+          "description": "One of: active, paused, completed, or interrupted."
+        }
+      }
+    },
+    "settings": {
+      "description": "One record holding the app-wide switches the user sets in Setup.",
+      "schema": {
+        "aiSuggestions": {
+          "type": "String",
+          "description": "True when the user has turned Inbox suggestions on (boolean). Off by default."
+        },
+        "theme": {
+          "type": "String",
+          "description": "Appearance override: 'system' (default), 'light' or 'dark'."
+        }
       }
     }
   },

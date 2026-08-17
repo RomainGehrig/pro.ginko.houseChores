@@ -27,6 +27,25 @@ export function escapeHtml(str) {
   })[character])
 }
 
+// The same escaping, under the name that marks an attribute context at the call
+// site. Keeping the two names apart is what lets either one change alone.
+export const escapeAttribute = escapeHtml
+
+export function formatFactHtml(value) {
+  const text = String(value)
+  const figures = /\d+(?::\d+)*(?:\.\d+)?/g
+  let cursor = 0
+  let markup = ''
+
+  for (const match of text.matchAll(figures)) {
+    markup += escapeHtml(text.slice(cursor, match.index))
+    markup += '<span class="fig">' + escapeHtml(match[0]) + '</span>'
+    cursor = match.index + match[0].length
+  }
+
+  return markup + escapeHtml(text.slice(cursor))
+}
+
 export function formatDateTime(ts) {
   if (!ts) return 'n/a'
   return new Date(ts).toLocaleString(undefined, {

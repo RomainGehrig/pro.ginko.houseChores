@@ -35,3 +35,20 @@ test('new session start does not add a restore notice', () => {
   assert.equal(showSessionStartNotice({ restored: false }, status), false)
   assert.equal(status.textContent, '')
 })
+
+test('missing and valid budgets update the inline session status without disabling controls', () => {
+  const status = statusElement()
+  const propose = { disabled: false }
+  const custom = { disabled: false }
+
+  assert.equal(sessionView.updateBudgetStatus(status, false), false)
+  assert.equal(status.textContent, 'Choose or enter a time budget first.')
+  assert.equal(status.getAttribute('role'), 'status')
+  assert.equal(propose.disabled, false)
+  assert.equal(custom.disabled, false)
+
+  assert.equal(sessionView.updateBudgetStatus(status, true), true)
+  assert.equal(status.textContent, '')
+  assert.equal(propose.disabled, false)
+  assert.equal(custom.disabled, false)
+})

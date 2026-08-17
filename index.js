@@ -1,33 +1,30 @@
-import { initTasksView } from './tasksView.js'
+import { initTasksView, selectLedgerView, setSuggestionsEnabled } from './tasksView.js'
 import { initSessionView } from './sessionView.js'
 import { initDoingView, startDoing } from './doingView.js'
-import { initReviewView } from './reviewView.js'
+import { initReviewView, startReview } from './reviewView.js'
 import { initHistoryView, refreshHistoryView } from './historyView.js'
-import { showView, setNavVisible } from './viewRouter.js'
+import { hasRequestedRoute, initRouter, showView, setNavVisible } from './router.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
-import { initCategoryLocationView } from './categoryLocationView.js'
 import { sessionStore } from './sessionStore.js'
 import { setCurrentSessionAggregate } from './state.js'
 import { escapeHtml } from './helpers.js'
+import { initSetupView } from './setup/setupView.js'
+import { initSheet } from './sheet.js'
+import { initUndoToast } from './undoToast.js'
+import { applyTheme, readCachedTheme } from './theme.js'
 
-document.querySelectorAll('.nav-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    showView(btn.dataset.view)
-    if (btn.dataset.view === 'history') refreshHistoryView()
-  })
-})
+// Before anything renders: the record that really holds the choice arrives over
+// the network, and a first paint in the wrong colour is worse than a stale one.
+applyTheme(readCachedTheme())
 
 async function openInitialView () {
   try {
     const aggregate = await sessionStore.restoreCurrent(Date.now())
-    if (!aggregate) {
-      showView('tasks')
-      return
-    }
+    if (!aggregate) return
     setCurrentSessionAggregate(aggregate)
     setNavVisible('doing', true)
-    showView('doing')
-    startDoing(aggregate)
+    await startDoing(aggregate)
+    if (!hasRequestedRoute()) showView('doing')
   } catch (error) {
     const content = document.getElementById('doingContent')
     content.innerHTML = '<p class="inline-status" data-state="error" role="alert">' +
@@ -36,18 +33,25 @@ async function openInitialView () {
     content.querySelector('#retrySessionRecoveryBtn')
       .addEventListener('click', openInitialView, { once: true })
     setNavVisible('doing', true)
-    showView('doing')
+    if (!hasRequestedRoute()) showView('doing')
   }
 }
 
 async function init () {
   await categoryLocationStore.initialize()
-  initCategoryLocationView()
+  initSheet()
+  initUndoToast()
   await initTasksView()
+  await initSetupView({ onSuggestionsChange: setSuggestionsEnabled })
   initSessionView()
   initDoingView()
   initReviewView()
   initHistoryView()
+  initRouter({
+    onLogRoute: refreshHistoryView,
+    onReceiptRoute: sessionId => startReview({ sessionId }),
+    onChoresRoute: selectLedgerView
+  })
   await openInitialView()
 }
 

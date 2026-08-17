@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { buildNewTaskRecord, createTaskWithId } from './taskData.js'
+import { buildNewTaskRecord, createTaskWithId, deleteTask } from './taskData.js'
 
 test('new tasks stay frictionless and await scheduling during review', () => {
   assert.deepEqual(buildNewTaskRecord('Clean balcony'), {
@@ -35,6 +35,26 @@ test('supplied task ID makes title-only creation idempotent', async () => {
     assert.equal(records.size, 1)
     assert.equal(records.get('quick-s1-1').status, 'proposed')
     assert.equal(records.get('quick-s1-1').name, 'Replace hallway bulb')
+  } finally {
+    if (originalFreezr === undefined) delete globalThis.freezr
+    else globalThis.freezr = originalFreezr
+  }
+})
+
+test('permanent task deletion forwards the task id and datastore result exactly once', async () => {
+  const originalFreezr = globalThis.freezr
+  const calls = []
+  const deleted = { _id: 'task-delete', deleted: true }
+  globalThis.freezr = {
+    delete: async (...args) => {
+      calls.push(args)
+      return deleted
+    }
+  }
+
+  try {
+    assert.equal(await deleteTask('task-delete'), deleted)
+    assert.deepEqual(calls, [['tasks', 'task-delete']])
   } finally {
     if (originalFreezr === undefined) delete globalThis.freezr
     else globalThis.freezr = originalFreezr

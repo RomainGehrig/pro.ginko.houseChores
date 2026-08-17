@@ -41,3 +41,12 @@ export function suggestionSelectionFits (selectedTasks, candidate, remainingMs) 
   return selectedTasks.reduce((sum, task) => sum + estimateMs(task), 0) +
     estimateMs(candidate) <= remainingMs
 }
+
+// The add field does two jobs at once. A name the chores already carry is a
+// search hit; anything else is offered as a new chore rather than a dead end.
+export function canQuickAdd (typed, tasks) {
+  const title = String(typed ?? '').trim().toLowerCase()
+  if (!title) return false
+  return !(tasks || []).some(task =>
+    String(task?.name ?? '').trim().toLowerCase() === title)
+}

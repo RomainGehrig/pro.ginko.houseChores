@@ -24,13 +24,13 @@ function createFakeApis ({ locationError = null } = {}) {
     categoryId: null,
     locationIds: [],
     estimatedDuration: null,
-    recurrence: null,
+    schedule: { type: 'one_off' },
     lastCompletedDate: null,
-    nextDueDate: 0,
+    scheduledDate: null,
     status: 'active',
     suggestedCategory: null,
     suggestedDuration: null,
-    suggestedRecurrenceDays: null
+    suggestedSchedule: null
   }]
   const taskUpdates = []
   let nextCategoryId = 1

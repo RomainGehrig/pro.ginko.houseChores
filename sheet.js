@@ -1,0 +1,208 @@
+// ABOUTME: Opens the shared accessible bottom sheet and resolves the selected action.
+// ABOUTME: Owns dismissal, focus trapping, and focus restoration for one sheet at a time.
+
+let initialized = false
+let elements = null
+let priorFocus = null
+let resolveOpen = null
+let activeOpen = null
+let openingFrame = null
+let closeTimer = null
+let closingValue = null
+let closing = false
+
+function enabledActions () {
+  return [...elements.actions.querySelectorAll('button:not([disabled])')]
+}
+
+// A sheet carrying a form must hold focus over the fields too, not only the
+// action buttons, or Tab walks out of the dialog and into the page behind it.
+const FOCUSABLE = 'button:not([disabled]), input:not([disabled]):not([type="hidden"]), ' +
+  'select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+
+function focusableControls () {
+  return [...elements.sheet.querySelectorAll(FOCUSABLE)]
+    .filter(control => !control.closest('[hidden]') &&
+      (control.offsetWidth > 0 || control.offsetHeight > 0 || control === document.activeElement))
+}
+
+// The body element, so a caller that opened a form can read it back. It keeps
+// its content after the sheet closes, which is what makes Save readable.
+export const sheetBody = () => elements?.message ?? null
+
+// The title row's own control, for an action about the thing being edited
+// rather than about the edit. A caller that listens for clicks inside the sheet
+// needs this as well as the body, since the two are siblings.
+export const sheetHeadAction = () => elements?.headAction ?? null
+
+const scheduleFrame = callback => typeof requestAnimationFrame === 'function'
+  ? requestAnimationFrame(callback)
+  : setTimeout(callback, 0)
+
+const cancelScheduledFrame = frame => {
+  if (frame === null) return
+  if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(frame)
+  else clearTimeout(frame)
+}
+
+function transitionTimeMilliseconds () {
+  if (typeof getComputedStyle !== 'function') return 0
+  const style = getComputedStyle(elements.sheet)
+  const milliseconds = value => value.trim().endsWith('ms')
+    ? Number.parseFloat(value)
+    : Number.parseFloat(value) * 1000
+  const durations = style.transitionDuration.split(',').map(milliseconds)
+  const delays = style.transitionDelay.split(',').map(milliseconds)
+  return durations.reduce((maximum, duration, index) =>
+    Math.max(maximum, duration + (delays[index] ?? delays[0] ?? 0)), 0)
+}
+
+function finishClose () {
+  if (!resolveOpen) return false
+  const resolve = resolveOpen
+  resolveOpen = null
+  activeOpen = null
+  cancelScheduledFrame(openingFrame)
+  openingFrame = null
+  clearTimeout(closeTimer)
+  closeTimer = null
+  elements.sheet.hidden = true
+  elements.scrim.hidden = true
+  elements.sheet.dataset.state = 'closed'
+  if (priorFocus?.isConnected) priorFocus.focus()
+  priorFocus = null
+  const value = closingValue
+  closingValue = null
+  closing = false
+  resolve(value)
+  return true
+}
+
+function closeSheet (value = null) {
+  if (!resolveOpen || closing) return false
+  closing = true
+  closingValue = value
+  const wasOpen = elements.sheet.dataset.state === 'open'
+  activeOpen = null
+  cancelScheduledFrame(openingFrame)
+  openingFrame = null
+  elements.sheet.dataset.state = 'closed'
+  if (!wasOpen) return finishClose()
+
+  clearTimeout(closeTimer)
+  closeTimer = setTimeout(finishClose, transitionTimeMilliseconds() + 50)
+  return true
+}
+
+// A control inside the body can end the sheet too, not only the action bar —
+// a form may carry actions that are about leaving it rather than completing it.
+export const closeSheetWith = value => closeSheet(value)
+
+function finishForReplacement () {
+  if (!resolveOpen) return false
+  if (!closing) {
+    closing = true
+    closingValue = null
+    activeOpen = null
+    cancelScheduledFrame(openingFrame)
+    openingFrame = null
+    elements.sheet.dataset.state = 'closed'
+  }
+  return finishClose()
+}
+
+function handleKeydown (event) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeSheet(null)
+    return
+  }
+  if (event.key !== 'Tab') return
+
+  const controls = focusableControls()
+  if (!controls.length) return
+  const first = controls[0]
+  const last = controls[controls.length - 1]
+  if (event.shiftKey && document.activeElement === first) {
+    event.preventDefault()
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
+    event.preventDefault()
+    first.focus()
+  }
+}
+
+export function initSheet () {
+  if (initialized) return true
+  if (typeof document === 'undefined') return false
+
+  const scrim = document.getElementById('sheetScrim')
+  const sheet = document.getElementById('bottomSheet')
+  const title = document.getElementById('bottomSheetTitle')
+  const message = document.getElementById('bottomSheetMessage')
+  const actions = document.getElementById('bottomSheetActions')
+  if (!scrim || !sheet || !title || !message || !actions) return false
+
+  // Optional: a sheet is complete without a header action, and the older
+  // markup that has no slot for one simply never gets offered it.
+  const headAction = document.getElementById('bottomSheetHeadAction')
+  elements = { scrim, sheet, title, message, actions, headAction }
+  sheet.addEventListener('keydown', handleKeydown)
+  sheet.addEventListener('transitionend', event => {
+    if (closing && event.propertyName === 'transform' && sheet.dataset.state === 'closed') finishClose()
+  })
+  scrim.addEventListener('click', () => closeSheet(null))
+  initialized = true
+  return true
+}
+
+export function openSheet ({
+  title, message, bodyHtml = null, headerActionHtml = null, actions = []
+}) {
+  if (!initSheet()) return Promise.resolve(null)
+  finishForReplacement()
+
+  priorFocus = document.activeElement
+  elements.title.textContent = String(title ?? '')
+  // Cleared for every sheet, so one that asks for no header action is never
+  // left holding the last sheet's.
+  if (elements.headAction) {
+    elements.headAction.innerHTML = headerActionHtml ? String(headerActionHtml) : ''
+    elements.headAction.hidden = !headerActionHtml
+  }
+  // bodyHtml comes from the app's own builders, which escape every chore-supplied
+  // value. Controls stay in `actions` so the focus trap still sees all of them.
+  if (bodyHtml === null) elements.message.textContent = String(message ?? '')
+  else elements.message.innerHTML = String(message ? '<span class="sheet-lede">' + message + '</span>' : '') + bodyHtml
+  elements.actions.replaceChildren()
+
+  for (const action of actions) {
+    const button = document.createElement('button')
+    button.type = 'button'
+    button.textContent = String(action.label ?? '')
+    if (action.className) button.className = String(action.className)
+    button.addEventListener('click', () => closeSheet(action.value))
+    elements.actions.appendChild(button)
+  }
+
+  const promise = new Promise(resolve => { resolveOpen = resolve })
+  closing = false
+  closingValue = null
+  elements.sheet.dataset.state = 'closed'
+  elements.scrim.hidden = false
+  elements.sheet.hidden = false
+  elements.sheet.getBoundingClientRect()
+  const open = {}
+  activeOpen = open
+  openingFrame = scheduleFrame(() => {
+    openingFrame = null
+    if (activeOpen === open && resolveOpen) elements.sheet.dataset.state = 'open'
+  })
+  // A form begins at its first field, whatever else the body puts above it — a
+  // sheet must never open on a button that starts a confirmation. A sheet with
+  // no fields is a plain confirmation, and begins at its first action.
+  const field = elements.message.querySelector(
+    'input:not([disabled]):not([type="hidden"]), select:not([disabled]), textarea:not([disabled])')
+  ;(field || enabledActions()[0] || focusableControls()[0])?.focus()
+  return promise
+}

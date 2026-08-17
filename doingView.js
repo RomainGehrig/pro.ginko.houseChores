@@ -3,12 +3,17 @@
 
 import { state, setCurrentSessionAggregate } from './state.js'
 import { completionAttemptIdFor, createExecution } from './executionData.js'
+import { taskFieldsBeforeUpdate } from './reopenLogic.js'
 import { listTasksByIds, updateTask } from './taskData.js'
 import { updateSession } from './sessionData.js'
-import { formatDuration, formatTimer } from './helpers.js'
+import { formatFactHtml, formatTimer } from './helpers.js'
+import { remainingLine } from './doingLines.js'
 import {
+  buildAddPanelHtml,
+  buildContinuationRemainingHtml,
   buildContinuationSearchResultsHtml,
   buildContinuationSuggestionsHtml,
+  buildQuickAddHtml,
   buildDoingSessionHtml
 } from './taskPresentationLogic.js'
 import { createCompletionCoordinator } from './completionSaveLogic.js'
@@ -16,14 +21,13 @@ import { prepareCompletionAttempt, retryCompletionForStage } from './doingComple
 import { localDateFromDate } from './scheduleLogic.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
 import { getActiveTasks, refreshTasksView } from './tasksView.js'
-import { showView, setNavVisible } from './viewRouter.js'
+import { showView, setNavVisible } from './router.js'
 import { renderReviewLoadError, startReview } from './reviewView.js'
 import { sessionStore } from './sessionStore.js'
 import {
-  normalizeContinuationSuggestionEntries,
+  canQuickAdd,
   searchContinuationTasks,
-  suggestContinuationTasks,
-  suggestionSelectionFits
+  suggestContinuationTasks
 } from './continuationLogic.js'
 import {
   activeElapsedMs,
@@ -59,7 +63,9 @@ export function initDoingView () {
   if (typeof window !== 'undefined' && boundWindow !== window) {
     boundWindow = window
     window.addEventListener('focus', () => refreshDoing({
-      allowNavigation: document.getElementById('view-doing')?.style.display === 'block'
+      // Shown screens take their display from the stylesheet, so "not hidden"
+      // is what identifies the one the user is actually looking at.
+      allowNavigation: document.getElementById('view-doing')?.style.display !== 'none'
     }))
   }
 }
@@ -109,17 +115,22 @@ async function applyAggregate (aggregate, { allowNavigation = true } = {}) {
   if (aggregate.session.status === 'completed') {
     clearInterval(timerInterval)
     setNavVisible('doing', false)
-    setNavVisible('review', true)
-    if (allowNavigation) showView('review')
+    setNavVisible('review', true, aggregate.session._id)
+    if (allowNavigation) showView('review', aggregate.session._id)
     await loadCurrentReview()
     return
   }
   if (aggregate.session.status === 'interrupted') {
     clearInterval(timerInterval)
+    setNavVisible('doing', false)
     renderDoingError('This session was superseded by newer unfinished work.')
     return
   }
+  setNavVisible('doing', true)
   renderDoing()
+  // Paused is when chores get added, so the panel is the paused state itself
+  // rather than something a second button has to open.
+  if (aggregate.session.status === 'paused') await openContinuePicker()
 }
 
 async function loadCurrentReview () {
@@ -151,9 +162,20 @@ function renderDoing () {
 function updateTimerDisplay () {
   const timerDisplay = document.getElementById('sessionTimerDisplay')
   if (!timerDisplay || !state.currentSession) return
-  timerDisplay.textContent = formatTimer(
-    Math.floor(activeElapsedMs(state.currentSession, Date.now()) / 1000)
-  )
+  const seconds = Math.floor(activeElapsedMs(state.currentSession, Date.now()) / 1000)
+  timerDisplay.textContent = formatTimer(seconds)
+
+  // Past the time you set, the clock changes colour and nothing else happens.
+  // It does not count down, stop the session, or turn red.
+  const budgetSeconds = Number(state.currentSession.timeBudgetMinutes || 0) * 60
+  timerDisplay.classList.toggle('is-past-budget', budgetSeconds > 0 && seconds > budgetSeconds)
+
+  // What is left of the budget moves with the clock, so it is read out on the
+  // same tick rather than going stale until the next render.
+  const remaining = document.getElementById('doingRemaining')
+  if (remaining) {
+    remaining.innerHTML = formatFactHtml(remainingLine(state.currentSession, seconds * 1000))
+  }
 }
 
 function setSessionMutationControlsDisabled (disabled) {
@@ -163,7 +185,6 @@ function setSessionMutationControlsDisabled (disabled) {
     if (control.id === 'retryCompletionBtn' || control.id === 'retrySessionMutationBtn') return
     control.disabled = disabled
   })
-  if (!disabled) updateResumeAvailability()
 }
 
 function clearDoingStatus () {
@@ -228,23 +249,33 @@ async function handleDoingClick (event) {
   if (button.dataset.taskId && button.dataset.outcome) {
     return completeTask(button.dataset.taskId, button.dataset.outcome)
   }
-  if (button.id === 'pauseSessionBtn') return pauseSession()
+  if (button.dataset.reopenExecutionId) {
+    return reopenExecution(button.dataset.reopenExecutionId)
+  }
+  if (button.id === 'pauseSessionBtn') {
+    return state.currentSession?.status === 'active' ? pauseSession() : resumeSession()
+  }
   if (button.id === 'concludeSessionBtn') return concludeSession()
-  if (button.id === 'openContinueBtn') return openContinuePicker()
   if (button.id === 'continueQuickAddBtn') return quickAddContinuation()
-  if (button.id === 'resumeSessionBtn') return resumeSession()
-  if (button.id === 'closeContinueBtn') return closeContinuePicker()
 }
 
 function handleDoingInput (event) {
   if (event.target?.id !== 'continueSearchInput' || state.currentSession?.status !== 'paused') return
+  const typed = event.target.value
   const results = searchContinuationTasks(
     continuationTasks,
-    event.target.value,
+    typed,
     state.currentSession.taskBundle || []
   )
   const container = document.getElementById('continueSearchResults')
   if (container) container.innerHTML = buildContinuationSearchResultsHtml(results)
+
+  // The doc gives this field both jobs, so anything the chores do not already
+  // answer to is offered as a new one on the same keystroke.
+  const quickAdd = document.getElementById('continueQuickAdd')
+  if (quickAdd) {
+    quickAdd.innerHTML = canQuickAdd(typed, continuationTasks) ? buildQuickAddHtml(typed) : ''
+  }
 }
 
 async function handleDoingChange (event) {
@@ -255,14 +286,6 @@ async function handleDoingChange (event) {
   if (!candidate || state.currentSession.taskBundle?.includes(taskId)) return
   await acceptSuggestedTask(candidate, event.target)
 }
-
-const persistedSuggestionSelections = () =>
-  normalizeContinuationSuggestionEntries(
-    state.currentSession?.continuationSuggestionEntries
-  ).map(entry => ({
-    _id: entry.taskId,
-    estimatedDuration: entry.estimatedDurationMinutes
-  }))
 
 async function openContinuePicker () {
   if (state.currentSession?.status !== 'paused') return
@@ -286,35 +309,18 @@ async function openContinuePicker () {
     state.currentSession.taskBundle || [],
     remainingMs
   )
-  panel.innerHTML =
-    '<h2>Add more tasks</h2>' +
-    '<p id="continueRemaining"></p>' +
-    '<div id="continueSuggestions"></div>' +
-    '<label>Search active tasks <input id="continueSearchInput" type="search"></label>' +
-    '<div id="continueSearchResults"></div>' +
-    '<label>Quick task title <input id="continueQuickTitle"></label>' +
-    '<button id="continueQuickAddBtn">Add task</button>' +
-    '<button id="resumeSessionBtn">Resume session</button>' +
-    '<button id="closeContinueBtn">Back</button>'
+  panel.innerHTML = buildAddPanelHtml(remainingMs)
   panel.hidden = false
 
   const remaining = document.getElementById('continueRemaining')
   if (remaining) {
-    remaining.textContent = formatDuration(Math.floor(remainingMs / 60000)) +
-      ' remain in the original session budget for suggestions.'
+    remaining.innerHTML = buildContinuationRemainingHtml(
+      state.currentSession, activeElapsedMs(state.currentSession, Date.now()))
   }
   const suggestionsContainer = document.getElementById('continueSuggestions')
   if (suggestionsContainer) {
     suggestionsContainer.innerHTML = buildContinuationSuggestionsHtml(suggestions)
   }
-  updateResumeAvailability()
-}
-
-function updateResumeAvailability () {
-  const button = document.getElementById('resumeSessionBtn')
-  if (!button || !state.currentSession) return
-  const resolved = resolvedTaskIds(state.currentExecutions)
-  button.disabled = (state.currentSession.taskBundle || []).every(id => resolved.has(id))
 }
 
 async function reconcileAmbiguousSuggestionSelections (retry) {
@@ -353,26 +359,10 @@ async function acceptSuggestedTask (candidate, checkbox) {
     if (state.currentSession?.taskBundle?.includes(candidate._id)) return true
     if (state.currentSession?.status !== 'paused') return false
   }
-  const remainingMs = remainingBudgetMs(state.currentSession, Date.now())
-  const otherSelections = persistedSuggestionSelections().filter(
-    task => task._id !== candidate._id
-  )
-  if (!suggestionSelectionFits(
-    otherSelections,
-    candidate,
-    remainingMs
-  )) {
-    if (checkbox) checkbox.checked = false
-    const remaining = document.getElementById('continueRemaining')
-    if (remaining) remaining.textContent = 'That suggestion would exceed the remaining session budget.'
-    return false
-  }
-
   const attached = await runContinuationMutation(
     () => sessionStore.attachTasks(
       state.currentSession._id,
-      [candidate._id],
-      { suggestionTaskIds: [candidate._id] }
+      [candidate._id]
     ),
     'Could not add the suggested task',
     () => acceptSuggestedTask(candidate),
@@ -396,7 +386,7 @@ function attachSearchedTask (taskId) {
 }
 
 function quickAddContinuation (retryIntent = null) {
-  const title = retryIntent?.title || document.getElementById('continueQuickTitle')?.value
+  const title = retryIntent?.title || document.getElementById('continueSearchInput')?.value
   return runContinuationMutation(
     () => sessionStore.quickAdd(state.currentSession._id, title, retryIntent),
     'Could not add the quick task',
@@ -414,11 +404,6 @@ function resumeSession () {
     'Could not resume the session',
     resumeSession
   )
-}
-
-function closeContinuePicker () {
-  const panel = document.getElementById('doingContinuePanel')
-  if (panel) panel.hidden = true
 }
 
 function validOutcome (outcome) {
@@ -580,7 +565,8 @@ async function prepareAndCompletePendingTask () {
       difficultyRating: null,
       notes: '',
       completionAttemptId: completionAttemptIdFor(attempt.aggregate.session._id, attempt.taskId),
-      taskUpdateSnapshot: taskUpdate
+      taskUpdateSnapshot: taskUpdate,
+      taskFieldsBefore: taskFieldsBeforeUpdate(prepared.task, taskUpdate)
     },
     taskId: attempt.taskId,
     taskUpdate,
@@ -746,6 +732,16 @@ function pauseSession () {
     () => sessionStore.pause(state.currentSession._id, Date.now()),
     'Could not pause the session',
     pauseSession
+  )
+}
+
+// Taking back an outcome is itself an undo, so it reports what happened and
+// leaves the chore actionable again rather than stacking a second undo on top.
+function reopenExecution (executionId) {
+  return runSessionMutation(
+    () => sessionStore.reopen(state.currentSession._id, executionId),
+    'Could not reopen the chore',
+    () => reopenExecution(executionId)
   )
 }
 

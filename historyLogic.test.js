@@ -3,11 +3,11 @@
 
 import { test } from 'node:test'
 import assert from 'node:assert'
-import { buildHistory, describeOutcomes } from './historyLogic.js'
+import { buildHistory, displayMinutes } from './historyLogic.js'
 
 const tasks = [
-  { _id: 't1', name: 'Pay electricity bill' },
-  { _id: 't2', name: 'File tax receipts' }
+  { _id: 't1', name: 'Pay electricity bill', estimatedDuration: 10 },
+  { _id: 't2', name: 'File tax receipts', estimatedDuration: 25 }
 ]
 
 test('sorts sessions newest first, missing startTime last', () => {
@@ -19,6 +19,26 @@ test('sorts sessions newest first, missing startTime last', () => {
   ]
   const result = buildHistory(sessions, [], tasks)
   assert.deepEqual(result.map(s => s.id), ['s2', 's4', 's1', 's3'])
+})
+
+// The Receipt says "Nothing goes to the log for this one" when the time is
+// omitted, and it keeps the clock's own figure on the record because that
+// honesty is what the estimate learns from. So the Log has to be the one that
+// declines to read it — an omitted time is an absence, not a zero, or it would
+// arrive as "Took 0 min" and drag the estimate down with it.
+test('an omitted time is an absence, however the clock measured it', () => {
+  const sessions = [{ _id: 's1', startTime: 1000, status: 'completed' }]
+  const executions = [
+    {
+      _id: 'e1', sessionId: 's1', taskId: 't1', startTime: 1000, outcome: 'done',
+      rawDurationMs: 23 * 60000, actualSeconds: 23 * 60, actualDuration: null, timeOmitted: true
+    },
+    { _id: 'e2', sessionId: 's1', taskId: 't2', startTime: 2000, actualDuration: 12, outcome: 'done' }
+  ]
+  const [summary] = buildHistory(sessions, executions, tasks)
+
+  assert.equal(summary.entries[0].actualDuration, null)
+  assert.equal(summary.totalActualMinutes, 12, 'the omitted figure is not in the total')
 })
 
 test('counts outcomes and totals actual minutes including cancelled', () => {
@@ -109,9 +129,42 @@ test('executions are matched to their own session only', () => {
   assert.deepEqual(result.find(s => s.id === 's2').entries.map(e => e.taskName), ['File tax receipts'])
 })
 
-test('describeOutcomes lists only non-zero outcomes, done first', () => {
-  assert.equal(describeOutcomes({ done: 2, already_done: 0, cancelled: 1 }), '2 done, 1 cancelled')
-  assert.equal(describeOutcomes({ done: 0, already_done: 1, cancelled: 0 }), '1 already done')
-  assert.equal(describeOutcomes({ done: 1, already_done: 1, cancelled: 1 }), '1 done, 1 already done, 1 cancelled')
-  assert.equal(describeOutcomes({ done: 0, already_done: 0, cancelled: 0 }), '')
+test('a session reports the clock its budget was measured against', () => {
+  const [ran] = buildHistory([{
+    _id: 's1', status: 'completed', startTime: 1000, endTime: 900000,
+    accumulatedActiveMs: 26 * 60000, activeStartedAt: null
+  }], [
+    { sessionId: 's1', taskId: 't1', rawDurationMs: 14 * 60000, outcome: 'done' }
+  ], tasks)
+  assert.equal(ran.activeMinutes, 26)
+
+  const [running] = buildHistory([{
+    _id: 's2', status: 'active', startTime: 1000, endTime: null,
+    accumulatedActiveMs: 5 * 60000, activeStartedAt: 2000
+  }], [], tasks)
+  assert.equal(running.activeMinutes, 5)
+})
+
+test('a session written before the app kept its own clock reports what the chores recorded', () => {
+  const [summary] = buildHistory([{ _id: 's1', status: 'completed', accumulatedActiveMs: null }], [
+    { sessionId: 's1', taskId: 't1', actualDuration: 12, outcome: 'done' },
+    { sessionId: 's1', taskId: 't2', actualDuration: 7, outcome: 'cancelled' }
+  ], tasks)
+  assert.equal(summary.activeMinutes, 19)
+})
+
+test('an entry carries the estimate its chore now holds, so drift has something to read', () => {
+  const [summary] = buildHistory([{ _id: 's1', status: 'completed' }], [
+    { sessionId: 's1', taskId: 't1', startTime: 1, actualDuration: 14, outcome: 'done' },
+    { sessionId: 's1', taskId: 'gone', startTime: 2, actualDuration: 3, outcome: 'done' }
+  ], tasks)
+  assert.deepEqual(summary.entries.map(entry => entry.estimatedDuration), [10, null])
+})
+
+test('measured minutes are shown whole, and any time at all counts as a minute', () => {
+  assert.equal(displayMinutes(10.951499999), 11)
+  assert.equal(displayMinutes(0.0917166), 1)
+  assert.equal(displayMinutes(0), 0)
+  assert.equal(displayMinutes(null), 0)
+  assert.equal(displayMinutes(1.5), 2)
 })

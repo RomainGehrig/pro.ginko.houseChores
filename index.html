@@ -1,96 +1,188 @@
 <div id="app">
-  <header class="app-header">
-    <h1>Chore Planner</h1>
-    <nav class="view-nav">
-      <button class="nav-btn active" data-view="tasks">Tasks</button>
-      <button class="nav-btn" data-view="session">Start Session</button>
-      <button class="nav-btn" data-view="history">History</button>
-      <button class="nav-btn" data-view="doing" style="display:none">Doing</button>
-      <button class="nav-btn" data-view="review" style="display:none">Review</button>
-    </nav>
-  </header>
+  <nav id="workNav" class="work-nav" aria-label="In-progress work" hidden>
+    <a data-context-route="doing" href="#/doing" hidden>Resume round</a>
+    <a data-context-route="review" href="#/receipt" hidden>Return to review</a>
+  </nav>
 
-  <section id="view-tasks" class="view">
-    <details id="referenceManager" class="reference-manager">
-      <summary>Categories &amp; locations</summary>
-      <div id="referenceManagerStatus" class="inline-status" role="status"></div>
-      <div class="reference-columns">
-        <section aria-labelledby="categoriesHeading">
-          <h3 id="categoriesHeading">Categories</h3>
-          <form id="addCategoryForm" class="reference-add-form">
-            <input id="newCategoryName" aria-label="New category name" autocomplete="off">
-            <button type="submit">Add</button>
-          </form>
-          <div id="categoryManagerList"></div>
-        </section>
-        <section aria-labelledby="locationsHeading">
-          <h3 id="locationsHeading">Locations</h3>
-          <form id="addLocationForm" class="reference-add-form">
-            <input id="newLocationName" aria-label="New location name" autocomplete="off">
-            <button type="submit">Add</button>
-          </form>
-          <div id="locationManagerList"></div>
-        </section>
+  <section id="view-today" class="view">
+    <header class="today-head">
+      <div class="today-title">
+        <p class="eyebrow">Today<span id="todayDate" class="today-date wide-only"></span></p>
+        <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">Today. </span>I&#39;ve got <span id="budgetHeadline" class="fig">30</span> min</h1>
       </div>
-    </details>
+      <div class="budget-choices" role="group" aria-label="Time budget">
+        <button class="pill time-btn" type="button" data-minutes="5" aria-pressed="false"><span class="fig">5</span> min</button>
+        <button class="pill time-btn" type="button" data-minutes="15" aria-pressed="false"><span class="fig">15</span> min</button>
+        <button class="pill time-btn" type="button" data-minutes="30" aria-pressed="false"><span class="fig">30</span> min</button>
+        <input id="customMinutes" class="pill pill-input fig" type="number" min="1" inputmode="numeric" placeholder="Custom" aria-label="Custom minutes">
+      </div>
+      <div class="today-actions">
+        <button id="proposeBundleBtn" class="btn btn-secondary" type="button">Fill it</button>
+        <button id="startSessionBtn" class="btn btn-primary" type="button">Start<span class="wide-only">doing</span></button>
+      </div>
+    </header>
 
-    <div class="add-task-box">
-      <h2>Add Tasks</h2>
-      <textarea id="newTaskInput" placeholder="One task per line, e.g.&#10;Clean bathroom&#10;Pay electricity bill"></textarea>
-      <button id="addTasksBtn">Add</button>
-      <button id="enrichBtn">Enrich with AI</button>
-      <span id="enrichStatus"></span>
+    <div class="vessel">
+      <div id="vesselColumn" class="vessel-column">
+        <div id="vesselLine" class="vessel-line" hidden><span id="vesselLineLabel" class="vessel-line-label fig"></span></div>
+        <div id="vesselFill" class="vessel-fill"></div>
+      </div>
+      <aside class="vessel-side" aria-label="In this session">
+        <h2 class="vessel-side-title display">In this session</h2>
+        <ol id="vesselList" class="vessel-list"></ol>
+        <p id="vesselIdle" class="vessel-idle muted">Tap a chore below to drop it in, or let the app fill the session for you.</p>
+      </aside>
     </div>
 
-    <div class="task-section">
-      <h2>Needs Review</h2>
-      <div class="task-cards" id="proposedCards"></div>
+    <div class="today-readout-lines">
+      <p id="bundleTotalLine" class="today-total">Nothing in yet</p>
+      <p id="bundleFitLine" class="today-fit muted">Nothing picked yet</p>
     </div>
 
-    <div class="task-section">
-      <h2>Active Tasks</h2>
-      <div class="task-cards" id="activeCards"></div>
+    <div id="sessionStatus" class="inline-status" role="status"></div>
+
+    <section class="pool" aria-labelledby="poolHeading">
+      <p id="poolHeading" class="eyebrow eyebrow-quiet">Ripest first &middot; hold for details</p>
+      <div id="categoryFilter" class="pool-cats" role="group" aria-label="Category filter"></div>
+      <div id="poolChips" class="pool-chips"></div>
+    </section>
+  </section>
+
+  <section id="view-inbox" class="view" style="display:none">
+    <div class="inbox-left">
+      <header class="inbox-head">
+        <p class="eyebrow"><span id="inboxCountLine">Inbox</span></p>
+        <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">Inbox. </span>Get it out of your head</h1>
+      </header>
+
+      <div class="capture">
+        <p class="muted capture-note wide-only">One task per line. No category, no duration, no date needed &mdash; none of it is checked here.</p>
+        <textarea id="newTaskInput" class="input" rows="3" placeholder="One task per line"></textarea>
+        <button id="addTasksBtn" class="btn btn-sage btn-block" type="button">Add</button>
+        <p class="muted capture-foot wide-only">Captured tasks wait beside this until you confirm them. Nothing here is scheduled yet.</p>
+      </div>
     </div>
 
-    <div class="task-section">
-      <h2>Archived</h2>
-      <div class="task-cards" id="archivedCards"></div>
+    <div class="inbox-waiting">
+      <div class="inbox-waiting-head">
+        <h2 class="eyebrow eyebrow-quiet inbox-waiting-title">Waiting to confirm</h2>
+        <button id="enrichBtn" class="btn btn-ghost" type="button">Suggest details</button>
+      </div>
+      <p id="enrichNote" class="muted inbox-suggest-note"></p>
+      <div id="enrichStatus" class="inline-status" role="status"></div>
+
+      <div class="task-section">
+        <div class="task-cards" id="proposedCards"></div>
+      </div>
     </div>
   </section>
 
-  <section id="view-session" class="view" style="display:none">
-    <h2>Start a Session</h2>
-    <div class="time-options">
-      <button class="time-btn" data-minutes="5">5 min</button>
-      <button class="time-btn" data-minutes="15">15 min</button>
-      <button class="time-btn" data-minutes="30">30 min</button>
-      <label>Custom: <input id="customMinutes" type="number" min="1" placeholder="minutes"></label>
+  <section id="view-chores" class="view" style="display:none">
+    <header class="ledger-head">
+      <div class="ledger-title">
+        <p class="eyebrow"><span id="choresCountLine">Chores</span></p>
+        <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">Chores. </span>The whole ledger</h1>
+      </div>
+      <div id="choresViews" class="seg ledger-views" role="group" aria-label="Which chores"></div>
+      <div id="choresFilters" class="ledger-filters">
+        <input id="choreSearch" class="input" type="search" placeholder="Search chores" aria-label="Search chores">
+        <div id="choreCategoryFilter" class="ledger-cats" role="group" aria-label="Category filter"></div>
+      </div>
+    </header>
+    <div id="choresStatus" role="status"></div>
+    <div class="ledger-body">
+      <div id="activeCards" class="ledger-pane"></div>
+      <div id="unscheduledCards" class="ledger-pane" hidden></div>
+      <div id="archivedCards" class="ledger-pane" hidden></div>
+      <div id="archiveStatus" role="status"></div>
     </div>
-    <div class="category-filter">
-      <label>Category filter:
-        <select id="categoryFilter">
-          <option value="">All</option>
-        </select>
-      </label>
-    </div>
-    <button id="proposeBundleBtn">Propose Bundle</button>
+  </section>
 
-    <div id="bundlePreview"></div>
-    <button id="startSessionBtn" style="display:none">Start Doing</button>
+  <section id="view-setup" class="view" style="display:none">
+    <div id="setupScreen" class="setup" data-tab="categories">
+      <header class="screen-head">
+        <p class="eyebrow">Setup</p>
+        <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">Setup. </span>Your vocabulary</h1>
+        <p class="muted setup-subline">Categories and locations are your words. Archiving one keeps every existing assignment intact.</p>
+        <div id="setupTabs" class="seg setup-tabs" role="group" aria-label="Which vocabulary"></div>
+      </header>
+      <div id="setupStatus" class="inline-status" role="status"></div>
+      <div class="setup-panes">
+        <section id="categoriesPane" class="setup-pane is-categories" aria-labelledby="categoriesHeading"></section>
+        <section id="locationsPane" class="setup-pane is-locations" aria-labelledby="locationsHeading"></section>
+        <section id="aiPane" class="setup-pane is-ai" aria-label="Suggestions"></section>
+        <section id="themePane" class="setup-pane is-theme" aria-labelledby="themeHeading"></section>
+      </div>
+    </div>
   </section>
 
   <section id="view-doing" class="view" style="display:none" aria-label="Active chore session">
+    <h1 class="route-heading" tabindex="-1">Doing</h1>
     <div id="doingContent" class="doing-session"></div>
   </section>
 
   <section id="view-review" class="view" style="display:none">
-    <h2>Session Review</h2>
-    <div id="reviewList"></div>
-    <button id="finishReviewBtn">Finish</button>
+    <div class="receipt">
+      <div class="receipt-main">
+        <header class="receipt-head">
+          <p class="eyebrow" id="receiptEyebrow">Receipt</p>
+          <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">Receipt. </span><span id="receiptHeadline">Nothing recorded yet</span></h1>
+          <p class="muted receipt-subline" id="receiptSubline">Actuals as the session measured them. Correct anything that is wrong.</p>
+          <p class="receipt-offers" id="receiptOffersLine">No estimates need revising</p>
+        </header>
+        <div id="reviewList" class="receipt-list"></div>
+      </div>
+      <aside class="receipt-rail" aria-labelledby="estimatesHeading">
+        <h2 id="estimatesHeading" class="display">Estimates</h2>
+        <p class="muted" id="receiptRailNote">The estimate is only a planning number. Actuals feed it; nothing is held against you.</p>
+        <div id="durationOffers"></div>
+      </aside>
+      <div class="receipt-foot">
+        <button id="finishReviewBtn" class="btn btn-primary btn-block">File session</button>
+        <p id="receiptFiledLine" class="receipt-filed" hidden>Filed to the log.</p>
+        <button id="reopenReviewBtn" class="btn btn-ghost" type="button" hidden>Edit again</button>
+      </div>
+    </div>
   </section>
 
-  <section id="view-history" class="view" style="display:none">
-    <h2>Session History</h2>
-    <div id="historyList"></div>
+  <section id="view-log" class="view" style="display:none">
+    <header class="screen-head log-head">
+      <p class="eyebrow">Log</p>
+      <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">Log. </span><span id="logHeadline">Nothing recorded yet</span></h1>
+      <p class="muted log-subline">What actually happened. Nothing here is a score.</p>
+      <div id="logRanges" class="seg" role="group" aria-label="How far back to read"></div>
+    </header>
+    <div class="log-body">
+      <section class="log-chart-card" aria-labelledby="logChartTitle">
+        <h2 id="logChartTitle" class="display log-chart-title">Active time</h2>
+        <div id="logChart" class="log-chart"></div>
+      </section>
+      <div id="historyList" class="log-sessions"></div>
+    </div>
   </section>
 </div>
+
+<div id="sheetScrim" hidden></div>
+<section id="bottomSheet" hidden data-state="closed" role="dialog" aria-modal="true" aria-labelledby="bottomSheetTitle" aria-describedby="bottomSheetMessage">
+  <div id="bottomSheetHead">
+    <h2 id="bottomSheetTitle"></h2>
+    <div id="bottomSheetHeadAction" hidden></div>
+  </div>
+  <p id="bottomSheetMessage"></p>
+  <div id="bottomSheetActions"></div>
+</section>
+
+<div id="undoToast" hidden role="status" aria-live="polite">
+  <span id="undoToastMessage"></span>
+  <span class="undo-separator">&middot;</span>
+  <button id="undoToastButton" type="button">Undo</button>
+</div>
+
+<nav class="bottom-nav" aria-label="Primary">
+  <p class="nav-wordmark display">Chore Planner</p>
+  <a data-route="today" href="#/today">Today</a>
+  <a id="inboxNav" data-route="inbox" href="#/inbox" aria-label="Inbox, no tasks to confirm">Inbox <span class="nav-count fig" hidden>0</span></a>
+  <a data-route="chores" href="#/chores">Chores</a>
+  <a data-route="log" href="#/log">Log</a>
+  <a data-route="setup" href="#/setup">Setup</a>
+</nav>

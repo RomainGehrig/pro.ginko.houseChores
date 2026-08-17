@@ -2,6 +2,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import {
   addCalendarPeriod,
+  cadencePhrase,
   localDateFromDate,
   nextScheduledDate,
   normalizeSchedule,
@@ -48,7 +49,7 @@ test('discards malformed persisted weekday arrays without aborting task normaliz
       type: 'fixed',
       pattern: { kind: 'weekdays', weekdays: { 0: 1 } }
     }
-  }, '2026-08-07'), {
+  }), {
     _id: 'malformed-task',
     status: 'active',
     scheduledDate: '2026-08-07',
@@ -71,6 +72,60 @@ test('accepts an off-pattern date for a fixed calendar schedule', () => {
   })
 })
 
+// No date is one of the three things a periodic or one-off chore can say about
+// when it comes round — the other two being today and some later day. Blank is
+// kept as blank, and the chore waits in the unscheduled list until it is given
+// a day. Only a fixed chore derives one, because its pattern is a real date.
+test('no date is kept as no date, and is never a reason to refuse', () => {
+  const today = '2026-08-16'
+
+  const periodic = validateScheduleInput(
+    { schedule: { type: 'periodic', every: 1, unit: 'week' } }, today)
+  assert.equal(periodic.ok, true)
+  assert.equal(periodic.scheduledDate, null, 'a rhythm with no day set stays unscheduled')
+
+  const once = validateScheduleInput({ scheduledDate: '', schedule: { type: 'one_off' } }, today)
+  assert.equal(once.ok, true)
+  assert.equal(once.scheduledDate, null)
+
+  const fixed = validateScheduleInput(
+    { schedule: { type: 'fixed', pattern: { kind: 'annual_date', month: 12, day: 1 } } }, today)
+  assert.equal(fixed.ok, true)
+  assert.equal(fixed.scheduledDate, '2026-12-01')
+})
+
+test('today and a later day are both kept exactly as chosen', () => {
+  const today = '2026-08-16'
+  for (const schedule of [{ type: 'one_off' }, { type: 'periodic', every: 1, unit: 'week' }]) {
+    assert.equal(
+      validateScheduleInput({ scheduledDate: '2026-08-16', schedule }, today).scheduledDate,
+      '2026-08-16', JSON.stringify(schedule))
+    assert.equal(
+      validateScheduleInput({ scheduledDate: '2026-11-30', schedule }, today).scheduledDate,
+      '2026-11-30', JSON.stringify(schedule))
+  }
+})
+
+test('a date the user did choose is still the one that is kept', () => {
+  const today = '2026-08-16'
+  for (const schedule of [
+    { type: 'one_off' },
+    { type: 'periodic', every: 2, unit: 'day' },
+    { type: 'fixed', pattern: { kind: 'month_day', day: 3 } }
+  ]) {
+    const result = validateScheduleInput({ scheduledDate: '2026-09-04', schedule }, today)
+    assert.equal(result.scheduledDate, '2026-09-04', JSON.stringify(schedule))
+  }
+})
+
+test('an unreadable date reads as none rather than stopping the save', () => {
+  const today = '2026-08-16'
+  const result = validateScheduleInput(
+    { scheduledDate: 'not-a-date', schedule: { type: 'one_off' } }, today)
+  assert.equal(result.ok, true)
+  assert.equal(result.scheduledDate, null)
+})
+
 test('matches fixed calendar dates clamped to February', () => {
   const monthly = { type: 'fixed', pattern: { kind: 'month_day', day: 31 } }
   const annual = { type: 'fixed', pattern: { kind: 'annual_date', month: 2, day: 29 } }
@@ -82,29 +137,39 @@ test('matches fixed calendar dates clamped to February', () => {
   assert.equal(validateScheduleInput({ scheduledDate: '2026-02-28', schedule: annual }).ok, true)
 })
 
-test('normalizes current local records without writing a migration', () => {
+test('reads a stored record as it stands, stating absences rather than inventing them', () => {
   assert.deepEqual(normalizeTaskSchedule({
-    _id: 'legacy-recurring',
-    recurrence: 14,
-    nextDueDate: new Date(2026, 7, 20, 12).getTime(),
+    _id: 'recurring',
+    schedule: { type: 'periodic', every: 2, unit: 'week' },
+    scheduledDate: '2026-08-20',
     status: 'approved_recurring'
-  }, '2026-08-07'), {
-    _id: 'legacy-recurring',
-    recurrence: 14,
-    nextDueDate: new Date(2026, 7, 20, 12).getTime(),
+  }), {
+    _id: 'recurring',
     status: 'approved_recurring',
     scheduledDate: '2026-08-20',
-    schedule: { type: 'periodic', every: 14, unit: 'day' },
+    schedule: { type: 'periodic', every: 2, unit: 'week' },
     suggestedSchedule: null
   })
 
+  // An active chore with nothing said about when it comes round keeps that
+  // silence: it belongs in the unscheduled list, not stamped with today.
   assert.equal(normalizeTaskSchedule({
-    status: 'active', recurrence: null, nextDueDate: 'invalid'
-  }, '2026-08-07').scheduledDate, '2026-08-07')
+    status: 'active', scheduledDate: null
+  }).scheduledDate, null)
 
   assert.equal(normalizeTaskSchedule({
     status: 'proposed', schedule: { type: 'one_off' }
-  }, '2026-08-07').scheduledDate, null)
+  }).scheduledDate, null)
+
+  // Unusable stored values are read as absences, never carried forward as-is.
+  const unusable = normalizeTaskSchedule({
+    schedule: { type: 'periodic', every: 0, unit: 'day' },
+    scheduledDate: '2026-02-30',
+    suggestedSchedule: { type: 'periodic', every: 'weekly' }
+  })
+  assert.deepEqual(unusable.schedule, { type: 'one_off' })
+  assert.equal(unusable.scheduledDate, null)
+  assert.equal(unusable.suggestedSchedule, null)
 })
 
 test('formats local dates without crossing UTC boundaries', () => {
@@ -183,6 +248,23 @@ test('builds outcome-specific task updates', () => {
   assert.equal(taskUpdateForOutcome(oneOff, 'cancelled', {
     completionDate: '2026-08-07', completedAt: 1234
   }), null)
+})
+
+// The row used to print the cadence in days with the unit dropped — "about
+// every 7" for a weekly chore. The rhythm is said the way it was set.
+test('the cadence is a phrase with its unit, and the summary is built from it', () => {
+  assert.equal(cadencePhrase({ type: 'periodic', every: 1, unit: 'week' }), 'about every week')
+  assert.equal(cadencePhrase({ type: 'periodic', every: 2, unit: 'week' }), 'about every 2 weeks')
+  assert.equal(cadencePhrase({ type: 'periodic', every: 3, unit: 'day' }), 'about every 3 days')
+  assert.equal(cadencePhrase({ type: 'periodic', every: 1, unit: 'year' }), 'about every year')
+
+  // Only a flexible cadence has one. A fixed pattern states real dates instead.
+  assert.equal(cadencePhrase({ type: 'one_off' }), '')
+  assert.equal(cadencePhrase({ type: 'fixed', pattern: { kind: 'month_day', day: 5 } }), '')
+  assert.equal(cadencePhrase(null), '')
+
+  assert.equal(scheduleSummary({ type: 'periodic', every: 1, unit: 'week' }),
+    'About every week after completion')
 })
 
 test('describes schedules in household language', () => {
