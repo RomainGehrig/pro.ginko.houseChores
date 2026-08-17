@@ -231,24 +231,24 @@ test('Inbox stays discoverable while only its zero count hides across render tra
   assert.equal(inbox.hidden, false)
   assert.equal(count.hidden, true)
   assert.equal(count.textContent, 0)
-  assert.deepEqual(labels.at(-1), ['aria-label', 'Inbox, no tasks to confirm'])
+  assert.deepEqual(labels.at(-1), ['aria-label', 'Capture, no chores to confirm'])
 
   tasksView.renderInboxNavigation(1, inbox)
   assert.equal(inbox.hidden, false)
   assert.equal(count.hidden, false)
   assert.equal(count.textContent, 1)
-  assert.deepEqual(labels.at(-1), ['aria-label', 'Inbox, 1 to confirm'])
+  assert.deepEqual(labels.at(-1), ['aria-label', 'Capture, 1 to confirm'])
 
   tasksView.renderInboxNavigation(4, inbox)
   assert.equal(count.hidden, false)
   assert.equal(count.textContent, 4)
-  assert.deepEqual(labels.at(-1), ['aria-label', 'Inbox, 4 to confirm'])
+  assert.deepEqual(labels.at(-1), ['aria-label', 'Capture, 4 to confirm'])
 })
 
 test('the inbox and chores eyebrows count without judging', () => {
-  assert.equal(tasksView.buildInboxCountLine(0), 'Inbox · clear')
-  assert.equal(tasksView.buildInboxCountLine(1), 'Inbox · 1 waiting')
-  assert.equal(tasksView.buildInboxCountLine(4), 'Inbox · 4 waiting')
+  assert.equal(tasksView.buildInboxCountLine(0), 'Capture · clear')
+  assert.equal(tasksView.buildInboxCountLine(1), 'Capture · 1 waiting')
+  assert.equal(tasksView.buildInboxCountLine(4), 'Capture · 4 waiting')
 
   assert.equal(tasksView.buildChoresCountLine(0), 'Chores · none yet')
   assert.equal(tasksView.buildChoresCountLine(1), 'Chores · 1 active')

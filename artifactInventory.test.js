@@ -76,7 +76,7 @@ test('route shell declares four primary canonical anchors, seven focus headings,
   ])
   const inboxAnchor = navMarkup.match(/<a[^>]*id="inboxNav"[^>]*>/)?.[0] || ''
   assert.doesNotMatch(inboxAnchor, /\shidden(?:\s|>)/)
-  assert.match(inboxAnchor, /aria-label="Inbox, no tasks to confirm"/)
+  assert.match(inboxAnchor, /aria-label="Capture, no chores to confirm"/)
   assert.match(navMarkup, /class="nav-count fig" hidden>0<\/span>/)
   assert.match(html, /<section id="view-inbox"[\s\S]*?id="newTaskInput"[\s\S]*?id="addTasksBtn"/)
   assert.match(html, /<nav id="workNav" class="work-nav" aria-label="In-progress work" hidden>/)

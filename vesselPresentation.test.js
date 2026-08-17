@@ -78,10 +78,10 @@ test('category tabs lead with All and mark the chosen one', () => {
   assert.match(markup, /data-category-id="c1" aria-pressed="true"[^>]*>Admin</)
 })
 
-test('an empty pool points at the Inbox rather than blaming the filter', () => {
+test('an empty pool points at Capture rather than blaming the filter', () => {
   const markup = buildPoolEmptyHtml('Admin')
   assert.match(markup, /Nothing waiting in Admin/)
-  assert.match(markup, /Inbox/)
+  assert.match(markup, /Capture/)
   assert.doesNotMatch(markup, /late|overdue|behind/i)
 })
 

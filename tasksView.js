@@ -286,13 +286,13 @@ function renderProposed() {
   renderInboxNavigation(proposed.length)
   container.innerHTML = proposed.length
     ? proposed.map(task => proposedCardHtml(task, snapshot)).join('')
-    : '<div class="inbox-clear card"><p class="display inbox-clear-title">Inbox clear</p>' +
+    : '<div class="inbox-clear card"><p class="display inbox-clear-title">Nothing waiting</p>' +
       '<p class="muted">Nothing waiting to confirm. Anything you capture lands here first.</p></div>'
 }
 
 export function buildInboxCountLine (proposedCount) {
-  if (proposedCount === 0) return 'Inbox · clear'
-  return 'Inbox · ' + proposedCount + ' waiting'
+  if (proposedCount === 0) return 'Capture · clear'
+  return 'Capture · ' + proposedCount + ' waiting'
 }
 
 export function buildChoresCountLine (activeCount) {
@@ -312,7 +312,7 @@ export function renderInboxNavigation (
     inboxNav.hidden = false
     inboxNav.setAttribute(
       'aria-label',
-      proposedCount === 0 ? 'Inbox, no tasks to confirm' : 'Inbox, ' + proposedCount + ' to confirm'
+      proposedCount === 0 ? 'Capture, no chores to confirm' : 'Capture, ' + proposedCount + ' to confirm'
     )
     const count = inboxNav.querySelector('.nav-count')
     if (count) {

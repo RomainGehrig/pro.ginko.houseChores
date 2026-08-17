@@ -945,8 +945,8 @@ const PRIMARY_NAV_BODY =
   '<main id="app"><section id="content">Chores</section></main>' +
   '<nav class="bottom-nav" aria-label="Primary">' +
     '<p class="nav-wordmark display">Chore Planner</p>' +
-    '<a data-route="today" href="#/today">Today</a>' +
-    '<a data-route="inbox" href="#/inbox">Inbox <span class="nav-count fig">12</span></a>' +
+    '<a data-route="today" href="#/today">Quick session</a>' +
+    '<a data-route="inbox" href="#/inbox">Capture <span class="nav-count fig">12</span></a>' +
     '<a data-route="chores" href="#/chores">Chores</a>' +
     '<a data-route="log" href="#/log" aria-current="page">Log</a>' +
     '<a data-route="setup" href="#/setup">Setup</a>' +
@@ -978,10 +978,10 @@ test('the navigation names destinations as the design writes them and marks the 
     `
   })
 
-  assert.deepEqual(result.labels, ['Today', 'Inbox', 'Chores', 'Log', 'Setup'])
+  assert.deepEqual(result.labels, ['Quick session', 'Capture', 'Chores', 'Log', 'Setup'])
   assert.ok(result.transform.every(value => value === 'none'), JSON.stringify(result.transform))
   assert.deepEqual(result.countBefore, [0x22, 0xb7, 0x20, 0x22],
-    'the inbox count reads "Inbox · 12", as in the doc')
+    'the capture count reads "Capture · 12", as in the doc')
 
   // Where you are is a filled pill and a heavier weight, so it does not rest on
   // colour alone to say it.

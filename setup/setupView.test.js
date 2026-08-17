@@ -161,7 +161,7 @@ test('the switch states its own position and exactly what suggestions do', () =>
   const off = aiPaneHtml(false)
   assert.match(off, /role="switch"[^>]*aria-checked="false"/)
   assert.match(off, /id="aiSwitchLabel"[^>]*>Off</)
-  assert.match(off, /Used in the Inbox, nowhere else\./)
+  assert.match(off, /Used in Capture, nowhere else\./)
   assert.match(off, /It never sets the date, never approves anything, and every field stays editable\./)
   assert.match(off, /The app is fully usable with this off\./)
   assert.match(off, /Chores, categories, locations, sessions and per-chore records live in your own storage\./)

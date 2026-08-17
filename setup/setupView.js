@@ -112,7 +112,7 @@ export function aiPaneHtml (on) {
     '<div class="ai-card-head">' +
       '<div class="ai-card-title">' +
         '<p class="display ai-title">Suggestions</p>' +
-        '<p class="muted">Used in the Inbox, nowhere else.</p>' +
+        '<p class="muted">Used in Capture, nowhere else.</p>' +
       '</div>' +
       '<div class="ai-switch-group">' +
         '<span class="muted ai-switch-state" id="aiSwitchLabel">' + aiSwitchLabel(on) + '</span>' +

@@ -69,7 +69,7 @@ export function buildCategoryTabsHtml (categories, selectedId) {
 export function buildPoolEmptyHtml (categoryName) {
   const where = categoryName ? ' in ' + escapeHtml(categoryName) : ''
   return '<p class="pool-empty muted">Nothing waiting' + where +
-    '. Anything you capture in the Inbox turns up here once you confirm it.</p>'
+    '. Anything you write down in Capture turns up here once you confirm it.</p>'
 }
 
 // The facts a chore can offer about itself. No figure here exists to say how

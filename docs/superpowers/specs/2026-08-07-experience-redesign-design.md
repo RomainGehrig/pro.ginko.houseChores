@@ -178,6 +178,8 @@ Hash routing — no `pushState`, because freezr serves the app under `/apps/<app
 #/setup                categories, places, guessing, export
 ```
 
+*Amended 2026-08-17 — what the destinations are called.* Two screens were renamed for the user without being renamed in the code: **Today is "Quick session"** and **Inbox is "Capture"**. The routes (`#/today`, `#/inbox`), the screen ids (`view-today`), the CSS classes and the internal identifiers (`buildInboxCountLine`, `renderToday`) all keep the older names, so this document's route table stays literally true. Where it says Today or Inbox as a *name the user reads*, read Quick session and Capture. Two words that are NOT this rename: the `Today` due-band on the ledger and the `Today` relative date in the Log both mean the actual day and are untouched.
+
 `router.js` owns exactly one exported pure function, `parseRoute(hash) -> { name, param }`, plus a subscribe/dispatch shell. Unknown routes fall back to `#/chores`. Every route change moves focus to the new screen's `<h1 tabindex="-1">` and sets `aria-current="page"` on the nav item.
 
 ```
