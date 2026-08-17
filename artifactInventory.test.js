@@ -1,9 +1,9 @@
 // ABOUTME: Verifies install-time file inventory and static selector fallbacks.
-// ABOUTME: Prevents imported modules/tests or legacy category choices from being omitted unnoticed.
+// ABOUTME: Prevents modules, category choices or README screenshots from going missing unnoticed.
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { readFile, readdir } from 'node:fs/promises'
+import { readFile, readdir, stat } from 'node:fs/promises'
 
 test('manifest inventories every JavaScript artifact including nested route renderers', async () => {
   const manifest = JSON.parse(await readFile(new URL('./manifest.json', import.meta.url), 'utf8'))
@@ -16,6 +16,23 @@ test('manifest inventories every JavaScript artifact including nested route rend
     .sort()
 
   assert.deepEqual(declared, actual)
+})
+
+// A README that shows the app is the first thing anyone sees of it, and a broken
+// image is the loudest possible way to say nobody looked. Renaming or moving a
+// screenshot should fail here rather than on someone else's screen.
+test('every screenshot the README points at exists and is described', async () => {
+  const readme = await readFile(new URL('./README.md', import.meta.url), 'utf8')
+  const images = [...readme.matchAll(/!\[([^\]]*)\]\(([^)\s]+)\)/g)]
+    .map(match => ({ alt: match[1], path: match[2] }))
+    .filter(image => !/^https?:/.test(image.path))
+
+  assert.ok(images.length > 0, 'expected the README to show the app, not only describe it')
+  for (const { alt, path } of images) {
+    const present = await stat(new URL('./' + path, import.meta.url)).then(() => true, () => false)
+    assert.ok(present, 'the README points at ' + path + ', which is not in the repo')
+    assert.ok(alt.trim(), path + ' has no alt text, so it says nothing to a reader who cannot see it')
+  }
 })
 
 test('the category filter ships empty and is labelled for assistive tech', async () => {
