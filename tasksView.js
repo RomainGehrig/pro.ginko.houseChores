@@ -758,11 +758,7 @@ async function openChoreEditor (id) {
   }
   if (choice !== 'save' || !body) return
 
-  const edit = readEditModal(body, task.name)
-  // The pills can only write a schedule that reads back, so this is the
-  // unreachable case rather than the everyday one. It says so and changes
-  // nothing, instead of writing half a chore.
-  if (!edit.ok) return showChoresFailure(edit.message)
+  const edit = readEditModal(body, task)
 
   const fields = {
     ...buildTaskReferenceFields(task, edit.categoryId, edit.locationIds, snapshot),

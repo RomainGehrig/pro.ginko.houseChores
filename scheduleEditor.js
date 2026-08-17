@@ -4,6 +4,7 @@
 import { escapeAttribute } from './helpers.js'
 import { formatFactHtml } from './helpers.js'
 import {
+  isoWeekday,
   localDateFromDate,
   normalizeSchedule,
   scheduleSummary,
@@ -118,7 +119,13 @@ export function scheduleEditorHtml (model = {}) {
   const dateOwner = model.dateOwner === 'app' ? 'app' : 'user'
   const periodic = schedule.type === 'periodic'
   const fixed = schedule.type === 'fixed'
-  const pattern = fixed ? schedule.pattern : { kind: 'weekdays', weekdays: [] }
+  // A chore with no pattern of its own still has to have one ready the moment
+  // the user asks for a fixed calendar. Weekly opens on the day the chore
+  // already sits on — revealing the group with nothing chosen would read back
+  // as no schedule at all, and a blank cannot be shown to the user as a choice.
+  const pattern = fixed
+    ? schedule.pattern
+    : { kind: 'weekdays', weekdays: [isoWeekday(scheduledDate)] }
   const fixedKind = pattern.kind
   const weekdays = (fixedKind === 'weekdays' ? pattern.weekdays : []).map(Number)
   const every = periodic ? schedule.every : 1

@@ -576,6 +576,93 @@ test('the editor completes from its header and keeps archiving out of the action
   })
 })
 
+// Pressing "Fixed calendar" used to land on Weekly with no day chosen, which
+// read back as no schedule at all — so Save discarded the name, estimate,
+// category and locations the user had just typed and dropped an error onto the
+// screen behind the closed sheet. Two clicks must never cost an edit.
+test('switching to a fixed calendar keeps every other edit the user just made', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 640 },
+    body: '<button id="addTasksBtn"></button><button id="enrichBtn"></button>' +
+      '<span id="enrichStatus"></span><div id="proposedCards"></div>' +
+      '<span id="choresCountLine"></span><div id="choresViews"></div>' +
+      '<div id="choresFilters"><input id="choreSearch"><div id="choreCategoryFilter"></div></div>' +
+      '<div id="activeCards"></div><div id="unscheduledCards"></div>' +
+      '<div id="archivedCards"></div><div id="archiveStatus"></div>' +
+      '<div id="choresStatus"></div>' +
+      '<div id="sheetScrim" hidden></div>' +
+      '<section id="bottomSheet" hidden role="dialog" aria-modal="true" aria-labelledby="bottomSheetTitle">' +
+        '<div id="bottomSheetHead"><h2 id="bottomSheetTitle"></h2>' +
+        '<div id="bottomSheetHeadAction"></div></div>' +
+        '<p id="bottomSheetMessage"></p><div id="bottomSheetActions"></div>' +
+      '</section>',
+    script: `
+      const records = {
+        categories: [],
+        locations: [],
+        tasks: [{
+          _id: 'task-active', name: 'Clean kitchen', status: 'approved_recurring',
+          categoryId: null, locationIds: [], estimatedDuration: 20,
+          scheduledDate: '2026-08-20', schedule: { type: 'periodic', every: 1, unit: 'week' }
+        }]
+      }
+      const clone = value => structuredClone(value)
+      window.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async () => ({}),
+        updateFields: async (collection, id, fields) => {
+          const record = records[collection].find(item => item._id === id)
+          Object.assign(record, clone(fields))
+          return clone(record)
+        }
+      }
+
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      await categoryLocationStore.initialize()
+      await initTasksView()
+
+      document.querySelector('[data-id="task-active"] .ledger-row-summary').click()
+      await Promise.resolve()
+      const modal = document.querySelector('.edit-modal')
+
+      modal.querySelector('.edit-name').value = 'Clean the whole kitchen'
+      modal.querySelector('[data-estimate="45"]').click()
+      ;[...modal.querySelectorAll('button')]
+        .find(button => button.textContent.trim() === 'Fixed calendar').click()
+      await Promise.resolve()
+
+      // The group is revealed with the chore's own day already offered.
+      const pressedWeekdays = [...modal.querySelectorAll(
+        '[data-schedule-toggle="weekday"][aria-pressed="true"]')].map(b => b.dataset.scheduleValue)
+
+      ;[...document.querySelectorAll('#bottomSheetActions button')]
+        .find(button => button.textContent === 'Save').click()
+      await new Promise(resolve => setTimeout(resolve, 60))
+
+      const result = {
+        pressedWeekdays,
+        stored: {
+          name: records.tasks[0].name,
+          estimatedDuration: records.tasks[0].estimatedDuration,
+          schedule: records.tasks[0].schedule
+        },
+        status: document.getElementById('choresStatus').textContent
+      }
+    `
+  })
+
+  assert.deepEqual(result, {
+    pressedWeekdays: ['4'],
+    stored: {
+      name: 'Clean the whole kitchen',
+      estimatedDuration: 45,
+      schedule: { type: 'fixed', pattern: { kind: 'weekdays', weekdays: [4] } }
+    },
+    status: ''
+  })
+})
+
 test('infers a fixed date then approves a manual off-pattern override', async () => {
   const result = await runBrowserScenario({
     body: '<button id="addTasksBtn"></button><button id="enrichBtn"></button>' +

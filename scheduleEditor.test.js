@@ -160,6 +160,25 @@ test('every schedule choice carries the value it writes and the state it is in',
   assert.match(markup, /role="group" aria-label="Annual date" data-schedule-fixed-group="annual_date"/)
 })
 
+// Pressing "Fixed calendar" on a chore that has no pattern used to reveal
+// Weekly with nothing chosen, which reads back as no schedule at all. The group
+// opens on the day the chore already sits on, so it is never revealed empty and
+// the user can see which day they are being offered.
+test('a chore with no pattern still opens Weekly on a real day', () => {
+  const markup = scheduleEditorHtml({
+    schedule: { type: 'periodic', every: 1, unit: 'week' },
+    scheduledDate: '2026-08-20' // a Thursday
+  })
+  const pressed = [...markup.matchAll(
+    /data-schedule-toggle="weekday" data-schedule-value="(\d)"[^>]*aria-pressed="true"/g)]
+  assert.deepEqual(pressed.map(match => match[1]), ['4'], 'Thursday, the day it is on')
+
+  // With no day of its own it opens on today, never on nothing.
+  const undated = scheduleEditorHtml({ schedule: { type: 'one_off' }, scheduledDate: '' })
+  const anyPressed = /data-schedule-toggle="weekday"[^>]*aria-pressed="true"/.test(undated)
+  assert.ok(anyPressed, 'some weekday is offered')
+})
+
 test('the day and month grids offer every choice the calendar allows', () => {
   const markup = scheduleEditorHtml({ schedule: { type: 'fixed', pattern: { kind: 'month_day', day: 3 } } })
   assert.equal((markup.match(/data-schedule-set="month-day"/g) || []).length, 31)

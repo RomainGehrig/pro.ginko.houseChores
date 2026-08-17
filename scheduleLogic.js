@@ -65,8 +65,12 @@ export function addCalendarPeriod (value, every, unit) {
   return clampedDate(targetYear, targetMonth, day)
 }
 
-function isoWeekday (value) {
-  return localDateObject(value).getDay() || 7
+// Monday is 1 and Sunday is 7, the numbering the fixed patterns are stored in.
+// A date it cannot read falls back to today, so a caller offering the user a
+// weekday always has one to offer.
+export function isoWeekday (value) {
+  const date = localDateObject(value) || new Date()
+  return date.getDay() || 7
 }
 
 function nextFixedDate (pattern, threshold) {

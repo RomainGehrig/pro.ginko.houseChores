@@ -43,16 +43,20 @@ export function editModalHtml (task, snapshot, state = {}) {
   '</div>'
 }
 
-// Nothing here refuses a save. An emptied name is someone part-way through
-// retyping, so it reads as the name the chore already had — the same reading
-// the cadence field gets, and one that cannot cost the edits made beside it.
-// Everything else may genuinely be left blank: no estimate, no category, no day.
-export function readEditModal (root, previousName = '') {
+// Nothing here refuses a save, and that is load-bearing: the sheet has already
+// closed by the time this runs, so a refusal would throw away every other edit
+// with no way back to them. An emptied name reads as the name the chore already
+// had, and a schedule that cannot be read reads as the schedule it already had
+// — the same reading the cadence field gets. Everything else may genuinely be
+// left blank: no estimate, no category, no day.
+export function readEditModal (root, previous = {}) {
   const typed = String(root.querySelector('.edit-name')?.value ?? '').trim()
-  const name = typed || String(previousName ?? '').trim()
+  const name = typed || String(previous?.name ?? '').trim()
 
-  const schedule = readScheduleEditor(root)
-  if (!schedule.ok) return { ok: false, message: schedule.message }
+  const edited = readScheduleEditor(root)
+  const schedule = edited.ok
+    ? edited
+    : { ok: true, schedule: previous?.schedule ?? null, scheduledDate: previous?.scheduledDate ?? null }
 
   return {
     ok: true,

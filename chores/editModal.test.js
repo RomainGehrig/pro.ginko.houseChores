@@ -110,7 +110,7 @@ test('reads every edited value back, the name trimmed', () => {
     type: 'periodic',
     every: '2',
     unit: 'week'
-  }), 'Old name')
+  }), { name: 'Old name' })
 
   assert.deepEqual(result, {
     ok: true,
@@ -132,25 +132,42 @@ test('reads every edited value back, the name trimmed', () => {
 test('an emptied name reads as the name it already had, and never refuses', () => {
   const result = readEditModal(modalRoot({
     name: '   ', estimate: '25', categoryId: '', locationIds: [], type: 'one_off'
-  }), 'Mop the hall')
+  }), { name: 'Mop the hall' })
   assert.equal(result.ok, true)
   assert.equal(result.name, 'Mop the hall')
   assert.equal(result.estimatedDuration, 25, 'the edits beside it survive')
 })
 
-test('an unreadable schedule reports itself rather than saving half a chore', () => {
+// The sheet has already closed by the time Save is read, so a refusal here
+// costs the user every other edit they made — the name, the estimate, the
+// category. An unreadable schedule reads as the one the chore already had,
+// exactly as an emptied name and an emptied cadence box do.
+test('an unreadable schedule keeps the one the chore had, and saves the rest', () => {
+  const previous = {
+    name: 'Mop',
+    schedule: { type: 'periodic', every: 2, unit: 'week' },
+    scheduledDate: '2026-08-20'
+  }
   const result = readEditModal(modalRoot({
-    name: 'Mop', estimate: '', categoryId: '', locationIds: [],
+    name: 'Mop the whole hall', estimate: '25', categoryId: 'cat-2', locationIds: ['loc-1'],
     type: 'fixed', fixedKind: 'unknown'
-  }), 'Mop')
-  assert.equal(result.ok, false)
-  assert.equal(result.message, 'Choose a valid schedule.')
+  }), previous)
+
+  assert.equal(result.ok, true)
+  assert.equal(result.name, 'Mop the whole hall', 'the edits beside it survive')
+  assert.equal(result.estimatedDuration, 25)
+  assert.equal(result.categoryId, 'cat-2')
+  assert.deepEqual(result.schedule, {
+    ok: true,
+    schedule: { type: 'periodic', every: 2, unit: 'week' },
+    scheduledDate: '2026-08-20'
+  })
 })
 
 test('an empty estimate and no category read as nothing set, not as a refusal', () => {
   const result = readEditModal(modalRoot({
     name: 'Mop', estimate: '', categoryId: '', locationIds: [], scheduledDate: '', type: 'one_off'
-  }), 'Mop')
+  }), { name: 'Mop' })
   assert.equal(result.ok, true)
   assert.equal(result.estimatedDuration, null)
   assert.equal(result.categoryId, null)
