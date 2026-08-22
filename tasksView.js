@@ -126,7 +126,19 @@ export function selectLedgerView (routeName) {
       view: next, openTaskId: null, confirmDoneId: null, confirmDeleteId: null
     })
   }
-  if (typeof document !== 'undefined') renderLedger()
+  if (typeof document === 'undefined') return
+  // The line describes something that happened while you were here. Arriving
+  // fresh, it is about a moment that has passed — and a session may have
+  // started since, which would leave it naming the wrong one.
+  clearChoresNote()
+  renderLedger()
+}
+
+// The session the ledger describes can arrive after the first paint — recovery
+// reads it from the server — and it can end on another screen. Either way the
+// list has to be told; nothing it owns has changed.
+export function refreshSessionMarks () {
+  if (typeof document !== 'undefined' && document.getElementById('activeCards')) renderLedger()
 }
 
 export async function refreshTasksView() {
@@ -714,6 +726,14 @@ function syncEnrichmentAvailability() {
 function showChoresNote (message) {
   const status = document.getElementById('choresStatus')
   status.textContent = message
+  status.removeAttribute('data-state')
+  status.setAttribute('role', 'status')
+}
+
+function clearChoresNote () {
+  const status = document.getElementById('choresStatus')
+  if (!status) return
+  status.textContent = ''
   status.removeAttribute('data-state')
   status.setAttribute('role', 'status')
 }
