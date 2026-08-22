@@ -1305,3 +1305,90 @@ test('reopening an outcome that is already gone changes nothing', async () => {
   const aggregate = await store.reopen('s1', 'gone')
   assert.deepEqual(aggregate.executions, [])
 })
+
+// A chore you hand to a session under way is your intent, not a proposal, so it
+// does not wait for the pause the continuation panel was built around.
+function runningFixture (status = 'active') {
+  let session = {
+    _id: 's1', status, startTime: 1000, taskBundle: ['t1'], timeBudgetMinutes: 30,
+    accumulatedActiveMs: 0, activeStartedAt: status === 'active' ? 1000 : null,
+    checkpointElapsedMs: 0, ...(status === 'paused' ? { pausedAt: 301000 } : {})
+  }
+  const tasks = new Map([
+    ['t1', { _id: 't1', name: 'Sink', status: 'active', estimatedDuration: 5 }],
+    ['t2', { _id: 't2', name: 'Garage', status: 'active', estimatedDuration: 30 }],
+    ['t3', { _id: 't3', name: 'Post', status: 'active' }]
+  ])
+  const updates = []
+  const store = createSessionStore({
+    now: () => 301000,
+    getSession: async () => ({ ...session, taskBundle: [...session.taskBundle] }),
+    listExecutions: async () => [],
+    listTasks: async ids => ids.map(id => tasks.get(id)).filter(Boolean),
+    updateSessionRecord: async (id, fields) => {
+      updates.push({ id, fields })
+      session = { ...session, ...fields }
+    }
+  })
+  return { store, updates, session: () => session }
+}
+
+test('a hand-picked chore joins a session that is still running', async () => {
+  const { store } = runningFixture('active')
+
+  const aggregate = await store.attachTasks('s1', ['t2'], { whileRunning: true })
+
+  assert.deepEqual(aggregate.session.taskBundle, ['t1', 't2'])
+  assert.equal(aggregate.session.status, 'active')
+})
+
+test('a hand-picked chore with no estimate joins a running session all the same', async () => {
+  const { store } = runningFixture('active')
+
+  const aggregate = await store.attachTasks('s1', ['t3'], { whileRunning: true })
+
+  assert.deepEqual(aggregate.session.taskBundle, ['t1', 't3'])
+})
+
+test('a hand-picked chore still joins a session waiting at a pause', async () => {
+  const { store } = runningFixture('paused')
+
+  const aggregate = await store.attachTasks('s1', ['t2'], { whileRunning: true })
+
+  assert.deepEqual(aggregate.session.taskBundle, ['t1', 't2'])
+})
+
+// The suggestion path is the app proposing within a remaining budget, which
+// only exists at the pause. It stays where it was.
+test('a suggested chore is still only attachable at a pause', async () => {
+  const { store, updates } = runningFixture('active')
+
+  const aggregate = await store.attachTasks(
+    's1', ['t2'], { suggestionTaskIds: ['t2'], whileRunning: true })
+
+  assert.deepEqual(aggregate.session.taskBundle, ['t1'])
+  assert.deepEqual(updates, [])
+})
+
+test('a finished session takes nothing more', async () => {
+  let session = {
+    _id: 's1', status: 'completed', startTime: 1000, endTime: 2000,
+    taskBundle: ['t1'], accumulatedActiveMs: 1000, activeStartedAt: null
+  }
+  const updates = []
+  const store = createSessionStore({
+    now: () => 301000,
+    getSession: async () => structuredClone(session),
+    listExecutions: async () => [],
+    listTasks: async ids => ids.map(id => ({ _id: id, status: 'active' })),
+    updateSessionRecord: async (id, fields) => {
+      updates.push({ id, fields })
+      session = { ...session, ...fields }
+    }
+  })
+
+  const aggregate = await store.attachTasks('s1', ['t2'], { whileRunning: true })
+
+  assert.deepEqual(aggregate.session.taskBundle, ['t1'])
+  assert.deepEqual(updates, [])
+})
