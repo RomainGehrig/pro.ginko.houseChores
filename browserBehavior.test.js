@@ -2798,6 +2798,7 @@ test('Setup shows one vocabulary at a time on a phone and both side by side on a
 // private list on either side would be two sessions wearing one name.
 test('adding a chore from the ledger lands in the session the pool is filling', async () => {
   const result = await runBrowserScenario({
+    viewport: { width: 390, height: 760 },
     body: '<button id="addTasksBtn"></button><button id="enrichBtn"></button>' +
       '<span id="enrichStatus"></span><div id="proposedCards"></div>' +
       '<span id="choresCountLine"></span><div id="choresViews"></div>' +
@@ -2840,15 +2841,17 @@ test('adding a chore from the ledger lands in the session the pool is filling', 
       await categoryLocationStore.initialize()
       await initTasksView()
 
+      // The session control lives in the title row beside Mark as done, not
+      // among the answers to the edit.
+      const headLabels = () => [...document.querySelectorAll('#bottomSheetHeadAction button')]
+        .map(button => button.textContent)
       const actionLabels = () => [...document.querySelectorAll('#bottomSheetActions button')]
         .map(button => button.textContent)
       const pressSessionAction = async id => {
         document.querySelector('[data-id="' + id + '"] .ledger-row-summary').click()
         await Promise.resolve()
-        const labels = actionLabels()
-        ;[...document.querySelectorAll('#bottomSheetActions button')]
-          .find(button => button.textContent === 'Add to session' || button.textContent === 'Take out')
-          .click()
+        const labels = headLabels()
+        document.querySelector('#bottomSheetHeadAction .session-btn').click()
         await new Promise(resolve => setTimeout(resolve, 60))
         return labels
       }
@@ -2860,7 +2863,8 @@ test('adding a chore from the ledger lands in the session the pool is filling', 
       // Reopening the same chore must offer the way back out, not a second add.
       document.querySelector('[data-id="task-active"] .ledger-row-summary').click()
       await Promise.resolve()
-      const reopenedLabels = actionLabels()
+      const reopenedLabels = headLabels()
+      const editStaysTwoAnswers = actionLabels()
       document.querySelector('#bottomSheetActions button').click()
       await new Promise(resolve => setTimeout(resolve, 60))
 
@@ -2869,11 +2873,28 @@ test('adding a chore from the ledger lands in the session the pool is filling', 
       const withUnestimated = sessionPicks.getPickedIds()
       const noteForUnestimated = document.getElementById('choresStatus').textContent
 
+      // Two controls in a title row on a phone: they may wrap under the title,
+      // but they must never push the sheet wider than the screen.
+      document.querySelector('[data-id="task-active"] .ledger-row-summary').click()
+      await Promise.resolve()
+      const head = document.getElementById('bottomSheetHead')
+      const sheet = document.getElementById('bottomSheet')
+      const headFits = [...document.querySelectorAll('#bottomSheetHeadAction button')]
+        .every(button => button.getBoundingClientRect().right <=
+          sheet.getBoundingClientRect().right + 1)
+      const headRows = Math.round(head.getBoundingClientRect().height)
+      document.querySelector('#bottomSheetActions button').click()
+      await new Promise(resolve => setTimeout(resolve, 60))
+
       const result = {
         firstLabels,
         afterAdding,
         noteAfterAdding,
         reopenedLabels,
+        editStaysTwoAnswers,
+        headFits,
+        headRows,
+        noHorizontalOverflow: document.documentElement.scrollWidth <= window.innerWidth,
         withUnestimated,
         noteForUnestimated,
         // The fact reads in the ordinary colour: nothing here is a failure.
@@ -2882,11 +2903,18 @@ test('adding a chore from the ledger lands in the session the pool is filling', 
     `
   })
 
-  assert.deepEqual(result.firstLabels, ['Cancel', 'Add to session', 'Save'])
+  assert.deepEqual(result.firstLabels, ['Mark as done', 'Add to session'])
   assert.deepEqual(result.afterAdding, ['task-active'])
-  assert.deepEqual(result.reopenedLabels, ['Cancel', 'Take out', 'Save'])
+  assert.deepEqual(result.reopenedLabels, ['Mark as done', 'Take out'])
+  assert.deepEqual(result.editStaysTwoAnswers, ['Cancel', 'Save'],
+    'the edit keeps its two answers; the session control is not one of them')
   assert.deepEqual(result.withUnestimated, ['task-active', 'task-no-estimate'])
   assert.equal(result.noteIsNeutral, true, 'a chore going into a session is not a failure')
+  assert.equal(result.headFits, true, 'the title-row controls stay inside the sheet on a phone')
+  // On a phone the pair wraps under the title rather than squeezing it: two rows
+  // of controls, never a third and never a squashed heading.
+  assert.ok(result.headRows <= 100, 'title row grew past two rows: ' + result.headRows)
+  assert.equal(result.noHorizontalOverflow, true, JSON.stringify(result))
   // btoa carries the scenario's result back as Latin-1, so the middot separator
   // does not survive the trip; the facts either side of it do.
   assert.match(result.noteAfterAdding,

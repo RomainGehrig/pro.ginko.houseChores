@@ -652,12 +652,14 @@ label:has(input[type="radio"]) {
   margin-top: 0;
 }
 
-/* The title row can carry one control of its own, for an action about the thing
-   being edited rather than about the edit. It holds the right edge so it never
-   reads as one of the answers waiting at the bottom. */
+/* The title row can carry controls of its own, for actions about the thing being
+   edited rather than about the edit. They hold the right edge so they never read
+   as one of the answers waiting at the bottom, and they wrap under the title
+   rather than squeezing it when the sheet is narrow. */
 #bottomSheetHead {
   align-items: center;
   display: flex;
+  flex-wrap: wrap;
   gap: var(--s3);
   justify-content: space-between;
   margin-bottom: var(--s3);
@@ -668,7 +670,11 @@ label:has(input[type="radio"]) {
 }
 
 #bottomSheetHeadAction {
+  display: flex;
   flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  justify-content: flex-end;
 }
 
 #bottomSheetActions {

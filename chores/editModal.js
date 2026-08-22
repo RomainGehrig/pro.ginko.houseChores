@@ -16,6 +16,17 @@ export function choreDoneButtonHtml (confirming = false) {
     (confirming ? 'true' : 'false') + '">' + doneLabel(confirming) + '</button>'
 }
 
+// Putting the chore in a session is the other thing you open a chore to do, so
+// it stands beside marking it done. It is the quieter of the two: filing a
+// completion is a write, this is a plan. No label means the chore has nowhere to
+// go — a session already has it — and then there is no control rather than one
+// that could only refuse.
+export function choreSessionButtonHtml (label) {
+  if (!label) return ''
+  return '<button type="button" class="btn btn-quiet session-btn">' +
+    escapeHtml(String(label)) + '</button>'
+}
+
 export function editModalHtml (task, snapshot, state = {}) {
   const model = buildTaskEditorModel(task, snapshot)
   const selectedLocationIds = new Set(model.locationIds)
