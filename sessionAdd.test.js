@@ -4,7 +4,10 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import { sessionAddActionLabel, sessionAddNote, sessionAddTarget } from './sessionAdd.js'
+import {
+  sessionAddActionLabel, sessionAddNote, sessionAddTarget,
+  sessionFloatModel, sessionMarkLabel, sessionMarks
+} from './sessionAdd.js'
 
 const session = (status, taskBundle = []) => ({ _id: 's1', status, taskBundle })
 
@@ -40,32 +43,69 @@ test('a chore already in the session under way is offered no action', () => {
   assert.equal(sessionAddActionLabel('in-running', true), null)
 })
 
-test('adding to the next session says where it went and what is in it', () => {
+// The floating readout states what is in the session and keeps stating it, so
+// the line about the chore that just moved says only that. Each says one thing.
+test('adding to the next session says which chore went where, and no more', () => {
   assert.equal(
-    sessionAddNote({ name: 'Descale the kettle', target: 'next', added: true, count: 3, minutes: 25 }),
-    'Descale the kettle is in your Quick session · 3 chores · 25 min')
+    sessionAddNote({ name: 'Descale the kettle', target: 'next', added: true }),
+    'Descale the kettle is in your Quick session.')
 })
 
-test('taking one out of the next session reports what is left', () => {
+test('taking one out says so in the same shape', () => {
   assert.equal(
-    sessionAddNote({ name: 'Descale the kettle', target: 'next', added: false, count: 1, minutes: 5 }),
-    'Descale the kettle is out of your Quick session · 1 chore · 5 min')
-})
-
-test('taking the last one out says the session is empty rather than counting nothing', () => {
-  assert.equal(
-    sessionAddNote({ name: 'Descale the kettle', target: 'next', added: false, count: 0, minutes: 0 }),
-    'Descale the kettle is out. Your Quick session is empty again.')
+    sessionAddNote({ name: 'Descale the kettle', target: 'next', added: false }),
+    'Descale the kettle is out of your Quick session.')
 })
 
 test('adding to the session under way names that session, not the next one', () => {
   assert.equal(
-    sessionAddNote({ name: 'Descale the kettle', target: 'running', added: true, count: 4 }),
-    'Descale the kettle is in the session you are doing · 4 chores')
+    sessionAddNote({ name: 'Descale the kettle', target: 'running', added: true }),
+    'Descale the kettle is in the session you are doing.')
 })
 
-test('a chore with no estimate still reads as a chore, with no minutes claimed for it', () => {
+test('a chore in the session under way is marked as being done', () => {
+  const marks = sessionMarks(session('active', ['a']), [], ['a', 'b'])
+  assert.deepEqual(marks, { a: 'doing' })
+})
+
+test('a chore picked for the next session is marked as picked', () => {
+  assert.deepEqual(sessionMarks(null, ['b'], ['a', 'b']), { b: 'picked' })
+})
+
+// Starting a session should empty the picks, but a stale one must never make a
+// chore read as two things at once.
+test('the session under way wins over a pick left behind', () => {
+  assert.deepEqual(sessionMarks(session('paused', ['a']), ['a'], ['a']), { a: 'doing' })
+})
+
+test('a finished session marks nothing, and leaves the picks reading as picks', () => {
+  assert.deepEqual(sessionMarks(session('completed', ['a']), ['b'], ['a', 'b']), { b: 'picked' })
+})
+
+test('the stamp names which session the chore is in', () => {
+  assert.equal(sessionMarkLabel('picked'), 'In session')
+  assert.equal(sessionMarkLabel('doing'), 'Doing')
+  assert.equal(sessionMarkLabel(null), '')
+})
+
+test('nothing in a session floats nothing', () => {
+  assert.equal(sessionFloatModel({ kind: 'picked', count: 0, minutes: 0 }), null)
+})
+
+test('the float states what is in the Quick session and goes there', () => {
+  assert.deepEqual(sessionFloatModel({ kind: 'picked', count: 3, minutes: 25 }), {
+    kind: 'picked', label: 'Quick session', facts: '3 chores · 25 min', href: '#/today'
+  })
+})
+
+test('while a session runs the float names that session and goes to it', () => {
+  assert.deepEqual(sessionFloatModel({ kind: 'doing', count: 1, minutes: 5 }), {
+    kind: 'doing', label: 'Doing', facts: '1 chore · 5 min', href: '#/doing'
+  })
+})
+
+test('a session of chores nobody estimated floats the count, claiming no minutes', () => {
   assert.equal(
-    sessionAddNote({ name: 'Sort the post', target: 'next', added: true, count: 1, minutes: 0 }),
-    'Sort the post is in your Quick session · 1 chore · no time set yet')
+    sessionFloatModel({ kind: 'picked', count: 2, minutes: 0 }).facts,
+    '2 chores · no time set yet')
 })

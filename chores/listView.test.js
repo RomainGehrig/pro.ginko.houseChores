@@ -195,3 +195,46 @@ test('an empty archive says what would put something in it', () => {
   assert.match(markup, /Nothing archived/)
   assert.match(markup, /Archiving a chore from the list puts it here, with its category, location and schedule intact\./)
 })
+
+// The stamp column repeats the group for the eye, so a chore in a session can
+// take it over without losing anything — the group heading still says when it is
+// due. Unlike the band, this is new information, so it is not hidden from
+// screen readers.
+test('a picked chore stamps the session it is in, in place of the band', () => {
+  const markup = ledgerRowHtml(chore(), SNAPSHOT, TODAY,
+    { marks: { 'task-1': 'picked' } }, { band: 'Ready' })
+  assert.match(markup, /<span class="row-band is-session">In session<\/span>/)
+  assert.doesNotMatch(markup, /aria-hidden="true">Ready/)
+  assert.match(markup, /data-session="picked"/)
+})
+
+test('a chore in the session under way says so, and says it differently', () => {
+  const markup = ledgerRowHtml(chore(), SNAPSHOT, TODAY,
+    { marks: { 'task-1': 'doing' } }, { band: 'Ready' })
+  assert.match(markup, /<span class="row-band is-session">Doing<\/span>/)
+  assert.match(markup, /data-session="doing"/)
+})
+
+// An unscheduled chore carries no band, and the column it would have taken is
+// given to the name. It still says it has no band; the stylesheet gives the
+// column back when there is a session stamp to put in it.
+test('an unscheduled chore in a session still gets the stamp, band or no band', () => {
+  const markup = ledgerRowHtml(chore(), SNAPSHOT, TODAY,
+    { marks: { 'task-1': 'picked' } }, { band: null, tag: 'No day set' })
+  assert.match(markup, /<span class="row-band is-session">In session<\/span>/)
+  assert.match(markup, /data-band=""/)
+  assert.match(markup, /data-session="picked"/)
+})
+
+test('an unmarked chore keeps its band and carries no session state', () => {
+  const markup = ledgerRowHtml(chore(), SNAPSHOT, TODAY,
+    { marks: { other: 'picked' } }, { band: 'Ready' })
+  assert.match(markup, /<span class="row-band" aria-hidden="true">Ready<\/span>/)
+  assert.doesNotMatch(markup, /data-session/)
+})
+
+test('a marked chore states nothing about being behind', () => {
+  const markup = ledgerRowHtml(chore(), SNAPSHOT, TODAY,
+    { marks: { 'task-1': 'picked' } }, { band: 'Ready' })
+  assert.doesNotMatch(markup, /overdue|late|behind/i)
+})

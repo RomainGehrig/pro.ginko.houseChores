@@ -6,6 +6,7 @@ import { buildChoreNoteHtml } from '../taskPresentationLogic.js'
 import { dueGroup } from '../slip.js'
 import { scheduleSummary, localDateFromDate } from '../scheduleLogic.js'
 import { referenceStateSuffix } from './fieldPills.js'
+import { sessionMarkLabel } from '../sessionAdd.js'
 import {
   bandLabel, bandIsNear, cadenceColor, cadenceProgress, cadenceProgressNote,
   buildLedgerGroups, unscheduledTasks,
@@ -75,11 +76,16 @@ function categoryTagHtml (task, snapshot) {
 
 // Split out so a saved edit can repaint one row's facts without rebuilding the
 // list around it.
-export function rowSummaryHtml (task, snapshot, today, { band, tag } = {}) {
-  const stamp = band === null
-    ? ''
-    : '<span class="row-band" aria-hidden="true">' +
-      escapeHtml(band || bandLabel(dueGroup(task, today))) + '</span>'
+export function rowSummaryHtml (task, snapshot, today, { band, tag, mark } = {}) {
+  // The band stamp repeats the group heading for the eye, so a chore in a
+  // session can take that column over without losing anything. This one is new
+  // information rather than a repeat, so the screen reader hears it too.
+  const stamp = mark
+    ? '<span class="row-band is-session">' + escapeHtml(sessionMarkLabel(mark)) + '</span>'
+    : band === null
+      ? ''
+      : '<span class="row-band" aria-hidden="true">' +
+        escapeHtml(band || bandLabel(dueGroup(task, today))) + '</span>'
   const flag = categoryFlag(task, snapshot)
 
   return stamp +
@@ -97,14 +103,19 @@ export function rowSummaryHtml (task, snapshot, today, { band, tag } = {}) {
 // The row states the chore and opens the editor. It does not become the editor:
 // an edit you can abandon needs somewhere of its own to happen.
 export function ledgerRowHtml (task, snapshot, today, state = {}, placement = {}) {
+  const mark = (state.marks || {})[task._id] || null
   const band = placement.band
 
+  // data-band keeps saying whether the chore has one — an unscheduled chore
+  // gives that column to its name, and the stylesheet gives it back when there
+  // is a session stamp to put in it.
   return '<li class="task-card ledger-row" data-id="' + escapeAttribute(task._id) + '"' +
+      (mark ? ' data-session="' + escapeAttribute(mark) + '"' : '') +
       (band === null ? ' data-band=""' : ' data-band="' +
         escapeAttribute(band || bandLabel(dueGroup(task, today))) + '"') +
       (placement.tag ? ' data-tag="' + escapeAttribute(placement.tag) + '"' : '') + '>' +
     '<button type="button" class="ledger-row-summary" aria-haspopup="dialog">' +
-      rowSummaryHtml(task, snapshot, today, placement) +
+      rowSummaryHtml(task, snapshot, today, { ...placement, mark }) +
     '</button>' +
   '</li>'
 }
