@@ -105,3 +105,19 @@ test('nothing in the vessel or pool calls a waiting chore late', () => {
     buildPoolChipsHtml([stale], [], TODAY) + buildChoreDetailHtml(stale, [], TODAY)
   assert.doesNotMatch(markup, /late|overdue|behind|\+\d+ ?d\b/i)
 })
+
+// A chore can be hand-picked from the ledger before anyone has estimated it.
+// It is in the session, so the vessel has to show it — a block with no share of
+// the fill would be a chore that vanished on being added.
+test('a chore with no estimate still gets a block, and says the estimate is missing', () => {
+  const markup = buildVesselFillHtml([chore({ estimatedDuration: null })], TODAY)
+  assert.match(markup, /style="flex:1;/)
+  assert.match(markup, />\?</)
+})
+
+test('an estimated chore keeps its full share beside an unestimated one', () => {
+  const markup = buildVesselFillHtml(
+    [chore({ estimatedDuration: null }), chore({ _id: 't2', estimatedDuration: 20 })], TODAY)
+  assert.match(markup, /style="flex:1;/)
+  assert.match(markup, /style="flex:20;/)
+})

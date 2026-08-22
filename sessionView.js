@@ -13,8 +13,9 @@ import { escapeHtml, formatDuration } from './helpers.js'
 import { localDateFromDate } from './scheduleLogic.js'
 import { poolOrder } from './ripenessLogic.js'
 import { openSheet } from './sheet.js'
+import { sessionPicks } from './sessionPicks.js'
 import {
-  togglePick, pickedBundle, bundleTotal, bundleTotalLine, bundleFitLine, vesselGeometry,
+  pickedBundle, bundleTotal, bundleTotalLine, bundleFitLine, vesselGeometry,
   todayDateLine
 } from './pickingLogic.js'
 import {
@@ -28,7 +29,6 @@ const HOLD_FOR_DETAIL_MS = 450
 let chosenPillMinutes = DEFAULT_BUDGET_MINUTES
 let selectedMinutes = DEFAULT_BUDGET_MINUTES
 let selectedCategoryId = ''
-let pickedIds = []
 let holdTimer = null
 let heldToDetail = false
 
@@ -62,7 +62,12 @@ function poolTasks () {
   return poolOrder(inCategory, today())
 }
 
-const taskById = id => eligibleTasks().find(task => task._id === id) || null
+const taskById = id => getActiveTasks().find(task => task._id === id) || null
+
+// The pool only offers chores that carry an estimate, but a chore picked from
+// the ledger need not have one. The session is whatever was picked, so it is
+// resolved against every active chore rather than only the pool's.
+const pickedTasks = () => pickedBundle(getActiveTasks(), sessionPicks.getPickedIds())
 
 export function initSessionView () {
   element('view-today').addEventListener('click', handleTodayClick)
@@ -73,6 +78,9 @@ export function initSessionView () {
   element('poolChips').addEventListener('pointercancel', cancelHold)
   element('poolChips').addEventListener('contextmenu', handleContextDetail)
   categoryLocationStore.subscribe(renderToday)
+  // The ledger picks into the same list, so the pool repaints on its changes
+  // too rather than only on its own.
+  sessionPicks.subscribe(refreshToday)
   renderToday()
 }
 
@@ -121,15 +129,14 @@ function pickCategory (categoryId) {
 }
 
 function pickChore (id) {
-  pickedIds = togglePick(pickedIds, id)
-  renderToday()
+  sessionPicks.toggle(id)
 }
 
 // The app's own proposal is the one thing that stays inside the budget. It
 // builds around what you already put in rather than replacing it: filling is
 // help with the rest of the session, not a verdict on the part you chose.
 function fillBundle () {
-  const before = pickedIds
+  const before = sessionPicks.getPickedIds()
   const proposal = buildBundleProposal(
     eligibleTasks(),
     selectedMinutes,
@@ -137,13 +144,12 @@ function fillBundle () {
     selectableReferences(categoryLocationStore.getSnapshot().categories),
     before
   )
-  pickedIds = proposal.tasks.map(task => task._id)
-  renderToday()
+  const after = sessionPicks.set(proposal.tasks.map(task => task._id))
 
   const status = element('sessionStatus')
   // A fill that found something says nothing, and takes back whatever the last
   // one said: the line describes what just happened, never what used to be true.
-  if (pickedIds.length > before.length) {
+  if (after.length > before.length) {
     status.textContent = ''
     status.removeAttribute('data-state')
     return
@@ -185,7 +191,7 @@ async function openChoreDetail (id) {
   cancelHold()
   const task = taskById(id)
   if (!task) return
-  const isPicked = pickedIds.includes(id)
+  const isPicked = sessionPicks.isPicked(id)
   const categories = selectableReferences(categoryLocationStore.getSnapshot().categories)
 
   const choice = await openSheet({
@@ -230,7 +236,8 @@ function renderToday () {
 
   const day = today()
   const pool = poolTasks()
-  const bundle = pickedBundle(eligibleTasks(), pickedIds)
+  const pickedIds = sessionPicks.getPickedIds()
+  const bundle = pickedTasks()
   const total = bundleTotal(bundle)
   const geometry = vesselGeometry(total, selectedMinutes)
 
@@ -274,7 +281,7 @@ export function refreshToday () {
 }
 
 async function startSession () {
-  const bundle = pickedBundle(eligibleTasks(), pickedIds)
+  const bundle = pickedTasks()
   const status = element('sessionStatus')
   if (!bundle.length) {
     status.textContent = 'Pick at least one chore, or press Fill it.'
