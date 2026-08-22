@@ -26,7 +26,9 @@ import {
   unscheduledListHtml
 } from './chores/listView.js'
 import { categoryPillsHtml, locationPillsHtml, referenceStateSuffix } from './chores/fieldPills.js'
-import { choreDoneButtonHtml, editModalHtml, readEditModal } from './chores/editModal.js'
+import {
+  choreDoneButtonHtml, choreSessionButtonHtml, editModalHtml, readEditModal
+} from './chores/editModal.js'
 import { doneLabel, unscheduledTasks } from './chores/ledgerLogic.js'
 import { closeSheetWith, openSheet, sheetBody, sheetHeadAction } from './sheet.js'
 import { optimisticArchive, pendingUndo } from './undoToast.js'
@@ -34,7 +36,7 @@ import { runArchiveAction } from './archiveView.js'
 import { sessionStore } from './sessionStore.js'
 import { sessionPicks } from './sessionPicks.js'
 import { bundleTotal, pickedBundle } from './pickingLogic.js'
-import { choreEditorActions, sessionAddNote, sessionAddTarget } from './sessionAdd.js'
+import { sessionAddActionLabel, sessionAddNote, sessionAddTarget } from './sessionAdd.js'
 import { setCurrentSessionAggregate, state } from './state.js'
 
 let tasksCache = []
@@ -785,12 +787,18 @@ async function openChoreEditor (id) {
   ledger.openTaskId = id
   ledger.confirmDoneId = null
 
+  // Both title-row controls are about the chore rather than about the edit:
+  // one files a completion, the other puts it in a session.
   const target = sessionAddTarget(state.currentSession, id)
   const choice = await openSheet({
     title: 'Edit chore',
-    headerActionHtml: choreDoneButtonHtml(),
+    headerActionHtml: choreDoneButtonHtml() +
+      choreSessionButtonHtml(sessionAddActionLabel(target, sessionPicks.isPicked(id))),
     bodyHtml: editModalHtml(task, snapshot),
-    actions: choreEditorActions(target, sessionPicks.isPicked(id))
+    actions: [
+      { label: 'Cancel', value: null, className: 'btn btn-ghost' },
+      { label: 'Save', value: 'save', className: 'btn btn-primary' }
+    ]
   })
 
   ledger.openTaskId = null
@@ -852,6 +860,7 @@ function handleEditorClick (evt) {
     }
     return closeSheetWith('done')
   }
+  if (evt.target.closest('.session-btn')) return closeSheetWith('session')
   if (evt.target.closest('.archive-btn')) return closeSheetWith('archive')
 
   // Anything else you touch is you carrying on editing, so the armed

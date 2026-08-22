@@ -3,7 +3,9 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { choreDoneButtonHtml, editModalHtml, readEditModal } from './editModal.js'
+import {
+  choreDoneButtonHtml, choreSessionButtonHtml, editModalHtml, readEditModal
+} from './editModal.js'
 
 const SNAPSHOT = {
   categories: [
@@ -173,4 +175,27 @@ test('an empty estimate and no category read as nothing set, not as a refusal', 
   assert.equal(result.categoryId, null)
   assert.deepEqual(result.locationIds, [])
   assert.equal(result.schedule.scheduledDate, null)
+})
+
+// Putting a chore in a session is the other thing you open a chore to do, so it
+// stands beside marking it done rather than among the answers to the edit.
+test('the session control rides in the title row, quieter than marking done', () => {
+  const markup = choreSessionButtonHtml('Add to session')
+  assert.match(markup, /class="btn btn-quiet session-btn"/)
+  assert.match(markup, />Add to session</)
+})
+
+test('the session control takes whatever the moment calls it', () => {
+  assert.match(choreSessionButtonHtml('Take out'), />Take out</)
+})
+
+// A chore already in a session under way has nowhere to go, and a control that
+// could only refuse is worse than no control.
+test('no label means no control at all, not a control that refuses', () => {
+  assert.equal(choreSessionButtonHtml(null), '')
+  assert.equal(choreSessionButtonHtml(''), '')
+})
+
+test('a label is text in the title row, not markup', () => {
+  assert.match(choreSessionButtonHtml('<script>x</script>'), /&lt;script&gt;/)
 })
