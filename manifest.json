@@ -143,7 +143,7 @@
     },
     {
       "path": "sessionStore.js",
-      "Description": "Coordinates authoritative session restore, repair, persistence, continuation, and title-only additions."
+      "Description": "Coordinates authoritative session restore, repair, persistence, continuation, hand-picked additions, and title-only additions."
     },
     {
       "path": "sessionStore.test.js",
@@ -195,7 +195,7 @@
     },
     {
       "path": "tasksView.js",
-      "Description": "Renders task destinations and wires intake, approval, editing, and optimistic archive transactions."
+      "Description": "Renders task destinations and wires intake, approval, editing, adding a chore to a session, and optimistic archive transactions."
     },
     {
       "path": "tasksView.test.js",
