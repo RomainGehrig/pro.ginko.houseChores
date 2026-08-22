@@ -354,6 +354,14 @@
       "Description": "Unit tests for the shared picked-chore store and its subscribers."
     },
     {
+      "path": "sessionAdd.js",
+      "Description": "Works out which session an added chore belongs to and states where it went."
+    },
+    {
+      "path": "sessionAdd.test.js",
+      "Description": "Unit tests for the add target, its action label and its neutral confirmation."
+    },
+    {
       "path": "vesselPresentation.js",
       "Description": "Markup for the Today vessel, its pool chips, category tabs and chore detail."
     },
