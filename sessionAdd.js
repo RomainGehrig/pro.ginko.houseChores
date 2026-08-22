@@ -36,3 +36,15 @@ export function sessionAddNote ({ name, target, added, count, minutes }) {
   if (count > 0) return chore + ' is out of your Quick session · ' + bundleFact(count, minutes)
   return chore + ' is out. Your Quick session is empty again.'
 }
+
+// Cancel and Save stay where they are; the session action sits between them,
+// being about the chore rather than about the edit. A chore with nowhere to go
+// leaves the pair alone rather than showing a third button that would refuse.
+export function choreEditorActions (target, isPicked) {
+  const label = sessionAddActionLabel(target, isPicked)
+  return [
+    { label: 'Cancel', value: null, className: 'btn btn-ghost' },
+    ...(label ? [{ label, value: 'session', className: 'btn btn-sage' }] : []),
+    { label: 'Save', value: 'save', className: 'btn btn-primary' }
+  ]
+}

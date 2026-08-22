@@ -2792,3 +2792,105 @@ test('Setup shows one vocabulary at a time on a phone and both side by side on a
     'the switch reads its own position at a glance')
   assert.ok(desktop.docScroll <= desktop.viewport, JSON.stringify(desktop))
 })
+
+// The ledger and the pool both fill the same session. Adding from the ledger has
+// to land in the list the Quick session screen is actually building — a second,
+// private list on either side would be two sessions wearing one name.
+test('adding a chore from the ledger lands in the session the pool is filling', async () => {
+  const result = await runBrowserScenario({
+    body: '<button id="addTasksBtn"></button><button id="enrichBtn"></button>' +
+      '<span id="enrichStatus"></span><div id="proposedCards"></div>' +
+      '<span id="choresCountLine"></span><div id="choresViews"></div>' +
+      '<div id="choresFilters"><input id="choreSearch"><div id="choreCategoryFilter"></div></div>' +
+      '<div id="activeCards"></div><div id="unscheduledCards"></div>' +
+      '<div id="archivedCards"></div><div id="archiveStatus"></div>' +
+      '<div id="choresStatus" class="inline-status"></div>' +
+      '<div id="sheetScrim" hidden></div>' +
+      '<section id="bottomSheet" hidden role="dialog" aria-modal="true" aria-labelledby="bottomSheetTitle">' +
+        '<div id="bottomSheetHead"><h2 id="bottomSheetTitle"></h2>' +
+        '<div id="bottomSheetHeadAction"></div></div>' +
+        '<p id="bottomSheetMessage"></p><div id="bottomSheetActions"></div>' +
+      '</section>',
+    script: `
+      const records = {
+        categories: [],
+        locations: [],
+        tasks: [{
+          _id: 'task-active', name: 'Clean kitchen', status: 'approved_recurring',
+          categoryId: null, locationIds: [], estimatedDuration: 20,
+          scheduledDate: '2026-08-21', schedule: { type: 'periodic', every: 1, unit: 'week' },
+          lastCompletedDate: null
+        }, {
+          _id: 'task-no-estimate', name: 'Sort the post', status: 'active',
+          categoryId: null, locationIds: [], estimatedDuration: null,
+          scheduledDate: '2026-08-21', schedule: { type: 'one_off' },
+          lastCompletedDate: null
+        }]
+      }
+      const clone = value => structuredClone(value)
+      window.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async () => ({}),
+        updateFields: async () => ({})
+      }
+
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      const { sessionPicks } = await import(applicationUrl + 'sessionPicks.js')
+      await categoryLocationStore.initialize()
+      await initTasksView()
+
+      const actionLabels = () => [...document.querySelectorAll('#bottomSheetActions button')]
+        .map(button => button.textContent)
+      const pressSessionAction = async id => {
+        document.querySelector('[data-id="' + id + '"] .ledger-row-summary').click()
+        await Promise.resolve()
+        const labels = actionLabels()
+        ;[...document.querySelectorAll('#bottomSheetActions button')]
+          .find(button => button.textContent === 'Add to session' || button.textContent === 'Take out')
+          .click()
+        await new Promise(resolve => setTimeout(resolve, 60))
+        return labels
+      }
+
+      const firstLabels = await pressSessionAction('task-active')
+      const afterAdding = sessionPicks.getPickedIds()
+      const noteAfterAdding = document.getElementById('choresStatus').textContent
+
+      // Reopening the same chore must offer the way back out, not a second add.
+      document.querySelector('[data-id="task-active"] .ledger-row-summary').click()
+      await Promise.resolve()
+      const reopenedLabels = actionLabels()
+      document.querySelector('#bottomSheetActions button').click()
+      await new Promise(resolve => setTimeout(resolve, 60))
+
+      // A chore nobody has estimated is still a chore you can decide to do.
+      await pressSessionAction('task-no-estimate')
+      const withUnestimated = sessionPicks.getPickedIds()
+      const noteForUnestimated = document.getElementById('choresStatus').textContent
+
+      const result = {
+        firstLabels,
+        afterAdding,
+        noteAfterAdding,
+        reopenedLabels,
+        withUnestimated,
+        noteForUnestimated,
+        // The fact reads in the ordinary colour: nothing here is a failure.
+        noteIsNeutral: !document.getElementById('choresStatus').hasAttribute('data-state')
+      }
+    `
+  })
+
+  assert.deepEqual(result.firstLabels, ['Cancel', 'Add to session', 'Save'])
+  assert.deepEqual(result.afterAdding, ['task-active'])
+  assert.deepEqual(result.reopenedLabels, ['Cancel', 'Take out', 'Save'])
+  assert.deepEqual(result.withUnestimated, ['task-active', 'task-no-estimate'])
+  assert.equal(result.noteIsNeutral, true, 'a chore going into a session is not a failure')
+  // btoa carries the scenario's result back as Latin-1, so the middot separator
+  // does not survive the trip; the facts either side of it do.
+  assert.match(result.noteAfterAdding,
+    /^Clean kitchen is in your Quick session .* 1 chore .* 20 min$/)
+  assert.match(result.noteForUnestimated,
+    /^Sort the post is in your Quick session .* 2 chores .* 20 min$/)
+})
