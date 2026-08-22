@@ -8,13 +8,18 @@ import { scheduleSummary } from './scheduleLogic.js'
 
 const minutesOf = task => Number(task?.estimatedDuration) || 0
 
+// A chore can be picked before anyone has estimated it, and it is in the session
+// all the same. It gets the smallest share the column can draw rather than none,
+// since a block of nothing is a chore that vanished on being added.
+const blockShare = task => Math.max(minutesOf(task), 1)
+
 // Each block grows in proportion to its estimate, so the column reads as the
 // shape of the session rather than a list with numbers attached.
 export function buildVesselFillHtml (bundle, today) {
   return (bundle || []).map(task => {
     const shade = ripenessColor(ripeness(task, today))
     return '<button type="button" class="vessel-block" data-remove-id="' +
-      escapeHtml(task._id) + '" style="flex:' + minutesOf(task) + ';background:' + shade + '"' +
+      escapeHtml(task._id) + '" style="flex:' + blockShare(task) + ';background:' + shade + '"' +
       ' aria-label="Take ' + escapeHtml(String(task?.name ?? '')) + ' out of the session">' +
       '<span class="vessel-block-minutes">' +
       formatFactHtml(formatDuration(task?.estimatedDuration)) + '</span>' +
