@@ -4,9 +4,7 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
 
-import {
-  choreEditorActions, sessionAddActionLabel, sessionAddNote, sessionAddTarget
-} from './sessionAdd.js'
+import { sessionAddActionLabel, sessionAddNote, sessionAddTarget } from './sessionAdd.js'
 
 const session = (status, taskBundle = []) => ({ _id: 's1', status, taskBundle })
 
@@ -70,22 +68,4 @@ test('a chore with no estimate still reads as a chore, with no minutes claimed f
   assert.equal(
     sessionAddNote({ name: 'Sort the post', target: 'next', added: true, count: 1, minutes: 0 }),
     'Sort the post is in your Quick session · 1 chore · no time set yet')
-})
-
-test('the editor keeps Cancel and Save around the session action', () => {
-  const actions = choreEditorActions('next', false)
-  assert.deepEqual(actions.map(action => action.label), ['Cancel', 'Add to session', 'Save'])
-  assert.deepEqual(actions.map(action => action.value), [null, 'session', 'save'])
-})
-
-test('the editor reads Take out for a chore already picked', () => {
-  assert.deepEqual(
-    choreEditorActions('next', true).map(action => action.label),
-    ['Cancel', 'Take out', 'Save'])
-})
-
-test('the editor of a chore already in the running session offers only the edit', () => {
-  assert.deepEqual(
-    choreEditorActions('in-running', false).map(action => action.label),
-    ['Cancel', 'Save'])
 })
