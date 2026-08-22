@@ -2836,7 +2836,7 @@ test('adding a chore from the ledger lands in the session the pool is filling', 
       }
 
       const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
-      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      const { initTasksView, selectLedgerView } = await import(applicationUrl + 'tasksView.js')
       const { sessionPicks } = await import(applicationUrl + 'sessionPicks.js')
       await categoryLocationStore.initialize()
       await initTasksView()
@@ -2898,7 +2898,14 @@ test('adding a chore from the ledger lands in the session the pool is filling', 
         withUnestimated,
         noteForUnestimated,
         // The fact reads in the ordinary colour: nothing here is a failure.
-        noteIsNeutral: !document.getElementById('choresStatus').hasAttribute('data-state')
+        noteIsNeutral: !document.getElementById('choresStatus').hasAttribute('data-state'),
+        // Coming back to the screen, the line is about a moment that has passed
+        // — and a session may have started since, which would leave it naming
+        // the wrong one.
+        noteAfterArriving: (
+          selectLedgerView('chores'),
+          document.getElementById('choresStatus').textContent
+        )
       }
     `
   })
@@ -2917,6 +2924,7 @@ test('adding a chore from the ledger lands in the session the pool is filling', 
   assert.equal(result.noHorizontalOverflow, true, JSON.stringify(result))
   assert.equal(result.noteAfterAdding, 'Clean kitchen is in your Quick session.')
   assert.equal(result.noteForUnestimated, 'Sort the post is in your Quick session.')
+  assert.equal(result.noteAfterArriving, '', 'arriving on Chores clears the passing line')
 })
 
 // A chore already in a session has to say so where you are looking, or you add
@@ -2954,9 +2962,10 @@ test('the ledger stamps what is in a session and floats what the session holds',
       }
 
       const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
-      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      const { initTasksView, refreshSessionMarks } =
+        await import(applicationUrl + 'tasksView.js')
       const { sessionPicks } = await import(applicationUrl + 'sessionPicks.js')
-      const { state, setCurrentSessionAggregate } = await import(applicationUrl + 'state.js')
+      const { setCurrentSessionAggregate } = await import(applicationUrl + 'state.js')
       await categoryLocationStore.initialize()
       await initTasksView()
       document.getElementById('view-chores').style.display = ''
@@ -3007,13 +3016,15 @@ test('the ledger stamps what is in a session and floats what the session holds',
       }
       const toastCleared = toastBottom() > toastAlone
 
-      // A session under way takes precedence over a pick left behind.
+      // A recovered session arrives after the first paint and nothing the list
+      // owns has changed, so it has to be told. It then takes precedence over a
+      // pick left behind.
       setCurrentSessionAggregate({
         session: { _id: 's1', status: 'active', taskBundle: ['task-picked'] },
         bundle: [records.tasks[0]],
         executions: []
       })
-      sessionPicks.set(['task-picked', 'task-loose'])
+      refreshSessionMarks()
       await new Promise(resolve => setTimeout(resolve, 30))
 
       const running = {

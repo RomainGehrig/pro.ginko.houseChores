@@ -1,4 +1,6 @@
-import { initTasksView, selectLedgerView, setSuggestionsEnabled } from './tasksView.js'
+import {
+  initTasksView, refreshSessionMarks, selectLedgerView, setSuggestionsEnabled
+} from './tasksView.js'
 import { initSessionView } from './sessionView.js'
 import { initDoingView, startDoing } from './doingView.js'
 import { initReviewView, startReview } from './reviewView.js'
@@ -22,6 +24,9 @@ async function openInitialView () {
     const aggregate = await sessionStore.restoreCurrent(Date.now())
     if (!aggregate) return
     setCurrentSessionAggregate(aggregate)
+    // The ledger was painted before this arrived, and it says which chores are
+    // in a session.
+    refreshSessionMarks()
     setNavVisible('doing', true)
     await startDoing(aggregate)
     if (!hasRequestedRoute()) showView('doing')
