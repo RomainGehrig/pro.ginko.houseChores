@@ -2915,10 +2915,175 @@ test('adding a chore from the ledger lands in the session the pool is filling', 
   // of controls, never a third and never a squashed heading.
   assert.ok(result.headRows <= 100, 'title row grew past two rows: ' + result.headRows)
   assert.equal(result.noHorizontalOverflow, true, JSON.stringify(result))
-  // btoa carries the scenario's result back as Latin-1, so the middot separator
-  // does not survive the trip; the facts either side of it do.
-  assert.match(result.noteAfterAdding,
-    /^Clean kitchen is in your Quick session .* 1 chore .* 20 min$/)
-  assert.match(result.noteForUnestimated,
-    /^Sort the post is in your Quick session .* 2 chores .* 20 min$/)
+  assert.equal(result.noteAfterAdding, 'Clean kitchen is in your Quick session.')
+  assert.equal(result.noteForUnestimated, 'Sort the post is in your Quick session.')
+})
+
+// A chore already in a session has to say so where you are looking, or you add
+// it twice. The stamp column already repeats the group for the eye, so it is
+// the column that can carry this without costing the row any width.
+test('the ledger stamps what is in a session and floats what the session holds', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 760 },
+    body: applicationMarkup,
+    script: `
+      const records = {
+        categories: [],
+        locations: [],
+        tasks: [{
+          _id: 'task-picked', name: 'Water the plants', status: 'approved_recurring',
+          categoryId: null, locationIds: [], estimatedDuration: 10,
+          scheduledDate: '2026-08-21', schedule: { type: 'periodic', every: 1, unit: 'week' },
+          lastCompletedDate: null
+        }, {
+          _id: 'task-loose', name: 'Sort the post', status: 'active',
+          categoryId: null, locationIds: [], estimatedDuration: 5,
+          scheduledDate: null, schedule: null, lastCompletedDate: null
+        }, {
+          _id: 'task-plain', name: 'Clean windows', status: 'approved_recurring',
+          categoryId: null, locationIds: [], estimatedDuration: 60,
+          scheduledDate: '2026-08-21', schedule: { type: 'periodic', every: 1, unit: 'week' },
+          lastCompletedDate: null
+        }]
+      }
+      const clone = value => structuredClone(value)
+      window.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async () => ({}),
+        updateFields: async () => ({})
+      }
+
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      const { sessionPicks } = await import(applicationUrl + 'sessionPicks.js')
+      const { state, setCurrentSessionAggregate } = await import(applicationUrl + 'state.js')
+      await categoryLocationStore.initialize()
+      await initTasksView()
+      document.getElementById('view-chores').style.display = ''
+
+      const float = document.getElementById('sessionFloat')
+      const root = document.documentElement
+      const toastBottom = () =>
+        Math.round(parseFloat(getComputedStyle(document.getElementById('undoToast')).bottom))
+      const row = id => document.querySelector('[data-id="' + id + '"]')
+      const wash = id => getComputedStyle(row(id)).backgroundColor
+
+      const emptyFloatHidden = float.hidden
+      const emptyNoSlot = !root.hasAttribute('data-session-float')
+      const toastAlone = toastBottom()
+
+      sessionPicks.set(['task-picked', 'task-loose'])
+      await new Promise(resolve => setTimeout(resolve, 30))
+
+      const picked = {
+        stamp: row('task-picked').querySelector('.row-band').textContent,
+        stampIsAnnounced: !row('task-picked').querySelector('.row-band').hasAttribute('aria-hidden'),
+        state: row('task-picked').dataset.session,
+        washed: wash('task-picked') !== wash('task-plain')
+      }
+      // An unscheduled chore gives the stamp column to its name; in a session it
+      // gets that column back rather than losing what it has to say. It only
+      // reads as bandless in the Unscheduled view, so that is where to look.
+      const showUnscheduled = () => {
+        document.querySelector('[data-ledger-view="unscheduled"]').click()
+        return document.querySelector('#unscheduledCards [data-id="task-loose"]')
+      }
+      const looseRow = showUnscheduled()
+      const looseCols = getComputedStyle(
+        looseRow.querySelector('.ledger-row-summary')).gridTemplateColumns
+      const looseStamp = looseRow.querySelector('.row-band')?.textContent ?? null
+      document.querySelector('[data-ledger-view="active"]').click()
+      const plainState = row('task-plain').dataset.session ?? null
+
+      const floatShown = {
+        hidden: float.hidden,
+        label: document.getElementById('sessionFloatLabel').textContent,
+        facts: document.getElementById('sessionFloatFacts').innerText,
+        href: new URL(float.href).hash,
+        kind: float.dataset.kind,
+        clearsTheNav: float.getBoundingClientRect().bottom <=
+          document.querySelector('.bottom-nav').getBoundingClientRect().top,
+        insideTheScreen: float.getBoundingClientRect().right <= window.innerWidth + 1
+      }
+      const toastCleared = toastBottom() > toastAlone
+
+      // A session under way takes precedence over a pick left behind.
+      setCurrentSessionAggregate({
+        session: { _id: 's1', status: 'active', taskBundle: ['task-picked'] },
+        bundle: [records.tasks[0]],
+        executions: []
+      })
+      sessionPicks.set(['task-picked', 'task-loose'])
+      await new Promise(resolve => setTimeout(resolve, 30))
+
+      const running = {
+        stamp: row('task-picked').querySelector('.row-band').textContent,
+        state: row('task-picked').dataset.session,
+        looseStillPicked: row('task-loose').dataset.session,
+        label: document.getElementById('sessionFloatLabel').textContent,
+        facts: document.getElementById('sessionFloatFacts').innerText,
+        href: new URL(float.href).hash,
+        kind: float.dataset.kind
+      }
+
+      // Nothing in either session floats nothing, and gives the space back.
+      setCurrentSessionAggregate(null)
+      sessionPicks.set([])
+      await new Promise(resolve => setTimeout(resolve, 30))
+      const emptiedAgain = {
+        hidden: float.hidden,
+        noSlot: !root.hasAttribute('data-session-float'),
+        toastBack: toastBottom() === toastAlone,
+        noStamps: document.querySelectorAll('[data-session]').length === 0,
+        // Out of the session, the unscheduled row gives the column back.
+        looseColsBack: getComputedStyle(
+          showUnscheduled().querySelector('.ledger-row-summary')).gridTemplateColumns
+      }
+
+      const result = {
+        emptyFloatHidden, emptyNoSlot, picked, looseCols, looseStamp, plainState,
+        floatShown, toastCleared, running, emptiedAgain,
+        noJudgement: !/overdue|late|behind/i.test(document.getElementById('activeCards').innerText)
+      }
+    `
+  })
+
+  assert.equal(result.emptyFloatHidden, true, 'nothing in a session floats nothing')
+  assert.equal(result.emptyNoSlot, true)
+  assert.equal(result.picked.stamp, 'In session')
+  assert.equal(result.picked.stampIsAnnounced, true,
+    'the band repeats the group, but this is new information')
+  assert.equal(result.picked.state, 'picked')
+  assert.equal(result.picked.washed, true, 'a picked row reads differently from a plain one')
+  assert.match(result.looseCols, /^62px /,
+    'the stamp column is back for an unscheduled chore in a session: ' + result.looseCols)
+  assert.equal(result.looseStamp, 'In session')
+  assert.equal(result.plainState, null, 'a chore in no session carries no state')
+
+  assert.equal(result.floatShown.hidden, false)
+  assert.equal(result.floatShown.label, 'Quick session')
+  assert.match(result.floatShown.facts, /2 chores/)
+  assert.match(result.floatShown.facts, /15 min/)
+  assert.equal(result.floatShown.href, '#/today')
+  assert.equal(result.floatShown.kind, 'picked')
+  assert.equal(result.floatShown.clearsTheNav, true, 'the readout sits clear of the navigation')
+  assert.equal(result.floatShown.insideTheScreen, true)
+  assert.equal(result.toastCleared, true, 'the undo toast stacks above the readout')
+
+  assert.equal(result.running.stamp, 'Doing')
+  assert.equal(result.running.state, 'doing')
+  assert.equal(result.running.looseStillPicked, 'picked',
+    'a chore not in the running session is still one you picked')
+  assert.equal(result.running.label, 'Doing')
+  assert.match(result.running.facts, /1 chore/)
+  assert.equal(result.running.href, '#/doing')
+  assert.equal(result.running.kind, 'doing')
+
+  assert.equal(result.emptiedAgain.hidden, true)
+  assert.equal(result.emptiedAgain.noSlot, true)
+  assert.equal(result.emptiedAgain.toastBack, true, 'the toast drops back to its own slot')
+  assert.equal(result.emptiedAgain.noStamps, true)
+  assert.doesNotMatch(result.emptiedAgain.looseColsBack, /^62px /,
+    'out of the session the unscheduled row gives the stamp column back to its name')
+  assert.equal(result.noJudgement, true)
 })

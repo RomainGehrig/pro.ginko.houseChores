@@ -455,14 +455,75 @@ label:has(input[type="radio"]) {
   padding: var(--s4) var(--gutter) calc(var(--s6) + 61px + env(safe-area-inset-bottom));
 }
 
+/* The height the floating session readout claims at the foot of the screen.
+   Everything that rests down there reads it, so the readout, the undo toast and
+   the end of the list never have to agree about it separately. */
+:root {
+  --float-slot: 0px;
+}
+
+:root[data-session-float="on"] {
+  --float-slot: calc(45px + var(--s2));
+}
+
+:root[data-session-float="on"] #view-chores {
+  padding-bottom: var(--float-slot);
+}
+
+#undoToast {
+  bottom: calc(61px + var(--s3) + var(--float-slot) + env(safe-area-inset-bottom));
+}
+
+/* What is in a session, while you are looking at the list instead of at it. A
+   readout rather than an alert, so it is a quiet plate and not the toast's ink.
+   It states what is in the session and goes to the screen that owns it. */
+.session-float {
+  align-items: center;
+  background: var(--plate);
+  border: 1px solid color-mix(in srgb, var(--enamel) 35%, transparent);
+  border-radius: var(--r-pill);
+  bottom: calc(61px + var(--s3) + env(safe-area-inset-bottom));
+  box-shadow: var(--lift);
+  color: var(--ink);
+  display: flex;
+  gap: var(--s2);
+  left: 50%;
+  max-width: calc(100vw - (2 * var(--gutter)));
+  min-height: 45px;
+  padding: var(--s2) var(--s4);
+  position: fixed;
+  text-decoration: none;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  z-index: 14;
+}
+
+.session-float-label {
+  color: var(--enamel);
+  font-family: var(--face-stamp);
+  font-size: var(--t-stamp);
+  letter-spacing: .04em;
+}
+
+.session-float-facts {
+  font-size: var(--t-note);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 @media (min-width: 900px) {
   #app {
     padding-bottom: var(--s6);
     padding-left: calc(188px + var(--gutter));
   }
 
-  #undoToast {
+  #undoToast,
+  .session-float {
     bottom: calc(var(--s3) + env(safe-area-inset-bottom));
+  }
+
+  #undoToast {
+    bottom: calc(var(--s3) + var(--float-slot) + env(safe-area-inset-bottom));
   }
 }
 
@@ -590,7 +651,6 @@ label:has(input[type="radio"]) {
   align-items: center;
   background: var(--ink);
   border-radius: var(--r-plate);
-  bottom: calc(61px + var(--s3) + env(safe-area-inset-bottom));
   color: var(--ground);
   display: flex;
   gap: var(--s2);
@@ -1128,9 +1188,21 @@ label:has(input[type="radio"]) {
 }
 
 /* An unscheduled chore carries no band stamp, so the column the stamp would
-   have taken belongs to the name instead of standing empty in front of it. */
-.ledger-row[data-band=""] .ledger-row-summary {
+   have taken belongs to the name instead of standing empty in front of it —
+   unless it is in a session, which puts its own stamp there. */
+.ledger-row[data-band=""]:not([data-session]) .ledger-row-summary {
   grid-template-columns: minmax(0, 1fr);
+}
+
+/* A chore in a session wears the accent the pool already uses for a picked
+   chip. It is a statement of where the chore is, not a mark against it. */
+.ledger-row.task-card[data-session] {
+  background: color-mix(in srgb, var(--enamel) 9%, transparent);
+  border-color: color-mix(in srgb, var(--enamel) 28%, transparent);
+}
+
+.ledger-row[data-session] .row-band.is-session {
+  color: var(--enamel);
 }
 
 .row-band {

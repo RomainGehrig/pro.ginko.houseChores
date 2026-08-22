@@ -43,6 +43,15 @@ export function showSessionStartNotice (startResult, status) {
   return true
 }
 
+// Once a session is under way the picks are no longer what you are putting
+// together — they are the session. A restored start did not use them, so it
+// leaves them exactly where they were.
+export function clearPicksForStart (startResult) {
+  if (startResult?.restored) return false
+  sessionPicks.set([])
+  return true
+}
+
 export function updateBudgetStatus (status, valid) {
   if (!status) return Boolean(valid)
   status.textContent = valid ? '' : 'Choose or enter a time budget first.'
@@ -301,6 +310,7 @@ async function startSession () {
     const startResult = await sessionStore.start(proposal, Date.now())
     const { aggregate } = startResult
     setCurrentSessionAggregate(aggregate)
+    clearPicksForStart(startResult)
     setNavVisible('doing', true)
     showView('doing')
     await startDoing(aggregate)
