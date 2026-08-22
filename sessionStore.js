@@ -212,10 +212,20 @@ export function createSessionStore ({
     return { ...aggregate, session: { ...aggregate.session, ...fields } }
   }
 
-  async function attachTasks (sessionId, taskIds, { suggestionTaskIds = null } = {}) {
+  // whileRunning is for a chore handed over from outside the session — from the
+  // ledger — where the user's intent is the whole of the request and the session
+  // under way is plainly what they meant. The continuation panel does not pass
+  // it: that panel only exists at a pause, so an active session there means the
+  // client's view is stale and the add must not be written.
+  async function attachTasks (
+    sessionId, taskIds, { suggestionTaskIds = null, whileRunning = false } = {}
+  ) {
     const atMs = now()
     const aggregate = await refresh(sessionId, atMs)
-    if (aggregate.session.status !== 'paused') return aggregate
+    const openToAdditions = whileRunning && suggestionTaskIds === null
+      ? !terminal(aggregate.session)
+      : aggregate.session.status === 'paused'
+    if (!openToAdditions) return aggregate
     const requestedIds = [...new Set(taskIds || [])]
     const requestedTasks = await listTasks(requestedIds)
     if (requestedTasks.length !== requestedIds.length ||
