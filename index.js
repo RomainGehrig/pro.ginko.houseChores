@@ -41,7 +41,9 @@ async function init () {
   await categoryLocationStore.initialize()
   initSheet()
   initUndoToast()
-  await initTasksView()
+  // Adding a chore to a session already under way repaints Doing, which the
+  // Chores view cannot reach on its own without the two importing each other.
+  await initTasksView({ onSessionAggregateChange: startDoing })
   await initSetupView({ onSuggestionsChange: setSuggestionsEnabled })
   initSessionView()
   initDoingView()

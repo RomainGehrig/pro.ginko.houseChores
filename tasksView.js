@@ -31,6 +31,11 @@ import { doneLabel, unscheduledTasks } from './chores/ledgerLogic.js'
 import { closeSheetWith, openSheet, sheetBody, sheetHeadAction } from './sheet.js'
 import { optimisticArchive, pendingUndo } from './undoToast.js'
 import { runArchiveAction } from './archiveView.js'
+import { sessionStore } from './sessionStore.js'
+import { sessionPicks } from './sessionPicks.js'
+import { bundleTotal, pickedBundle } from './pickingLogic.js'
+import { choreEditorActions, sessionAddNote, sessionAddTarget } from './sessionAdd.js'
+import { setCurrentSessionAggregate, state } from './state.js'
 
 let tasksCache = []
 const pendingTaskArchives = new Map()
@@ -62,7 +67,12 @@ export function overlayPendingTaskArchives (tasks, pendingArchives) {
   return overlaid
 }
 
-export async function initTasksView() {
+// A chore added to a session already under way changes what Doing is showing,
+// and Doing is not this module's to import — index wires its repaint in.
+let applySessionAggregate = null
+
+export async function initTasksView({ onSessionAggregateChange = null } = {}) {
+  applySessionAggregate = onSessionAggregateChange
   document.getElementById('addTasksBtn').addEventListener('click', handleAddTasks)
   document.getElementById('enrichBtn').addEventListener('click', handleEnrich)
   document.getElementById('proposedCards').addEventListener('click', handleProposedClick)
@@ -651,6 +661,15 @@ function syncEnrichmentAvailability() {
   else if (status.textContent === availability.message) status.textContent = ''
 }
 
+// A fact about what just happened, in the colour everything else is in. The
+// failure line below it is the only thing on this screen that is not neutral.
+function showChoresNote (message) {
+  const status = document.getElementById('choresStatus')
+  status.textContent = message
+  status.removeAttribute('data-state')
+  status.setAttribute('role', 'status')
+}
+
 function showChoresFailure (message) {
   const status = document.getElementById('choresStatus')
   status.textContent = message
@@ -722,6 +741,40 @@ async function markChoreRecentlyDone (task) {
   }
 }
 
+// Putting a chore in a session is not an edit of the chore, so it leaves the
+// editor rather than waiting for Save. Which session it means is settled before
+// the sheet opens, so the label and the act cannot disagree.
+async function addChoreToSession (task, target) {
+  if (target === 'running') return addChoreToRunningSession(task)
+
+  const added = sessionPicks.toggle(task._id)
+  const bundle = pickedBundle(getActiveTasks(), sessionPicks.getPickedIds())
+  showChoresNote(sessionAddNote({
+    name: task.name,
+    target: 'next',
+    added,
+    count: bundle.length,
+    minutes: bundleTotal(bundle)
+  }))
+}
+
+async function addChoreToRunningSession (task) {
+  try {
+    const aggregate = await sessionStore.attachTasks(
+      state.currentSession._id, [task._id], { whileRunning: true })
+    setCurrentSessionAggregate(aggregate)
+    await applySessionAggregate?.(aggregate)
+    showChoresNote(sessionAddNote({
+      name: task.name,
+      target: 'running',
+      added: true,
+      count: aggregate.bundle.length
+    }))
+  } catch (error) {
+    showChoresFailure('Could not add that to the session you are doing: ' + error.message)
+  }
+}
+
 // The editor is a dialogue of its own, so an edit can be abandoned without
 // having already been written. Only Save writes, and it writes everything at
 // once — including the name, which the row itself never let you touch.
@@ -732,18 +785,17 @@ async function openChoreEditor (id) {
   ledger.openTaskId = id
   ledger.confirmDoneId = null
 
+  const target = sessionAddTarget(state.currentSession, id)
   const choice = await openSheet({
     title: 'Edit chore',
     headerActionHtml: choreDoneButtonHtml(),
     bodyHtml: editModalHtml(task, snapshot),
-    actions: [
-      { label: 'Cancel', value: null, className: 'btn btn-ghost' },
-      { label: 'Save', value: 'save', className: 'btn btn-primary' }
-    ]
+    actions: choreEditorActions(target, sessionPicks.isPicked(id))
   })
 
   ledger.openTaskId = null
   const body = sheetBody()
+  if (choice === 'session') return addChoreToSession(task, target)
   if (choice === 'done') return markChoreRecentlyDone(task)
   if (choice === 'archive') {
     return archiveTaskOptimistically(task, {
