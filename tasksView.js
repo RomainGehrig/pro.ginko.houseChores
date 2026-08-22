@@ -7,7 +7,7 @@ import {
   sanitizeLocationIds,
   selectableReferences
 } from './categoryLocationLogic.js'
-import { escapeAttribute, escapeHtml, formatDuration } from './helpers.js'
+import { escapeAttribute, escapeHtml, formatDuration, formatFactHtml } from './helpers.js'
 import { buildEnrichmentAvailability, suggestionsNote } from './taskPresentationLogic.js'
 import { localDateFromDate, taskUpdateForOutcome } from './scheduleLogic.js'
 import { saveTaskWithRefresh } from './taskSaveLogic.js'
@@ -36,7 +36,10 @@ import { runArchiveAction } from './archiveView.js'
 import { sessionStore } from './sessionStore.js'
 import { sessionPicks } from './sessionPicks.js'
 import { bundleTotal, pickedBundle } from './pickingLogic.js'
-import { sessionAddActionLabel, sessionAddNote, sessionAddTarget } from './sessionAdd.js'
+import {
+  sessionAddActionLabel, sessionAddNote, sessionAddTarget,
+  sessionFloatModel, sessionMarks, sessionUnderWay
+} from './sessionAdd.js'
 import { setCurrentSessionAggregate, state } from './state.js'
 
 let tasksCache = []
@@ -98,6 +101,10 @@ export async function initTasksView({ onSessionAggregateChange = null } = {}) {
   })
 
   categoryLocationStore.subscribe(renderTasksAfterReferencePublication)
+  // Picking happens on two screens now, so the list repaints on either.
+  sessionPicks.subscribe(() => {
+    if (document.getElementById('activeCards')) renderLedger()
+  })
   await refreshTasksView()
 }
 
@@ -109,11 +116,16 @@ export function setSuggestionsEnabled (enabled) {
 }
 
 // The router owns which view the Chores screen opens on, so #/archive is a
-// place you can link to rather than a tab you have to find.
+// place you can link to rather than a tab you have to find. Arriving always
+// repaints: a session may have started or ended while you were elsewhere, and
+// the list says which chores are in one.
 export function selectLedgerView (routeName) {
   const next = routeName === 'archive' ? 'archive' : 'active'
-  if (ledger.view === next) return
-  Object.assign(ledger, { view: next, openTaskId: null, confirmDoneId: null, confirmDeleteId: null })
+  if (ledger.view !== next) {
+    Object.assign(ledger, {
+      view: next, openTaskId: null, confirmDoneId: null, confirmDeleteId: null
+    })
+  }
   if (typeof document !== 'undefined') renderLedger()
 }
 
@@ -469,20 +481,54 @@ function ledgerFilterCategoryName (snapshot) {
   return (snapshot.categories || []).find(item => item._id === ledger.categoryId)?.name || 'All'
 }
 
-function ledgerState (snapshot) {
+function ledgerState (snapshot, marks) {
   return {
     openTaskId: ledger.openTaskId,
     confirmDoneId: ledger.confirmDoneId,
     confirmDeleteId: ledger.confirmDeleteId,
+    marks,
     filter: { query: ledger.query, category: ledgerFilterCategoryName(snapshot) }
   }
+}
+
+// The session the ledger is describing: the one being done if there is one,
+// otherwise the one being put together. Both are read fresh, so concluding a
+// session elsewhere is reflected the next time the list is painted.
+function currentSessionBundle () {
+  return sessionUnderWay(state.currentSession)
+    ? { kind: 'doing', bundle: state.currentBundle }
+    : { kind: 'picked', bundle: pickedBundle(getActiveTasks(), sessionPicks.getPickedIds()) }
+}
+
+// Absent when nothing is in a session: an empty readout is clutter, not
+// information, and the space it claims is given back to the list.
+function renderSessionFloat () {
+  const float = document.getElementById('sessionFloat')
+  if (!float) return
+  const { kind, bundle } = currentSessionBundle()
+  const model = sessionFloatModel({
+    kind, count: bundle.length, minutes: bundleTotal(bundle)
+  })
+
+  float.hidden = !model
+  if (model) document.documentElement.dataset.sessionFloat = 'on'
+  else delete document.documentElement.dataset.sessionFloat
+  if (!model) return
+
+  float.href = model.href
+  float.dataset.kind = model.kind
+  document.getElementById('sessionFloatLabel').textContent = model.label
+  document.getElementById('sessionFloatFacts').innerHTML = formatFactHtml(model.facts)
 }
 
 function renderLedger (snapshot = categoryLocationStore.getSnapshot()) {
   const today = localDateFromDate(new Date())
   const active = getActiveTasks()
-  const state = ledgerState(snapshot)
+  const marks = sessionMarks(
+    state.currentSession, sessionPicks.getPickedIds(), active.map(task => task._id))
+  const listState = ledgerState(snapshot, marks)
   const looseCount = unscheduledTasks(active, today, {}, snapshot.categories || []).length
+  renderSessionFloat()
 
   const countLine = document.getElementById('choresCountLine')
   if (countLine) countLine.textContent = buildChoresCountLine(active.length)
@@ -492,9 +538,9 @@ function renderLedger (snapshot = categoryLocationStore.getSnapshot()) {
   document.getElementById('choresFilters').hidden = ledger.view === 'archive'
 
   const panes = {
-    active: ledgerGroupsHtml(active, snapshot, today, state),
-    unscheduled: unscheduledListHtml(active, snapshot, today, state),
-    archive: archiveListHtml(tasksCache, snapshot, today, state)
+    active: ledgerGroupsHtml(active, snapshot, today, listState),
+    unscheduled: unscheduledListHtml(active, snapshot, today, listState),
+    archive: archiveListHtml(tasksCache, snapshot, today, listState)
   }
   for (const [view, id] of [['active', 'activeCards'], ['unscheduled', 'unscheduledCards'], ['archive', 'archivedCards']]) {
     const pane = document.getElementById(id)
@@ -750,14 +796,7 @@ async function addChoreToSession (task, target) {
   if (target === 'running') return addChoreToRunningSession(task)
 
   const added = sessionPicks.toggle(task._id)
-  const bundle = pickedBundle(getActiveTasks(), sessionPicks.getPickedIds())
-  showChoresNote(sessionAddNote({
-    name: task.name,
-    target: 'next',
-    added,
-    count: bundle.length,
-    minutes: bundleTotal(bundle)
-  }))
+  showChoresNote(sessionAddNote({ name: task.name, target: 'next', added }))
 }
 
 async function addChoreToRunningSession (task) {
@@ -766,12 +805,9 @@ async function addChoreToRunningSession (task) {
       state.currentSession._id, [task._id], { whileRunning: true })
     setCurrentSessionAggregate(aggregate)
     await applySessionAggregate?.(aggregate)
-    showChoresNote(sessionAddNote({
-      name: task.name,
-      target: 'running',
-      added: true,
-      count: aggregate.bundle.length
-    }))
+    // The picks store did not move, so nothing else will repaint the list.
+    renderLedger()
+    showChoresNote(sessionAddNote({ name: task.name, target: 'running', added: true }))
   } catch (error) {
     showChoresFailure('Could not add that to the session you are doing: ' + error.message)
   }
