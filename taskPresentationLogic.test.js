@@ -112,6 +112,20 @@ test('resolved and unavailable cards remain visible without outcome controls whi
   assert.doesNotMatch(markup, /id="openContinueBtn"|id="doingDecisionPanel"/)
 })
 
+test('an active session keeps its add panel available while the clock runs', () => {
+  const markup = buildDoingSessionHtml(
+    {
+      _id: 's1', status: 'active', timeBudgetMinutes: 15,
+      accumulatedActiveMs: 0, activeStartedAt: 1000
+    },
+    [{ _id: 't1', name: 'Clean sink', estimatedDuration: 5 }],
+    [], [], 2000
+  )
+
+  assert.match(markup, /id="doingContinuePanel"[^>]*class="[^"]*doing-add/)
+  assert.doesNotMatch(markup, /id="doingContinuePanel"[^>]*hidden/)
+})
+
 test('the head states the clock, what it is doing, and both ways out of the session', () => {
   const running = buildDoingSessionHtml(
     { _id: 's1', status: 'active', timeBudgetMinutes: 30, accumulatedActiveMs: 12 * 60000 },

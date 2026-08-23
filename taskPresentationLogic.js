@@ -154,7 +154,7 @@ export function buildDoingSessionHtml (
       '<div id="doingTaskList">' + tasksHtml + '</div>' +
     '</div>' +
     '<aside id="doingContinuePanel" class="doing-add" aria-label="Add to the session"' +
-      (paused ? '' : ' hidden') + '></aside>' +
+      (active || paused ? '' : ' hidden') + '></aside>' +
   '</div>'
 }
 
