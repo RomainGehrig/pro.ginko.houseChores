@@ -2138,6 +2138,7 @@ test('a chore taken out stays set aside when Quick session is filled again', asy
       '<ol id="vesselList"></ol><p id="vesselIdle"></p>' +
       '<p id="bundleTotalLine"></p><p id="bundleFitLine"></p>' +
       '<div id="sessionStatus"></div><div id="doingStatus"></div>' +
+      '<p id="poolHeading" tabindex="-1">Available chores</p>' +
       '<div id="categoryFilter"></div><div id="poolChips"></div>' +
       '</section>' +
       '<button id="addTasksBtn"></button><button id="enrichBtn"></button>' +
@@ -2187,6 +2188,10 @@ test('a chore taken out stays set aside when Quick session is filled again', asy
 
       document.getElementById('proposeBundleBtn').click()
       const firstFill = names()
+      document.querySelector('#vesselList [data-remove-id="early"]').focus()
+      sessionPicks.set(['early', 'next'])
+      const focusAfterUnrelatedRepaint = document.activeElement.dataset.removeId ?? null
+
       const takeOutControl = document.querySelector('#vesselList [data-remove-id="early"]')
       takeOutControl.focus()
       takeOutControl.click()
@@ -2222,7 +2227,8 @@ test('a chore taken out stays set aside when Quick session is filled again', asy
       const fallbackFocus = document.activeElement.id
 
       const result = {
-        firstFill, afterTakingOut, focusAfterTakingOut, setAsideClass, setAsideLabel,
+        firstFill, focusAfterUnrelatedRepaint,
+        afterTakingOut, focusAfterTakingOut, setAsideClass, setAsideLabel,
         afterRefill, statusAfterRefill, excludedAfterRefill,
         afterManualPick, excludedAfterManualPick, afterArchivedRefresh, fallbackFocus
       }
@@ -2230,6 +2236,8 @@ test('a chore taken out stays set aside when Quick session is filled again', asy
   })
 
   assert.deepEqual(result.firstFill, ['Water the plants', 'Wipe the sills'])
+  assert.equal(result.focusAfterUnrelatedRepaint, 'early',
+    'an unrelated repaint keeps focus on the vessel control that is still present')
   assert.deepEqual(result.afterTakingOut, ['Wipe the sills'])
   assert.equal(result.focusAfterTakingOut, 'early',
     'focus follows the chore to its still-enabled pool control')
@@ -2241,8 +2249,8 @@ test('a chore taken out stays set aside when Quick session is filled again', asy
   assert.deepEqual(result.afterManualPick, ['Wipe the sills', 'Water the plants'])
   assert.deepEqual(result.excludedAfterManualPick, [])
   assert.deepEqual(result.afterArchivedRefresh, { excluded: ['early'], stillInPool: false })
-  assert.equal(result.fallbackFocus, 'proposeBundleBtn',
-    'a chore outside the pool hands focus to Fill it after being set aside')
+  assert.equal(result.fallbackFocus, 'poolHeading',
+    'a chore outside the pool hands focus to the available-chores heading')
 })
 
 test('chore details can set a task aside and offer it again without picking it', async () => {

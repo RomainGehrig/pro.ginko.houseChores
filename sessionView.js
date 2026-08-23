@@ -348,7 +348,9 @@ function rememberFocus () {
   if (!key) return null
   const attribute = active.dataset.pickId ? 'data-pick-id'
     : active.dataset.detailId ? 'data-detail-id'
-      : active.dataset.removeId ? 'data-pick-id' : 'data-category-id'
+      : active.dataset.removeId
+        ? (sessionPicks.isPicked(active.dataset.removeId) ? 'data-remove-id' : 'data-pick-id')
+        : 'data-category-id'
   return attribute + '="' + key + '"'
 }
 
@@ -356,7 +358,7 @@ function restoreFocus (selector) {
   if (!selector) return
   const matchingControl = document.querySelector('#view-today [' + selector + ']')
   if (matchingControl) return matchingControl.focus()
-  if (selector.startsWith('data-pick-id=')) element('proposeBundleBtn')?.focus()
+  if (selector.startsWith('data-pick-id=')) element('poolHeading')?.focus()
 }
 
 function renderToday () {
