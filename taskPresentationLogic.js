@@ -163,7 +163,7 @@ export function buildDoingSessionHtml (
 export function buildAddPanelHtml (remainingMs) {
   return '<h2 class="display doing-add-title">Add to the session</h2>' +
     '<p class="muted doing-add-note" id="continueRemaining"></p>' +
-    '<p class="eyebrow eyebrow-quiet doing-add-fits">' +
+    '<p class="eyebrow eyebrow-quiet doing-add-fits" id="continueFits">' +
       escapeHtml(fitsLabel(remainingMs)) + '</p>' +
     '<div id="continueSuggestions" class="continue-rows"></div>' +
     '<input id="continueSearchInput" class="input doing-add-search" type="search" ' +

@@ -1030,6 +1030,38 @@ test('the active picker adds chores while the same session clock keeps running',
   })
 })
 
+test('an active tick drops proposals that stop fitting without disturbing search', async () => {
+  const original = { ...task('original-task'), estimatedDuration: 1 }
+  const suggested = { ...task('suggested-2m'), estimatedDuration: 2 }
+  const session = {
+    _id: 'shrinking-budget-session', status: 'active', startTime: 10000,
+    taskBundle: ['original-task'], timeBudgetMinutes: 3,
+    accumulatedActiveMs: 0, activeStartedAt: 10000,
+    pausedAt: null, checkpointElapsedMs: 0, pendingAddition: null
+  }
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [original, suggested],
+    bundle: [original]
+  }, async ({ document, clock }) => {
+    assert.ok(document.suggestionControl('suggested-2m'))
+    const search = document.control('continueSearchInput')
+    search.value = 'half-written chore'
+
+    clock.setNow(131000)
+    clock.fireIntervals()
+
+    assert.equal(document.suggestionControl('suggested-2m'), null)
+    assert.equal(document.control('continueSearchInput'), search)
+    assert.equal(search.value, 'half-written chore')
+    assert.match(
+      document.control('continueRemaining').innerHTML,
+      /About <span class="fig">1<\/span> min left/
+    )
+  })
+})
+
 test('paused picker attaches suggestions and search, quick-adds a proposed task, and resumes', async () => {
   const elapsedBeforePicker = 10 * 60000
   const resumeClickedAt = 1200000

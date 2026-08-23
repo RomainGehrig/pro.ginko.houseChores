@@ -7,7 +7,7 @@ import { taskFieldsBeforeUpdate } from './reopenLogic.js'
 import { listTasksByIds, updateTask } from './taskData.js'
 import { updateSession } from './sessionData.js'
 import { formatFactHtml, formatTimer } from './helpers.js'
-import { remainingLine } from './doingLines.js'
+import { fitsLabel, remainingLine } from './doingLines.js'
 import {
   buildAddPanelHtml,
   buildContinuationRemainingHtml,
@@ -165,7 +165,9 @@ function renderDoing () {
 function updateTimerDisplay () {
   const timerDisplay = document.getElementById('sessionTimerDisplay')
   if (!timerDisplay || !state.currentSession) return
-  const seconds = Math.floor(activeElapsedMs(state.currentSession, Date.now()) / 1000)
+  const nowMs = Date.now()
+  const elapsedMs = activeElapsedMs(state.currentSession, nowMs)
+  const seconds = Math.floor(elapsedMs / 1000)
   timerDisplay.textContent = formatTimer(seconds)
 
   // Past the time you set, the clock changes colour and nothing else happens.
@@ -179,6 +181,30 @@ function updateTimerDisplay () {
   if (remaining) {
     remaining.innerHTML = formatFactHtml(remainingLine(state.currentSession, seconds * 1000))
   }
+  updateAddPanelTiming(elapsedMs, nowMs)
+}
+
+function updateAddPanelTiming (elapsedMs, nowMs) {
+  if (!sessionAcceptsAdditions(state.currentSession)) return
+  const remainingMs = remainingBudgetMs(state.currentSession, nowMs)
+  const remaining = document.getElementById('continueRemaining')
+  if (remaining) {
+    remaining.innerHTML = buildContinuationRemainingHtml(state.currentSession, elapsedMs)
+  }
+  const fits = document.getElementById('continueFits')
+  if (fits) fits.textContent = fitsLabel(remainingMs)
+
+  const suggestionsContainer = document.getElementById('continueSuggestions')
+  if (!suggestionsContainer) return
+  const suggestions = suggestContinuationTasks(
+    continuationTasks,
+    state.currentSession.taskBundle || [],
+    remainingMs
+  )
+  const suggestionIds = suggestions.map(task => task._id).join('\n')
+  if (suggestionsContainer.dataset.suggestionIds === suggestionIds) return
+  suggestionsContainer.innerHTML = buildContinuationSuggestionsHtml(suggestions)
+  suggestionsContainer.dataset.suggestionIds = suggestionIds
 }
 
 function setSessionMutationControlsDisabled (disabled) {
@@ -307,24 +333,11 @@ async function openContinuePicker () {
     return
   }
 
-  const remainingMs = remainingBudgetMs(state.currentSession, Date.now())
-  const suggestions = suggestContinuationTasks(
-    continuationTasks,
-    state.currentSession.taskBundle || [],
-    remainingMs
-  )
+  const nowMs = Date.now()
+  const remainingMs = remainingBudgetMs(state.currentSession, nowMs)
   panel.innerHTML = buildAddPanelHtml(remainingMs)
   panel.hidden = false
-
-  const remaining = document.getElementById('continueRemaining')
-  if (remaining) {
-    remaining.innerHTML = buildContinuationRemainingHtml(
-      state.currentSession, activeElapsedMs(state.currentSession, Date.now()))
-  }
-  const suggestionsContainer = document.getElementById('continueSuggestions')
-  if (suggestionsContainer) {
-    suggestionsContainer.innerHTML = buildContinuationSuggestionsHtml(suggestions)
-  }
+  updateAddPanelTiming(activeElapsedMs(state.currentSession, nowMs), nowMs)
 }
 
 async function reconcileAmbiguousSuggestionSelections (retry) {
