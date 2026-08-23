@@ -3017,7 +3017,19 @@ test('Setup shows one vocabulary at a time on a phone and both side by side on a
 test('adding a chore from the ledger lands in the session the pool is filling', async () => {
   const result = await runBrowserScenario({
     viewport: { width: 390, height: 760 },
-    body: '<button id="addTasksBtn"></button><button id="enrichBtn"></button>' +
+    body: '<section id="view-today">' +
+      '<span id="budgetHeadline"></span><span id="todayDate"></span>' +
+      '<button id="proposeBundleBtn" type="button">Fill it</button>' +
+      '<button id="startSessionBtn" type="button">Start</button>' +
+      '<input id="customMinutes" type="number">' +
+      '<div id="vesselColumn"><div id="vesselLine"><span id="vesselLineLabel"></span></div>' +
+      '<div id="vesselFill"></div></div>' +
+      '<ol id="vesselList"></ol><p id="vesselIdle"></p>' +
+      '<p id="bundleTotalLine"></p><p id="bundleFitLine"></p>' +
+      '<div id="sessionStatus"></div><div id="doingStatus"></div>' +
+      '<div id="categoryFilter"></div><div id="poolChips"></div>' +
+      '</section>' +
+      '<button id="addTasksBtn"></button><button id="enrichBtn"></button>' +
       '<span id="enrichStatus"></span><div id="proposedCards"></div>' +
       '<span id="choresCountLine"></span><div id="choresViews"></div>' +
       '<div id="choresFilters"><input id="choreSearch"><div id="choreCategoryFilter"></div></div>' +
@@ -3055,9 +3067,11 @@ test('adding a chore from the ledger lands in the session the pool is filling', 
 
       const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
       const { initTasksView, selectLedgerView } = await import(applicationUrl + 'tasksView.js')
+      const { initSessionView } = await import(applicationUrl + 'sessionView.js')
       const { sessionPicks } = await import(applicationUrl + 'sessionPicks.js')
       await categoryLocationStore.initialize()
       await initTasksView()
+      initSessionView()
 
       // The session control lives in the title row beside Mark as done, not
       // among the answers to the edit.
@@ -3083,8 +3097,13 @@ test('adding a chore from the ledger lands in the session the pool is filling', 
       await Promise.resolve()
       const reopenedLabels = headLabels()
       const editStaysTwoAnswers = actionLabels()
-      document.querySelector('#bottomSheetActions button').click()
+      document.querySelector('#bottomSheetHeadAction .session-btn').click()
       await new Promise(resolve => setTimeout(resolve, 60))
+      const afterTakingOut = sessionPicks.getPickedIds()
+      const excludedAfterTakingOut = sessionPicks.getExcludedIds()
+
+      document.getElementById('proposeBundleBtn').click()
+      const afterLedgerRefill = sessionPicks.getPickedIds()
 
       // A chore nobody has estimated is still a chore you can decide to do.
       await pressSessionAction('task-no-estimate')
@@ -3110,6 +3129,9 @@ test('adding a chore from the ledger lands in the session the pool is filling', 
         noteAfterAdding,
         reopenedLabels,
         editStaysTwoAnswers,
+        afterTakingOut,
+        excludedAfterTakingOut,
+        afterLedgerRefill,
         headFits,
         headRows,
         noHorizontalOverflow: document.documentElement.scrollWidth <= window.innerWidth,
@@ -3133,7 +3155,11 @@ test('adding a chore from the ledger lands in the session the pool is filling', 
   assert.deepEqual(result.reopenedLabels, ['Mark as done', 'Take out'])
   assert.deepEqual(result.editStaysTwoAnswers, ['Cancel', 'Save'],
     'the edit keeps its two answers; the session control is not one of them')
-  assert.deepEqual(result.withUnestimated, ['task-active', 'task-no-estimate'])
+  assert.deepEqual(result.afterTakingOut, [])
+  assert.deepEqual(result.excludedAfterTakingOut, ['task-active'])
+  assert.deepEqual(result.afterLedgerRefill, [],
+    'Fill does not immediately return a chore taken out from the ledger')
+  assert.deepEqual(result.withUnestimated, ['task-no-estimate'])
   assert.equal(result.noteIsNeutral, true, 'a chore going into a session is not a failure')
   assert.equal(result.headFits, true, 'the title-row controls stay inside the sheet on a phone')
   // On a phone the pair wraps under the title rather than squeezing it: two rows

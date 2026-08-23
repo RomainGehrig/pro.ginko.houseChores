@@ -825,7 +825,13 @@ async function markChoreRecentlyDone (task) {
 async function addChoreToSession (task, target) {
   if (target === 'running') return addChoreToRunningSession(task)
 
-  const added = sessionPicks.toggle(task._id)
+  let added
+  if (sessionPicks.isPicked(task._id)) {
+    sessionPicks.exclude(task._id)
+    added = false
+  } else {
+    added = sessionPicks.toggle(task._id)
+  }
   showChoresNote(sessionAddNote({ name: task.name, target: 'next', added }))
 }
 
