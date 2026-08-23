@@ -61,6 +61,15 @@ test('a pool chip reports whether it is already in the session', () => {
   assert.match(markup, /data-pick-id="t2" aria-pressed="true"/)
 })
 
+test('a set-aside pool chip stays available and says why it looks different', () => {
+  const markup = buildPoolChipsHtml([chore()], [], TODAY, ['t1'])
+
+  assert.match(markup, /pool-chip-wrap is-excluded/)
+  assert.match(markup, /Set aside/)
+  assert.match(markup, /data-pick-id="t1" aria-pressed="false"/)
+  assert.doesNotMatch(markup, /disabled/)
+})
+
 test('every pool chip carries a detail control reachable without a long press', () => {
   const markup = buildPoolChipsHtml([chore()], [], TODAY)
   assert.match(markup, /data-detail-id="t1"/)

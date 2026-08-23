@@ -41,12 +41,15 @@ export function buildVesselListHtml (bundle, today) {
 // Two controls in one pill: the body picks the chore, the trailing button opens
 // its detail. The design reaches detail by holding the chip, which pointer users
 // still can — this keeps the same detail one Tab away for everyone else.
-export function buildPoolChipsHtml (tasks, pickedIds, today) {
+export function buildPoolChipsHtml (tasks, pickedIds, today, excludedIds = []) {
   const picked = new Set(pickedIds || [])
+  const excluded = new Set(excludedIds || [])
   return (tasks || []).map(task => {
     const isPicked = picked.has(task._id)
+    const isExcluded = excluded.has(task._id)
     const name = escapeHtml(String(task?.name ?? ''))
-    return '<span class="pool-chip-wrap' + (isPicked ? ' is-on' : '') + '">' +
+    return '<span class="pool-chip-wrap' + (isPicked ? ' is-on' : '') +
+      (isExcluded ? ' is-excluded' : '') + '">' +
       '<button type="button" class="pool-chip" data-pick-id="' + escapeHtml(task._id) +
       '" aria-pressed="' + (isPicked ? 'true' : 'false') + '">' +
       '<span class="pool-chip-dot" style="background:' +
@@ -54,6 +57,7 @@ export function buildPoolChipsHtml (tasks, pickedIds, today) {
       '<span class="pool-chip-name">' + name + '</span>' +
       '<span class="pool-chip-minutes">' +
       formatFactHtml(formatDuration(task?.estimatedDuration)) + '</span>' +
+      (isExcluded ? '<span class="pool-chip-state">Set aside</span>' : '') +
       '</button>' +
       '<button type="button" class="pool-chip-info" data-detail-id="' + escapeHtml(task._id) +
       '" aria-label="Details for ' + name + '">&hellip;</button>' +
