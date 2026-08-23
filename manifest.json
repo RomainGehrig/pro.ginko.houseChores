@@ -547,7 +547,7 @@
         },
         "outcome": {
           "type": "String",
-          "description": "One of: done, cancelled, already_done."
+          "description": "One of: done or cancelled. Historical records may contain already_done."
         },
         "difficultyRating": {
           "type": "String",

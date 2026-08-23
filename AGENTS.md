@@ -86,8 +86,14 @@ verification pass. Use this order instead:
 2. Run the relevant real-browser regression from the worktree, for example
    `node --test --test-name-pattern="<targeted test name>" browserBehavior.test.js`.
    Because that test resolves assets from its own file location, it exercises
-   the worktree files. If Chromium fails with a sandbox-only `EPERM` or DevTools
-   pipe reset, rerun the same command with the required host permission.
+   the worktree files. If browser discovery fails, set the executable explicitly,
+   for example `CHROME_BIN=/absolute/path/to/chromium node --test ...`; a Chromium
+   downloaded by Playwright is valid. If Chromium then fails with a sandbox-only
+   `EPERM` or DevTools pipe reset, rerun the same command with the required host
+   permission. The harness retries Chromium's intermittent `ENOTEMPTY` profile
+   cleanup race; if it still appears, confirm the focused test passes alone and
+   that the same teardown failure reproduces on the base commit before calling it
+   a product regression.
 3. Query live data using the primary checkout's ignored token.
 4. Drive the installed app through Chrome only after confirming the server is
    available and is actually loading the change. If the server cannot load the

@@ -200,7 +200,15 @@ async function runBrowserScenario (scenario) {
         })
       })
     }
-    rmSync(profileDirectory, { recursive: true, force: true })
+    // Chromium can release files in its temporary profile a fraction after the
+    // process exits. Let Node retry that teardown race instead of turning a
+    // passing browser assertion into an intermittent ENOTEMPTY failure.
+    rmSync(profileDirectory, {
+      recursive: true,
+      force: true,
+      maxRetries: 3,
+      retryDelay: 100
+    })
   }
 }
 

@@ -807,6 +807,9 @@ function handleEstimateClick (evt, card) {
   return false
 }
 
+// This is the Chores-screen meaning of "Mark as done": move the chore's rhythm
+// from now without inventing a session or a timed execution. Quick Session
+// details deliberately use the same boundary.
 export async function markChoreRecentlyDone (task, {
   nowMs = Date.now(),
   update = updateTask,
