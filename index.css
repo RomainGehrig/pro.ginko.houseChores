@@ -2053,6 +2053,7 @@ textarea {
 .vessel-column {
   --vessel-fill: 0;
   --vessel-line: 1;
+  --vessel-blocks: 0;
   flex: none;
   padding-top: 22px;
   position: relative;
@@ -2091,6 +2092,11 @@ textarea {
   gap: 3px;
   height: calc(var(--vessel-fill) * 92%);
   left: 0;
+  /* A chore nobody has estimated is worth no minutes, so a session of only
+     those computes to a fill of nothing — and the chores in it disappear. The
+     fill is never shorter than what it holds. Time the app cannot state is not
+     a reason to hide the session, and never past the vessel's own span. */
+  min-height: min(92%, calc(var(--vessel-blocks) * 38px));
   overflow: hidden;
   position: absolute;
   right: 0;
@@ -2488,6 +2494,9 @@ textarea {
     border-radius: 26px;
     flex-direction: row;
     height: 100%;
+    /* Lying on its side the fill draws time across, so the floor is a width. */
+    min-height: 0;
+    min-width: min(100%, calc(var(--vessel-blocks) * 84px));
     top: 0;
     transition: width var(--t-fill) var(--e-fill);
     width: calc(var(--vessel-fill) * 100%);
