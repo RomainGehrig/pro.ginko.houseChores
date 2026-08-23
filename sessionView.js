@@ -251,7 +251,9 @@ function rememberFocus () {
 
 function restoreFocus (selector) {
   if (!selector) return
-  document.querySelector('#view-today [' + selector + ']')?.focus()
+  const matchingControl = document.querySelector('#view-today [' + selector + ']')
+  if (matchingControl) return matchingControl.focus()
+  if (selector.startsWith('data-pick-id=')) element('proposeBundleBtn')?.focus()
 }
 
 function renderToday () {

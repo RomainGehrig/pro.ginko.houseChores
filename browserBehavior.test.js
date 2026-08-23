@@ -1990,13 +1990,20 @@ test('a chore taken out stays set aside when Quick session is filled again', asy
       '</main>',
     script: `
       const records = {
-        categories: [], locations: [],
+        categories: [
+          { _id: 'c1', name: 'Inside', status: 'active', displayOrder: 0 },
+          { _id: 'c2', name: 'Outside', status: 'active', displayOrder: 1 }
+        ],
+        locations: [],
         tasks: [
-          { _id: 'early', name: 'Water the plants', status: 'active', categoryId: null,
+          { _id: 'early', name: 'Water the plants', status: 'active', categoryId: 'c1',
             locationIds: [], estimatedDuration: 5, scheduledDate: '2026-08-10',
             schedule: { type: 'one_off' } },
-          { _id: 'next', name: 'Wipe the sills', status: 'active', categoryId: null,
+          { _id: 'next', name: 'Wipe the sills', status: 'active', categoryId: 'c1',
             locationIds: [], estimatedDuration: 5, scheduledDate: '2026-08-11',
+            schedule: { type: 'one_off' } },
+          { _id: 'filtered', name: 'Sweep the terrace', status: 'active', categoryId: 'c2',
+            locationIds: [], estimatedDuration: 60, scheduledDate: '2026-08-12',
             schedule: { type: 'one_off' } }
         ]
       }
@@ -2047,10 +2054,17 @@ test('a chore taken out stays set aside when Quick session is filled again', asy
         stillInPool: Boolean(document.querySelector('[data-pick-id="early"]'))
       }
 
+      document.querySelector('[data-category-id="c1"]').click()
+      sessionPicks.set(['filtered'])
+      const filteredControl = document.querySelector('#vesselList [data-remove-id="filtered"]')
+      filteredControl.focus()
+      filteredControl.click()
+      const fallbackFocus = document.activeElement.id
+
       const result = {
         firstFill, afterTakingOut, focusAfterTakingOut, setAsideClass, setAsideLabel,
         afterRefill, statusAfterRefill, excludedAfterRefill,
-        afterManualPick, excludedAfterManualPick, afterArchivedRefresh
+        afterManualPick, excludedAfterManualPick, afterArchivedRefresh, fallbackFocus
       }
     `
   })
@@ -2067,6 +2081,8 @@ test('a chore taken out stays set aside when Quick session is filled again', asy
   assert.deepEqual(result.afterManualPick, ['Wipe the sills', 'Water the plants'])
   assert.deepEqual(result.excludedAfterManualPick, [])
   assert.deepEqual(result.afterArchivedRefresh, { excluded: ['early'], stillInPool: false })
+  assert.equal(result.fallbackFocus, 'proposeBundleBtn',
+    'a chore outside the pool hands focus to Fill it after being set aside')
 })
 
 test('chore details can set a task aside and offer it again without picking it', async () => {
