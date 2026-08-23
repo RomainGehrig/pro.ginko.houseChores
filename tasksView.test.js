@@ -52,7 +52,7 @@ test('outside completion advances the chore and removes it from the pending sess
   sessionPicks.reset()
   sessionPicks.set(['task-1', 'task-2'])
 
-  await tasksView.markChoreRecentlyDone({
+  const result = await tasksView.markChoreRecentlyDone({
     _id: 'task-1',
     status: 'approved_recurring',
     scheduledDate: '2026-08-20',
@@ -69,6 +69,51 @@ test('outside completion advances the chore and removes it from the pending sess
   ]])
   assert.deepEqual(order, ['write', 'refresh'])
   assert.deepEqual(sessionPicks.getPickedIds(), ['task-2'])
+  assert.deepEqual(result, { ok: true, stage: null, message: '' })
+  sessionPicks.reset()
+})
+
+test('a recorded completion leaves the pending session even when refresh fails', async () => {
+  sessionPicks.reset()
+  sessionPicks.set(['task-1', 'task-2'])
+
+  const result = await tasksView.markChoreRecentlyDone({
+    _id: 'task-1', schedule: { type: 'one_off' }
+  }, {
+    nowMs: new Date(2026, 7, 23, 12, 0, 0).getTime(),
+    update: async () => {},
+    refresh: async () => { throw new Error('refresh offline') }
+  })
+
+  assert.deepEqual(result, {
+    ok: false,
+    stage: 'refresh',
+    message: 'Task saved, but could not refresh tasks: refresh offline'
+  })
+  assert.deepEqual(sessionPicks.getPickedIds(), ['task-2'])
+  sessionPicks.reset()
+})
+
+test('a completion write failure keeps the pending chore and skips refresh', async () => {
+  let refreshed = false
+  sessionPicks.reset()
+  sessionPicks.set(['task-1', 'task-2'])
+
+  const result = await tasksView.markChoreRecentlyDone({
+    _id: 'task-1', schedule: { type: 'one_off' }
+  }, {
+    nowMs: new Date(2026, 7, 23, 12, 0, 0).getTime(),
+    update: async () => { throw new Error('write offline') },
+    refresh: async () => { refreshed = true }
+  })
+
+  assert.deepEqual(result, {
+    ok: false,
+    stage: 'write',
+    message: 'Could not save task: write offline'
+  })
+  assert.equal(refreshed, false)
+  assert.deepEqual(sessionPicks.getPickedIds(), ['task-1', 'task-2'])
   sessionPicks.reset()
 })
 

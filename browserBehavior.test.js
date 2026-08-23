@@ -1797,6 +1797,12 @@ test('Quick Session details mark a chore done only after the second tap', async 
           scheduledDate: '2026-08-21',
           schedule: { type: 'periodic', every: 1, unit: 'week' },
           lastCompletedDate: null
+        }, {
+          _id: 'task-2', name: 'Wash laundry', status: 'approved_recurring',
+          categoryId: null, locationIds: [], estimatedDuration: 15,
+          scheduledDate: '2026-08-22',
+          schedule: { type: 'periodic', every: 1, unit: 'week' },
+          lastCompletedDate: null
         }]
       }
       const writes = []
@@ -1819,7 +1825,8 @@ test('Quick Session details mark a chore done only after the second tap', async 
       await categoryLocationStore.initialize()
       await initTasksView()
       initSessionView()
-      sessionPicks.set(['task-1'])
+      const poolOrderBefore = [...document.querySelectorAll('[data-pick-id]')]
+        .map(button => button.dataset.pickId)
 
       document.querySelector('[data-detail-id="task-1"]').click()
       await Promise.resolve()
@@ -1849,12 +1856,15 @@ test('Quick Session details mark a chore done only after the second tap', async 
         writes,
         picked: sessionPicks.getPickedIds(),
         task: records.tasks[0],
+        poolOrderBefore,
+        poolOrderAfter: [...document.querySelectorAll('[data-pick-id]')]
+          .map(button => button.dataset.pickId),
         sheetClosed: document.getElementById('bottomSheet').hidden
       }
     `
   })
 
-  assert.deepEqual(result.headLabels, ['Mark as done', 'Take out'])
+  assert.deepEqual(result.headLabels, ['Mark as done', 'Add to session'])
   assert.deepEqual(result.actionLabels, ['Close'])
   assert.equal(result.armedLabel, 'Tap again to confirm')
   assert.equal(result.writesAfterFirstTap, 0)
@@ -1865,6 +1875,8 @@ test('Quick Session details mark a chore done only after the second tap', async 
   assert.equal(typeof result.writes[0].fields.lastCompletedDate, 'number')
   assert.match(result.writes[0].fields.scheduledDate, /^\d{4}-\d{2}-\d{2}$/)
   assert.deepEqual(result.picked, [])
+  assert.deepEqual(result.poolOrderBefore, ['task-1', 'task-2'])
+  assert.deepEqual(result.poolOrderAfter, ['task-2', 'task-1'])
   assert.equal(result.task.status, 'approved_recurring')
   assert.equal(result.sheetClosed, true)
 })

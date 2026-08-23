@@ -814,9 +814,16 @@ export async function markChoreRecentlyDone (task, {
     completedAt: nowMs,
     completionDate: localDateFromDate(new Date(nowMs))
   })
-  await update(task._id, fields)
-  await refresh()
-  if (sessionPicks.isPicked(task._id)) sessionPicks.toggle(task._id)
+  const result = await saveTaskWithRefresh(
+    () => update(task._id, fields),
+    refresh
+  )
+  // Once the write has landed, this chore is no longer part of the work the
+  // user plans to do next. A failed repaint must not put persisted work back.
+  if (result.stage !== 'write' && sessionPicks.isPicked(task._id)) {
+    sessionPicks.toggle(task._id)
+  }
+  return result
 }
 
 // Putting a chore in a session is not an edit of the chore, so it leaves the
@@ -886,11 +893,13 @@ async function openChoreEditor (id) {
   const body = sheetBody()
   if (choice === 'session') return addChoreToSession(task, target)
   if (choice === 'done') {
-    try {
-      return await markChoreRecentlyDone(task)
-    } catch {
-      showChoresFailure("Couldn't record that. The chore is unchanged.")
+    const result = await markChoreRecentlyDone(task)
+    if (!result.ok) {
+      showChoresFailure(result.stage === 'refresh'
+        ? "Recorded, but couldn't refresh the chores."
+        : "Couldn't record that. The chore is unchanged.")
     }
+    return result
   }
   if (choice === 'archive') {
     return archiveTaskOptimistically(task, {

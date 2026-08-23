@@ -72,10 +72,37 @@ test('Quick Session task details put outside completion beside the session actio
 test('a failed Quick Session completion is stated inline without changing the chore', () => {
   const status = statusElement()
 
-  assert.equal(sessionView.showQuickCompletionFailure(status), true)
+  assert.equal(sessionView.showQuickCompletionResult(status, {
+    ok: false, stage: 'write', message: 'Could not save task: offline'
+  }), false)
   assert.equal(status.textContent, "Couldn't record that. The chore is unchanged.")
   assert.equal(status.getAttribute('role'), 'alert')
   assert.equal(status.getAttribute('data-state'), 'error')
+})
+
+test('a recorded completion distinguishes a failed list refresh from a failed write', () => {
+  const status = statusElement()
+
+  assert.equal(sessionView.showQuickCompletionResult(status, {
+    ok: false, stage: 'refresh', message: 'Task saved, but could not refresh tasks: offline'
+  }), false)
+  assert.equal(status.textContent, "Recorded, but couldn't refresh the chores.")
+  assert.equal(status.getAttribute('role'), 'status')
+  assert.equal(status.getAttribute('data-state'), 'info')
+})
+
+test('a successful Quick Session completion clears any earlier failure', () => {
+  const status = statusElement()
+  status.textContent = "Couldn't record that. The chore is unchanged."
+  status.setAttribute('role', 'alert')
+  status.setAttribute('data-state', 'error')
+
+  assert.equal(sessionView.showQuickCompletionResult(status, {
+    ok: true, stage: null, message: ''
+  }), true)
+  assert.equal(status.textContent, '')
+  assert.equal(status.getAttribute('role'), 'status')
+  assert.equal(status.getAttribute('data-state'), '')
 })
 
 // Once a session is under way the picks are no longer what you are putting

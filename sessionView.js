@@ -63,12 +63,22 @@ export function updateBudgetStatus (status, valid) {
   return Boolean(valid)
 }
 
-export function showQuickCompletionFailure (status) {
-  if (!status) return false
-  status.textContent = "Couldn't record that. The chore is unchanged."
-  status.setAttribute('role', 'alert')
-  status.setAttribute('data-state', 'error')
-  return true
+export function showQuickCompletionResult (status, result) {
+  if (!status) return result?.ok === true
+  if (result?.ok) {
+    status.textContent = ''
+    status.setAttribute('role', 'status')
+    status.setAttribute('data-state', '')
+    return true
+  }
+
+  const refreshFailed = result?.stage === 'refresh'
+  status.textContent = refreshFailed
+    ? "Recorded, but couldn't refresh the chores."
+    : "Couldn't record that. The chore is unchanged."
+  status.setAttribute('role', refreshFailed ? 'status' : 'alert')
+  status.setAttribute('data-state', refreshFailed ? 'info' : 'error')
+  return false
 }
 
 function eligibleTasks () {
@@ -242,11 +252,11 @@ async function openChoreDetail (id) {
 
   if (choice === 'toggle') pickChore(id)
   if (choice === 'done') {
-    try {
-      await markChoreRecentlyDone(task)
-    } catch {
-      showQuickCompletionFailure(element('sessionStatus'))
-    }
+    const result = await markChoreRecentlyDone(task)
+    // Removing a pick already repaints through the shared store. A chore that
+    // was only in the pool has no such event, so repaint its new rhythm here.
+    if (result.ok && !isPicked) renderToday()
+    showQuickCompletionResult(element('sessionStatus'), result)
   }
 }
 
