@@ -2282,6 +2282,14 @@ textarea {
   color: var(--on-enamel);
 }
 
+/* Set aside is a choice for this draft, not a disabled chore. The dashed edge
+   distinguishes it without fading the control or turning the state into a warning. */
+.pool-chip-wrap.is-excluded {
+  background: color-mix(in srgb, var(--sunk) 45%, transparent);
+  border-style: dashed;
+  color: var(--graphite);
+}
+
 .pool-chip,
 .pool-chip-info {
   background: none;
@@ -2315,6 +2323,17 @@ textarea {
 .pool-chip-minutes {
   font-size: 11.5px;
   opacity: .72;
+}
+
+.pool-chip-state {
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+}
+
+.pool-chip-wrap.is-excluded .pool-chip-dot {
+  opacity: .45;
 }
 
 .pool-chip-info {

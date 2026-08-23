@@ -2146,6 +2146,41 @@ test('chore details can set a task aside and offer it again without picking it',
   assert.deepEqual(result.afterOfferAgain, { picked: [], excluded: [] })
 })
 
+test('a set-aside pool chip stays neutral and fully interactive', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 640 },
+    body: '<main id="app"><span class="pool-chip-wrap is-excluded">' +
+      '<button type="button" class="pool-chip" data-pick-id="early" aria-pressed="false">' +
+        '<span class="pool-chip-dot"></span><span class="pool-chip-name">Water the plants</span>' +
+        '<span class="pool-chip-minutes">5 min</span>' +
+        '<span class="pool-chip-state">Set aside</span>' +
+      '</button>' +
+      '<button type="button" class="pool-chip-info">&hellip;</button>' +
+      '</span></main>',
+    script: `
+      const wrapper = document.querySelector('.pool-chip-wrap')
+      const chip = document.querySelector('.pool-chip')
+      const state = document.querySelector('.pool-chip-state')
+      const result = {
+        borderStyle: getComputedStyle(wrapper).borderStyle,
+        opacity: getComputedStyle(wrapper).opacity,
+        cursor: getComputedStyle(chip).cursor,
+        targetHeight: chip.getBoundingClientRect().height,
+        stateTransform: getComputedStyle(state).textTransform
+      }
+    `
+  })
+
+  assert.deepEqual(result, {
+    borderStyle: 'dashed',
+    opacity: '1',
+    cursor: 'pointer',
+    targetHeight: result.targetHeight,
+    stateTransform: 'uppercase'
+  })
+  assert.ok(result.targetHeight >= 44.5, JSON.stringify(result))
+})
+
 test('Today sets its budget and its two controls on one desktop row, the session beside the pool', async () => {
   const result = await runBrowserScenario({
     viewport: { width: 1280, height: 900 },
