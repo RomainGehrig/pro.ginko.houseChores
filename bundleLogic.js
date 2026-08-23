@@ -37,11 +37,14 @@ export function buildBundle(tasks, budgetMinutes, categoryFilterId, keptIds = []
   return bundle
 }
 
-export function buildBundleProposal (tasks, budgetMinutes, categoryFilterId, categories, keptIds = []) {
+export function buildBundleProposal (
+  tasks, budgetMinutes, categoryFilterId, categories, keptIds = [], excludedIds = []
+) {
   const capturedCategoryId = categoryFilterId || null
   const category = categories.find(item => item._id === capturedCategoryId)
   return {
-    tasks: buildBundle(tasks, budgetMinutes, capturedCategoryId, keptIds).map(task => ({ ...task })),
+    tasks: buildBundle(tasks, budgetMinutes, capturedCategoryId, keptIds, excludedIds)
+      .map(task => ({ ...task })),
     timeBudgetMinutes: budgetMinutes,
     categoryFilterId: capturedCategoryId,
     categoryFilter: category?.name || null
