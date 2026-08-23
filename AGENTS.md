@@ -63,6 +63,43 @@ compares to usual, when it next comes round.
 Use the Chrome MCP to access and interact with the app at
 `http://localhost:3000/apps/pro.ginko.houseChores/index`.
 
+## Working in worktrees
+
+When a task is assigned to a worktree, create it under the ignored
+`.worktrees/` directory on a branch whose name describes the change. Run every
+edit, test, status check, and commit with that worktree as the working directory;
+the primary checkout must remain untouched.
+
+Ignored local files are not copied into a git worktree. In particular,
+`.freezr-access.local.json` remains in the primary checkout. A worktree at
+`.worktrees/<name>` can read it from `../../.freezr-access.local.json` for the
+required live-data query. Never copy the token into the worktree, print it, or
+commit it.
+
+The installed app URL is not proof that worktree code is running. The freezr
+server may still be serving the installed primary checkout, and it may be
+unreachable from an agent sandbox even while it is available on the host.
+Never copy worktree files into the primary checkout just to make browser
+verification pass. Use this order instead:
+
+1. Run focused Node tests from the worktree.
+2. Run the relevant real-browser regression from the worktree, for example
+   `node --test --test-name-pattern="<targeted test name>" browserBehavior.test.js`.
+   Because that test resolves assets from its own file location, it exercises
+   the worktree files. If browser discovery fails, set the executable explicitly,
+   for example `CHROME_BIN=/absolute/path/to/chromium node --test ...`; a Chromium
+   downloaded by Playwright is valid. If Chromium then fails with a sandbox-only
+   `EPERM` or DevTools pipe reset, rerun the same command with the required host
+   permission. The harness retries Chromium's intermittent `ENOTEMPTY` profile
+   cleanup race; if it still appears, confirm the focused test passes alone and
+   that the same teardown failure reproduces on the base commit before calling it
+   a product regression.
+3. Query live data using the primary checkout's ignored token.
+4. Drive the installed app through Chrome only after confirming the server is
+   available and is actually loading the change. If the server cannot load the
+   worktree, report the installed-app check as unavailable and retain the
+   passing worktree browser regression as separate evidence.
+
 ## Committing
 
 Commit at every step, without waiting to be asked. A step is one coherent

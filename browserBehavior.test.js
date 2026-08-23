@@ -200,7 +200,15 @@ async function runBrowserScenario (scenario) {
         })
       })
     }
-    rmSync(profileDirectory, { recursive: true, force: true })
+    // Chromium can release files in its temporary profile a fraction after the
+    // process exits. Let Node retry that teardown race instead of turning a
+    // passing browser assertion into an intermittent ENOTEMPTY failure.
+    rmSync(profileDirectory, {
+      recursive: true,
+      force: true,
+      maxRetries: 3,
+      retryDelay: 100
+    })
   }
 }
 
@@ -1781,6 +1789,158 @@ test('a row with no band gives the stamp column back to the chore name', async (
   assert.doesNotMatch(result.columns, /^62px /, JSON.stringify(result))
   assert.equal(result.nameLeft, 0, 'nothing stands where the stamp is not')
   assert.ok(result.nameWidth > 150, JSON.stringify(result))
+})
+
+test('Quick Session details mark a chore done only after the second tap', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 760 },
+    body: applicationMarkup,
+    script: `
+      const records = {
+        categories: [],
+        locations: [],
+        tasks: [{
+          _id: 'task-1', name: 'Clean kitchen', status: 'approved_recurring',
+          categoryId: null, locationIds: [], estimatedDuration: 20,
+          scheduledDate: '2026-08-21',
+          schedule: { type: 'periodic', every: 1, unit: 'week' },
+          lastCompletedDate: null
+        }, {
+          _id: 'task-2', name: 'Wash laundry', status: 'approved_recurring',
+          categoryId: null, locationIds: [], estimatedDuration: 15,
+          scheduledDate: '2026-08-22',
+          schedule: { type: 'periodic', every: 1, unit: 'week' },
+          lastCompletedDate: null
+        }]
+      }
+      const writes = []
+      const clone = value => structuredClone(value)
+      window.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async () => ({}),
+        delete: async () => ({}),
+        updateFields: async (collection, id, fields) => {
+          writes.push({ collection, id, fields: clone(fields) })
+          Object.assign(records[collection].find(record => record._id === id), fields)
+          return clone(records[collection].find(record => record._id === id))
+        }
+      }
+
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      const { initSessionView } = await import(applicationUrl + 'sessionView.js')
+      const { sessionPicks } = await import(applicationUrl + 'sessionPicks.js')
+      await categoryLocationStore.initialize()
+      await initTasksView()
+      initSessionView()
+      const poolOrderBefore = [...document.querySelectorAll('[data-pick-id]')]
+        .map(button => button.dataset.pickId)
+
+      document.querySelector('[data-detail-id="task-1"]').click()
+      await Promise.resolve()
+      const headLabels = [...document.querySelectorAll('#bottomSheetHeadAction button')]
+        .map(button => button.textContent)
+      const actionLabels = [...document.querySelectorAll('#bottomSheetActions button')]
+        .map(button => button.textContent)
+      const done = document.querySelector('#bottomSheetHeadAction .done-btn')
+      done?.click()
+      const armedLabel = done?.textContent || null
+      const writesAfterFirstTap = writes.length
+      const sheetOpenAfterFirstTap = !document.getElementById('bottomSheet').hidden
+      done?.click()
+
+      const started = Date.now()
+      while (writes.length === 0 && Date.now() - started < 1500) {
+        await new Promise(resolve => setTimeout(resolve, 20))
+      }
+      await new Promise(resolve => setTimeout(resolve, 300))
+
+      const result = {
+        headLabels,
+        actionLabels,
+        armedLabel,
+        writesAfterFirstTap,
+        sheetOpenAfterFirstTap,
+        writes,
+        picked: sessionPicks.getPickedIds(),
+        task: records.tasks[0],
+        poolOrderBefore,
+        poolOrderAfter: [...document.querySelectorAll('[data-pick-id]')]
+          .map(button => button.dataset.pickId),
+        sheetClosed: document.getElementById('bottomSheet').hidden
+      }
+    `
+  })
+
+  assert.deepEqual(result.headLabels, ['Mark as done', 'Add to session'])
+  assert.deepEqual(result.actionLabels, ['Close'])
+  assert.equal(result.armedLabel, 'Tap again to confirm')
+  assert.equal(result.writesAfterFirstTap, 0)
+  assert.equal(result.sheetOpenAfterFirstTap, true)
+  assert.equal(result.writes.length, 1)
+  assert.equal(result.writes[0].collection, 'tasks')
+  assert.equal(result.writes[0].id, 'task-1')
+  assert.equal(typeof result.writes[0].fields.lastCompletedDate, 'number')
+  assert.match(result.writes[0].fields.scheduledDate, /^\d{4}-\d{2}-\d{2}$/)
+  assert.deepEqual(result.picked, [])
+  assert.deepEqual(result.poolOrderBefore, ['task-1', 'task-2'])
+  assert.deepEqual(result.poolOrderAfter, ['task-2', 'task-1'])
+  assert.equal(result.task.status, 'approved_recurring')
+  assert.equal(result.sheetClosed, true)
+})
+
+test('Quick Session completion confirmation stands down after inspecting the facts', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 760 },
+    body: applicationMarkup,
+    script: `
+      const records = {
+        categories: [], locations: [],
+        tasks: [{
+          _id: 'task-1', name: 'Clean kitchen', status: 'approved_recurring',
+          categoryId: null, locationIds: [], estimatedDuration: 20,
+          scheduledDate: '2026-08-21',
+          schedule: { type: 'periodic', every: 1, unit: 'week' }
+        }]
+      }
+      let writes = 0
+      const clone = value => structuredClone(value)
+      window.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async () => ({}),
+        delete: async () => ({}),
+        updateFields: async () => { writes++; return {} }
+      }
+
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      const { initSessionView } = await import(applicationUrl + 'sessionView.js')
+      await categoryLocationStore.initialize()
+      await initTasksView()
+      initSessionView()
+
+      document.querySelector('[data-detail-id="task-1"]').click()
+      await Promise.resolve()
+      const done = document.querySelector('#bottomSheetHeadAction .done-btn')
+      done.click()
+      const armedLabel = done.textContent
+      document.querySelector('#bottomSheetMessage').click()
+
+      const result = {
+        armedLabel,
+        labelAfterInspecting: done.textContent,
+        pressedAfterInspecting: done.getAttribute('aria-pressed'),
+        writes
+      }
+    `
+  })
+
+  assert.deepEqual(result, {
+    armedLabel: 'Tap again to confirm',
+    labelAfterInspecting: 'Mark as done',
+    pressedAfterInspecting: 'false',
+    writes: 0
+  })
 })
 
 const TODAY_BODY =

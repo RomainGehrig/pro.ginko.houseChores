@@ -1,19 +1,26 @@
 // ABOUTME: Today — the budget drawn as a vessel you fill, and the pool you fill it from.
 // ABOUTME: Proposals stay inside the budget; anything picked by hand is never measured against it.
 
-import { getActiveTasks } from './tasksView.js'
+import { getActiveTasks, markChoreRecentlyDone } from './tasksView.js'
 import { buildBundleProposal } from './bundleLogic.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
 import { selectableReferences } from './categoryLocationLogic.js'
-import { setCurrentSessionAggregate } from './state.js'
+import { setCurrentSessionAggregate, state } from './state.js'
 import { showView, setNavVisible } from './router.js'
 import { startDoing } from './doingView.js'
 import { sessionStore } from './sessionStore.js'
 import { escapeHtml, formatDuration } from './helpers.js'
 import { localDateFromDate } from './scheduleLogic.js'
 import { poolOrder } from './ripenessLogic.js'
-import { openSheet } from './sheet.js'
+import { closeSheetWith, openSheet, sheetBody, sheetHeadAction } from './sheet.js'
 import { sessionPicks } from './sessionPicks.js'
+import {
+  armOrConfirmDone, choreDoneButtonHtml, choreSessionButtonHtml,
+  completionFailureMessage, disarmDone
+} from './chores/choreActions.js'
+import {
+  sessionAddActionLabel, sessionAddLanded, sessionAddNote, sessionAddTarget
+} from './sessionAdd.js'
 import {
   pickedBundle, bundleTotal, bundleTotalLine, bundleFitLine, vesselGeometry,
   todayDateLine
@@ -61,13 +68,30 @@ export function updateBudgetStatus (status, valid) {
   return Boolean(valid)
 }
 
+export function showQuickCompletionResult (status, result) {
+  if (!status) return result?.ok === true
+  if (result?.ok) {
+    status.textContent = ''
+    status.setAttribute('role', 'status')
+    status.removeAttribute?.('data-state')
+    return true
+  }
+
+  const refreshFailed = result?.stage === 'refresh'
+  status.textContent = completionFailureMessage(result)
+  status.setAttribute('role', refreshFailed ? 'status' : 'alert')
+  status.setAttribute('data-state', refreshFailed ? 'info' : 'error')
+  return false
+}
+
 function eligibleTasks () {
   return getActiveTasks().filter(task => Number(task?.estimatedDuration) > 0)
 }
 
 function poolTasks () {
   const inCategory = eligibleTasks().filter(task =>
-    !selectedCategoryId || task.categoryId === selectedCategoryId)
+    (!selectedCategoryId || task.categoryId === selectedCategoryId) &&
+    sessionAddTarget(state.currentSession, task._id) !== 'in-running')
   return poolOrder(inCategory, today())
 }
 
@@ -196,27 +220,97 @@ function handleContextDetail (event) {
   openChoreDetail(chip.dataset.pickId)
 }
 
+export function quickDetailSheetModel (task, categories, day, isPicked, currentSession = null) {
+  const target = sessionAddTarget(currentSession, task._id)
+  return {
+    title: String(task.name ?? ''),
+    bodyHtml: buildChoreDetailHtml(task, categories, day),
+    headerActionHtml: (target === 'in-running' ? '' : choreDoneButtonHtml()) +
+      choreSessionButtonHtml(sessionAddActionLabel(target, isPicked)),
+    actions: [
+      { label: 'Close', value: null, className: 'btn btn-ghost' }
+    ]
+  }
+}
+
+export async function addQuickChoreToSession (task, target, {
+  currentSession = state.currentSession,
+  attachTasks = (...args) => sessionStore.attachTasks(...args),
+  setAggregate = setCurrentSessionAggregate,
+  renderRunning = startDoing,
+  isPicked = id => sessionPicks.isPicked(id),
+  togglePick = id => sessionPicks.toggle(id)
+} = {}) {
+  if (target !== 'running') {
+    if (target === 'in-running') return { target, added: false, aggregate: null }
+    return { target: 'next', added: togglePick(task._id), aggregate: null }
+  }
+
+  if (!currentSession?._id) throw new Error('The session being done is no longer available.')
+  const aggregate = await attachTasks(
+    currentSession._id, [task._id], { whileRunning: true })
+  setAggregate(aggregate)
+
+  if (!sessionAddLanded(aggregate.session, task._id)) {
+    const added = isPicked(task._id) || togglePick(task._id)
+    return { target: 'ended', added, aggregate }
+  }
+
+  await renderRunning(aggregate)
+  return { target: 'running', added: true, aggregate }
+}
+
+function showQuickSessionPlacement (task, placement) {
+  const status = element('sessionStatus')
+  status.textContent = sessionAddNote({
+    name: task.name,
+    target: placement.target,
+    added: placement.added
+  })
+  status.setAttribute('role', 'status')
+  status.setAttribute('data-state', 'info')
+}
+
 async function openChoreDetail (id) {
   cancelHold()
   const task = taskById(id)
   if (!task) return
   const isPicked = sessionPicks.isPicked(id)
+  const target = sessionAddTarget(state.currentSession, id)
   const categories = selectableReferences(categoryLocationStore.getSnapshot().categories)
 
-  const choice = await openSheet({
-    title: String(task.name ?? ''),
-    bodyHtml: buildChoreDetailHtml(task, categories, today()),
-    actions: [
-      { label: 'Close', value: null, className: 'btn btn-ghost' },
-      {
-        label: isPicked ? 'Take out' : 'Add to session',
-        value: 'toggle',
-        className: 'btn btn-primary'
-      }
-    ]
+  const pendingChoice = openSheet(
+    quickDetailSheetModel(task, categories, today(), isPicked, state.currentSession))
+  const head = sheetHeadAction()
+  const done = head?.querySelector('.done-btn')
+  done?.addEventListener('click', () => {
+    if (!armOrConfirmDone(done)) return
+    closeSheetWith('done')
   })
+  sheetBody()?.addEventListener('click', () => disarmDone(done))
+  head?.querySelector('.session-btn')?.addEventListener('click', () => closeSheetWith('session'))
 
-  if (choice === 'toggle') pickChore(id)
+  const choice = await pendingChoice
+
+  if (choice === 'session') {
+    try {
+      const placement = await addQuickChoreToSession(task, target)
+      if (placement.target === 'running') renderToday()
+      showQuickSessionPlacement(task, placement)
+    } catch (error) {
+      const status = element('sessionStatus')
+      status.textContent = 'Could not add that to the session you are doing: ' + error.message
+      status.setAttribute('role', 'alert')
+      status.setAttribute('data-state', 'error')
+    }
+  }
+  if (choice === 'done') {
+    const result = await markChoreRecentlyDone(task)
+    // Removing a pick already repaints through the shared store. A chore that
+    // was only in the pool has no such event, so repaint its new rhythm here.
+    if (result.ok && !isPicked) renderToday()
+    showQuickCompletionResult(element('sessionStatus'), result)
+  }
 }
 
 // Re-rendering the pool replaces the very control that was just pressed, so

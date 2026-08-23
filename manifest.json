@@ -202,6 +202,14 @@
       "Description": "Node tests covering task approval/edit helpers, due-first ledgers, and optimistic archive commit and recovery."
     },
     {
+      "path": "chores/choreActions.js",
+      "Description": "Builds shared chore header actions and keeps completion confirmation and failure feedback consistent."
+    },
+    {
+      "path": "chores/choreActions.test.js",
+      "Description": "Tests shared chore completion confirmation, disarming, and factual failure messages."
+    },
+    {
       "path": "chores/ledgerLogic.js",
       "Description": "Pure view model for the Chores ledger: bands, counts, filters and ripeness."
     },
@@ -547,7 +555,7 @@
         },
         "outcome": {
           "type": "String",
-          "description": "One of: done, cancelled, already_done."
+          "description": "One of: done or cancelled. Historical records may contain already_done."
         },
         "difficultyRating": {
           "type": "String",

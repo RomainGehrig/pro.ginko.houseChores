@@ -26,10 +26,12 @@ import {
   unscheduledListHtml
 } from './chores/listView.js'
 import { categoryPillsHtml, locationPillsHtml, referenceStateSuffix } from './chores/fieldPills.js'
+import { editModalHtml, readEditModal } from './chores/editModal.js'
 import {
-  choreDoneButtonHtml, choreSessionButtonHtml, editModalHtml, readEditModal
-} from './chores/editModal.js'
-import { doneLabel, unscheduledTasks } from './chores/ledgerLogic.js'
+  armOrConfirmDone, choreDoneButtonHtml, choreSessionButtonHtml,
+  completionFailureMessage, disarmDone
+} from './chores/choreActions.js'
+import { unscheduledTasks } from './chores/ledgerLogic.js'
 import { closeSheetWith, openSheet, sheetBody, sheetHeadAction } from './sheet.js'
 import { optimisticArchive, pendingUndo } from './undoToast.js'
 import { runArchiveAction } from './archiveView.js'
@@ -805,18 +807,28 @@ function handleEstimateClick (evt, card) {
   return false
 }
 
-async function markChoreRecentlyDone (task) {
-  const now = Date.now()
+// This is the Chores-screen meaning of "Mark as done": move the chore's rhythm
+// from now without inventing a session or a timed execution. Quick Session
+// details deliberately use the same boundary.
+export async function markChoreRecentlyDone (task, {
+  nowMs = Date.now(),
+  update = updateTask,
+  refresh = refreshTasksView
+} = {}) {
   const fields = taskUpdateForOutcome(task, 'completed', {
-    completedAt: now,
-    completionDate: localDateFromDate(new Date(now))
+    completedAt: nowMs,
+    completionDate: localDateFromDate(new Date(nowMs))
   })
-  try {
-    await updateTask(task._id, fields)
-    await refreshTasksView()
-  } catch {
-    showChoresFailure("Couldn't record that. The chore is unchanged.")
+  const result = await saveTaskWithRefresh(
+    () => update(task._id, fields),
+    refresh
+  )
+  // Once the write has landed, this chore is no longer part of the work the
+  // user plans to do next. A failed repaint must not put persisted work back.
+  if (result.stage !== 'write' && sessionPicks.isPicked(task._id)) {
+    sessionPicks.toggle(task._id)
   }
+  return result
 }
 
 // Putting a chore in a session is not an edit of the chore, so it leaves the
@@ -885,7 +897,13 @@ async function openChoreEditor (id) {
   ledger.openTaskId = null
   const body = sheetBody()
   if (choice === 'session') return addChoreToSession(task, target)
-  if (choice === 'done') return markChoreRecentlyDone(task)
+  if (choice === 'done') {
+    const result = await markChoreRecentlyDone(task)
+    if (!result.ok) {
+      showChoresFailure(completionFailureMessage(result))
+    }
+    return result
+  }
   if (choice === 'archive') {
     return archiveTaskOptimistically(task, {
       replace: replacement => {
@@ -934,11 +952,7 @@ function handleEditorClick (evt) {
   if (done) {
     // Marking a chore done is awkward to take back, so it asks a second time
     // in its own label rather than in a dialogue on top of a dialogue.
-    if (done.getAttribute('aria-pressed') !== 'true') {
-      done.setAttribute('aria-pressed', 'true')
-      done.textContent = doneLabel(true)
-      return
-    }
+    if (!armOrConfirmDone(done)) return
     return closeSheetWith('done')
   }
   if (evt.target.closest('.session-btn')) return closeSheetWith('session')
@@ -947,10 +961,7 @@ function handleEditorClick (evt) {
   // Anything else you touch is you carrying on editing, so the armed
   // confirmation stands down rather than waiting for a stray second press.
   const armed = head?.querySelector('.done-btn')
-  if (armed?.getAttribute('aria-pressed') === 'true') {
-    armed.setAttribute('aria-pressed', 'false')
-    armed.textContent = doneLabel(false)
-  }
+  disarmDone(armed)
 
   if (handleScheduleChoiceClick(evt)) return
   handleEstimateClick(evt, card)
