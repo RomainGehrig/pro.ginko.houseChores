@@ -5,7 +5,7 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 
 import {
-  sessionAddActionLabel, sessionAddNote, sessionAddTarget,
+  sessionAddActionLabel, sessionAddLanded, sessionAddNote, sessionAddTarget,
   sessionFloatModel, sessionMarkLabel, sessionMarks
 } from './sessionAdd.js'
 
@@ -108,4 +108,23 @@ test('a session of chores nobody estimated floats the count, claiming no minutes
   assert.equal(
     sessionFloatModel({ kind: 'picked', count: 2, minutes: 0 }).facts,
     '2 chores · no time set yet')
+})
+
+// Attaching to a session cannot refuse: a session that finished while the sheet
+// was open comes back untouched rather than throwing. So what happened is read
+// off the session that came back, never off the absence of an error.
+test('an add landed only if the session that came back holds the chore', () => {
+  assert.equal(sessionAddLanded(session('active', ['a', 'b']), 'b'), true)
+  assert.equal(sessionAddLanded(session('active', ['a']), 'b'), false)
+  assert.equal(sessionAddLanded(session('completed', ['a']), 'b'), false)
+  assert.equal(sessionAddLanded(null, 'b'), false)
+})
+
+// The session it was going into has finished. The chore still has somewhere to
+// go, so it goes there rather than nowhere, and the line says both halves: what
+// happened to the session, and where the chore is now.
+test('a session that finished says so, and says where the chore went instead', () => {
+  assert.equal(
+    sessionAddNote({ name: 'Water the plants', target: 'ended', added: true }),
+    'That session has finished. Water the plants is in your Quick session.')
 })

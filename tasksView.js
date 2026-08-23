@@ -37,7 +37,7 @@ import { sessionStore } from './sessionStore.js'
 import { sessionPicks } from './sessionPicks.js'
 import { bundleTotal, pickedBundle } from './pickingLogic.js'
 import {
-  sessionAddActionLabel, sessionAddNote, sessionAddTarget,
+  sessionAddActionLabel, sessionAddLanded, sessionAddNote, sessionAddTarget,
   sessionFloatModel, sessionMarks, sessionUnderWay
 } from './sessionAdd.js'
 import { setCurrentSessionAggregate, state } from './state.js'
@@ -824,6 +824,11 @@ async function addChoreToRunningSession (task) {
     const aggregate = await sessionStore.attachTasks(
       state.currentSession._id, [task._id], { whileRunning: true })
     setCurrentSessionAggregate(aggregate)
+    // Attaching cannot refuse: a session that finished while the sheet was open
+    // comes back untouched rather than throwing. Handing that one on to Doing
+    // would carry the user off to a receipt they never asked for, on the
+    // strength of an add that never happened.
+    if (!sessionAddLanded(aggregate.session, task._id)) return addChoreToFinishedSession(task)
     await applySessionAggregate?.(aggregate)
     // The picks store did not move, so nothing else will repaint the list.
     renderLedger()
@@ -831,6 +836,16 @@ async function addChoreToRunningSession (task) {
   } catch (error) {
     showChoresFailure('Could not add that to the session you are doing: ' + error.message)
   }
+}
+
+// The session it was going into has finished. The chore still has somewhere to
+// go, so it goes to the one being put together rather than nowhere at all.
+function addChoreToFinishedSession (task) {
+  if (!sessionPicks.isPicked(task._id)) sessionPicks.toggle(task._id)
+  // The session in hand is a finished one now, so the stamps it was casting
+  // have to go whether or not the pick itself moved.
+  renderLedger()
+  showChoresNote(sessionAddNote({ name: task.name, target: 'ended', added: true }))
 }
 
 // The editor is a dialogue of its own, so an edit can be abandoned without

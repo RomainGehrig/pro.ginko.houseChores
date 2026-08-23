@@ -1350,6 +1350,19 @@ test('a hand-picked chore with no estimate joins a running session all the same'
   assert.deepEqual(aggregate.session.taskBundle, ['t1', 't3'])
 })
 
+// Attaching cannot refuse — it answers with the session as it really is. A
+// session that finished while the sheet was open therefore comes back untouched
+// and unthrown, and the caller has to read what happened off the session.
+test('a session that has finished comes back untouched rather than refusing', async () => {
+  const { store, updates } = runningFixture('completed')
+
+  const aggregate = await store.attachTasks('s1', ['t2'], { whileRunning: true })
+
+  assert.deepEqual(aggregate.session.taskBundle, ['t1'], 'nothing was added')
+  assert.equal(aggregate.session.status, 'completed')
+  assert.deepEqual(updates, [], 'and nothing was written')
+})
+
 test('a hand-picked chore still joins a session waiting at a pause', async () => {
   const { store } = runningFixture('paused')
 
