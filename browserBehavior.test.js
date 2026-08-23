@@ -2020,8 +2020,11 @@ test('a chore taken out stays set aside when Quick session is filled again', asy
 
       document.getElementById('proposeBundleBtn').click()
       const firstFill = names()
-      document.querySelector('#vesselList [data-remove-id="early"]').click()
+      const takeOutControl = document.querySelector('#vesselList [data-remove-id="early"]')
+      takeOutControl.focus()
+      takeOutControl.click()
       const afterTakingOut = names()
+      const focusAfterTakingOut = document.activeElement.dataset.pickId ?? null
       const setAsideClass = document.querySelector('[data-pick-id="early"]')
         .closest('.pool-chip-wrap').classList.contains('is-excluded')
       const setAsideLabel = document.querySelector('[data-pick-id="early"]')
@@ -2037,7 +2040,7 @@ test('a chore taken out stays set aside when Quick session is filled again', asy
       const excludedAfterManualPick = sessionPicks.getExcludedIds()
 
       const result = {
-        firstFill, afterTakingOut, setAsideClass, setAsideLabel,
+        firstFill, afterTakingOut, focusAfterTakingOut, setAsideClass, setAsideLabel,
         afterRefill, statusAfterRefill, excludedAfterRefill,
         afterManualPick, excludedAfterManualPick
       }
@@ -2046,6 +2049,8 @@ test('a chore taken out stays set aside when Quick session is filled again', asy
 
   assert.deepEqual(result.firstFill, ['Water the plants', 'Wipe the sills'])
   assert.deepEqual(result.afterTakingOut, ['Wipe the sills'])
+  assert.equal(result.focusAfterTakingOut, 'early',
+    'focus follows the chore to its still-enabled pool control')
   assert.equal(result.setAsideClass, true)
   assert.match(result.setAsideLabel, /Set aside/)
   assert.deepEqual(result.afterRefill, ['Wipe the sills'])

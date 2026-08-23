@@ -245,7 +245,7 @@ function rememberFocus () {
   if (!key) return null
   const attribute = active.dataset.pickId ? 'data-pick-id'
     : active.dataset.detailId ? 'data-detail-id'
-      : active.dataset.removeId ? 'data-remove-id' : 'data-category-id'
+      : active.dataset.removeId ? 'data-pick-id' : 'data-category-id'
   return attribute + '="' + key + '"'
 }
 
