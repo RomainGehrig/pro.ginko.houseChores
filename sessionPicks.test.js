@@ -51,10 +51,22 @@ test('setting nothing empties the list', () => {
 
 test('subscribers hear about every change, wherever it came from', () => {
   const heard = []
-  sessionPicks.subscribe(ids => heard.push(ids))
+  sessionPicks.subscribe((...args) => heard.push({
+    args,
+    pickedIds: sessionPicks.getPickedIds(),
+    setAsideIds: sessionPicks.getExcludedIds()
+  }))
   sessionPicks.toggle('a')
-  sessionPicks.set(['b'])
-  assert.deepEqual(heard, [['a'], ['b']])
+  sessionPicks.exclude('b')
+  assert.deepEqual(heard, [{
+    args: [],
+    pickedIds: ['a'],
+    setAsideIds: []
+  }, {
+    args: [],
+    pickedIds: ['a'],
+    setAsideIds: ['b']
+  }])
 })
 
 test('a subscriber can stop listening', () => {
@@ -69,7 +81,7 @@ test('a subscriber can stop listening', () => {
 test('one subscriber throwing does not rob the others of the change', () => {
   const heard = []
   sessionPicks.subscribe(() => { throw new Error('no') })
-  sessionPicks.subscribe(ids => heard.push(ids))
+  sessionPicks.subscribe(() => heard.push(sessionPicks.getPickedIds()))
   sessionPicks.toggle('a')
   assert.deepEqual(heard, [['a']])
 })
@@ -94,7 +106,7 @@ test('keeping every pick changes nothing and tells nobody', () => {
 test('a pick dropped with its chore reaches both screens', () => {
   const heard = []
   sessionPicks.set(['a', 'b'])
-  sessionPicks.subscribe(ids => heard.push(ids))
+  sessionPicks.subscribe(() => heard.push(sessionPicks.getPickedIds()))
   sessionPicks.retain(['b'])
   assert.deepEqual(heard, [['b']])
 })
@@ -141,7 +153,7 @@ test('clearing the draft empties picks and exclusions without dropping subscribe
   const heard = []
   sessionPicks.set(['a'])
   sessionPicks.exclude('b')
-  sessionPicks.subscribe(ids => heard.push(ids))
+  sessionPicks.subscribe(() => heard.push(sessionPicks.getPickedIds()))
 
   sessionPicks.clear()
   sessionPicks.toggle('c')

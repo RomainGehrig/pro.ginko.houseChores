@@ -12,15 +12,15 @@ export function prioritizeTasks(tasks) {
 // is the user's statement of intent, and the app only decides what to add
 // around it. Once the budget is spent nothing more is added, but nothing that
 // was there is ever taken away.
-export function buildBundle(tasks, budgetMinutes, categoryFilterId, keptIds = [], excludedIds = []) {
+export function buildBundle(tasks, budgetMinutes, categoryFilterId, keptIds = [], setAsideIds = []) {
   const byId = new Map(tasks.map(task => [task._id, task]))
   const kept = (keptIds || []).map(id => byId.get(id)).filter(Boolean)
   const keptIdSet = new Set(kept.map(task => task._id))
-  const excludedIdSet = new Set(excludedIds || [])
+  const setAsideIdSet = new Set(setAsideIds || [])
 
   const eligible = tasks.filter(t => {
     if (keptIdSet.has(t._id)) return false
-    if (excludedIdSet.has(t._id)) return false
+    if (setAsideIdSet.has(t._id)) return false
     if (categoryFilterId && t.categoryId !== categoryFilterId) return false
     return t.estimatedDuration && t.estimatedDuration > 0
   })
@@ -38,12 +38,12 @@ export function buildBundle(tasks, budgetMinutes, categoryFilterId, keptIds = []
 }
 
 export function buildBundleProposal (
-  tasks, budgetMinutes, categoryFilterId, categories, keptIds = [], excludedIds = []
+  tasks, budgetMinutes, categoryFilterId, categories, keptIds = [], setAsideIds = []
 ) {
   const capturedCategoryId = categoryFilterId || null
   const category = categories.find(item => item._id === capturedCategoryId)
   return {
-    tasks: buildBundle(tasks, budgetMinutes, capturedCategoryId, keptIds, excludedIds)
+    tasks: buildBundle(tasks, budgetMinutes, capturedCategoryId, keptIds, setAsideIds)
       .map(task => ({ ...task })),
     timeBudgetMinutes: budgetMinutes,
     categoryFilterId: capturedCategoryId,

@@ -9,10 +9,9 @@ const copy = () => pickedIds.slice()
 const copyExcluded = () => excludedIds.slice()
 
 function announce () {
-  const ids = copy()
   for (const subscriber of [...subscribers]) {
     // One screen failing to repaint must not keep the change from the other.
-    try { subscriber(ids.slice()) } catch { /* the other subscribers still hear it */ }
+    try { subscriber() } catch { /* the other subscribers still hear it */ }
   }
 }
 
