@@ -149,7 +149,7 @@ export async function refreshTasksView() {
   // the day it is restored. What the server holds is what counts here: an
   // archive still waiting on its undo keeps its pick, to give back with the
   // chore if the undo comes.
-  sessionPicks.retain(fetched.filter(stillOnTheList).map(task => task._id))
+  sessionPicks.retain(fetched.filter(stillOnTheList).map(task => task._id), { refresh: true })
   renderTasks()
 }
 

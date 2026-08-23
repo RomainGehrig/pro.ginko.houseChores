@@ -2008,7 +2008,7 @@ test('a chore taken out stays set aside when Quick session is filled again', asy
       }
 
       const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
-      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      const { initTasksView, refreshTasksView } = await import(applicationUrl + 'tasksView.js')
       const { initSessionView } = await import(applicationUrl + 'sessionView.js')
       const { sessionPicks } = await import(applicationUrl + 'sessionPicks.js')
       await categoryLocationStore.initialize()
@@ -2039,10 +2039,18 @@ test('a chore taken out stays set aside when Quick session is filled again', asy
       const afterManualPick = names()
       const excludedAfterManualPick = sessionPicks.getExcludedIds()
 
+      sessionPicks.exclude('early')
+      records.tasks[0].status = 'archived'
+      await refreshTasksView()
+      const afterArchivedRefresh = {
+        excluded: sessionPicks.getExcludedIds(),
+        stillInPool: Boolean(document.querySelector('[data-pick-id="early"]'))
+      }
+
       const result = {
         firstFill, afterTakingOut, focusAfterTakingOut, setAsideClass, setAsideLabel,
         afterRefill, statusAfterRefill, excludedAfterRefill,
-        afterManualPick, excludedAfterManualPick
+        afterManualPick, excludedAfterManualPick, afterArchivedRefresh
       }
     `
   })
@@ -2058,6 +2066,7 @@ test('a chore taken out stays set aside when Quick session is filled again', asy
   assert.deepEqual(result.excludedAfterRefill, ['early'])
   assert.deepEqual(result.afterManualPick, ['Wipe the sills', 'Water the plants'])
   assert.deepEqual(result.excludedAfterManualPick, [])
+  assert.deepEqual(result.afterArchivedRefresh, { excluded: ['early'], stillInPool: false })
 })
 
 test('chore details can set a task aside and offer it again without picking it', async () => {
