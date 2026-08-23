@@ -2052,6 +2052,100 @@ test('a chore taken out stays set aside when Quick session is filled again', asy
   assert.deepEqual(result.excludedAfterManualPick, [])
 })
 
+test('chore details can set a task aside and offer it again without picking it', async () => {
+  const result = await runBrowserScenario({
+    body: '<main id="app"><section id="view-today" class="view">' +
+      '<span id="budgetHeadline"></span><span id="todayDate"></span>' +
+      '<button id="proposeBundleBtn" type="button">Fill it</button>' +
+      '<button id="startSessionBtn" type="button">Start</button>' +
+      '<input id="customMinutes" type="number">' +
+      '<div id="vesselColumn"><div id="vesselLine"><span id="vesselLineLabel"></span></div>' +
+      '<div id="vesselFill"></div></div>' +
+      '<ol id="vesselList"></ol><p id="vesselIdle"></p>' +
+      '<p id="bundleTotalLine"></p><p id="bundleFitLine"></p>' +
+      '<div id="sessionStatus"></div><div id="doingStatus"></div>' +
+      '<div id="categoryFilter"></div><div id="poolChips"></div>' +
+      '</section>' +
+      '<button id="addTasksBtn"></button><button id="enrichBtn"></button>' +
+      '<span id="enrichStatus"></span><div id="proposedCards"></div>' +
+      '<span id="choresCountLine"></span><div id="choresViews"></div>' +
+      '<div id="choresFilters"><input id="choreSearch"><div id="choreCategoryFilter"></div></div>' +
+      '<div id="activeCards"></div><div id="unscheduledCards"></div>' +
+      '<div id="archivedCards"></div><div id="archiveStatus"></div>' +
+      '<div id="choresStatus"></div>' +
+      '</main>' +
+      '<div id="sheetScrim" hidden></div>' +
+      '<section id="bottomSheet" hidden data-state="closed" role="dialog" aria-modal="true" ' +
+        'aria-labelledby="bottomSheetTitle">' +
+        '<h2 id="bottomSheetTitle"></h2><p id="bottomSheetMessage"></p>' +
+        '<div id="bottomSheetActions"></div>' +
+      '</section>',
+    script: `
+      const records = {
+        categories: [], locations: [],
+        tasks: [{
+          _id: 'early', name: 'Water the plants', status: 'active', categoryId: null,
+          locationIds: [], estimatedDuration: 5, scheduledDate: '2026-08-10',
+          schedule: { type: 'one_off' }
+        }]
+      }
+      const clone = value => structuredClone(value)
+      window.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async () => ({}),
+        updateFields: async () => ({})
+      }
+
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      const { initSessionView } = await import(applicationUrl + 'sessionView.js')
+      const { sessionPicks } = await import(applicationUrl + 'sessionPicks.js')
+      await categoryLocationStore.initialize()
+      await initTasksView()
+      initSessionView()
+
+      const actionLabels = () => [...document.querySelectorAll('#bottomSheetActions button')]
+        .map(button => button.textContent.trim())
+      const choose = async label => {
+        [...document.querySelectorAll('#bottomSheetActions button')]
+          .find(button => button.textContent.trim() === label).click()
+        document.getElementById('bottomSheet').dispatchEvent(
+          new TransitionEvent('transitionend', { propertyName: 'transform', bubbles: true }))
+        await new Promise(resolve => setTimeout(resolve, 0))
+      }
+
+      document.querySelector('[data-detail-id="early"]').click()
+      const initialActions = actionLabels()
+      await choose('Set aside')
+      const afterSetAside = {
+        picked: sessionPicks.getPickedIds(),
+        excluded: sessionPicks.getExcludedIds(),
+        marked: document.querySelector('[data-pick-id="early"]')
+          .closest('.pool-chip-wrap').classList.contains('is-excluded')
+      }
+
+      document.querySelector('[data-detail-id="early"]').click()
+      const excludedActions = actionLabels()
+      await choose('Offer again')
+
+      const result = {
+        initialActions,
+        afterSetAside,
+        excludedActions,
+        afterOfferAgain: {
+          picked: sessionPicks.getPickedIds(),
+          excluded: sessionPicks.getExcludedIds()
+        }
+      }
+    `
+  })
+
+  assert.deepEqual(result.initialActions, ['Close', 'Set aside', 'Add to session'])
+  assert.deepEqual(result.afterSetAside, { picked: [], excluded: ['early'], marked: true })
+  assert.deepEqual(result.excludedActions, ['Close', 'Offer again', 'Add to session'])
+  assert.deepEqual(result.afterOfferAgain, { picked: [], excluded: [] })
+})
+
 test('Today sets its budget and its two controls on one desktop row, the session beside the pool', async () => {
   const result = await runBrowserScenario({
     viewport: { width: 1280, height: 900 },

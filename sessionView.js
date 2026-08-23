@@ -207,22 +207,30 @@ async function openChoreDetail (id) {
   const task = taskById(id)
   if (!task) return
   const isPicked = sessionPicks.isPicked(id)
+  const isExcluded = sessionPicks.isExcluded(id)
   const categories = selectableReferences(categoryLocationStore.getSnapshot().categories)
+
+  const actions = [{ label: 'Close', value: null, className: 'btn btn-ghost' }]
+  if (isPicked) {
+    actions.push({ label: 'Set aside', value: 'exclude', className: 'btn btn-primary' })
+  } else {
+    actions.push({
+      label: isExcluded ? 'Offer again' : 'Set aside',
+      value: isExcluded ? 'include' : 'exclude',
+      className: 'btn btn-secondary'
+    })
+    actions.push({ label: 'Add to session', value: 'toggle', className: 'btn btn-primary' })
+  }
 
   const choice = await openSheet({
     title: String(task.name ?? ''),
     bodyHtml: buildChoreDetailHtml(task, categories, today()),
-    actions: [
-      { label: 'Close', value: null, className: 'btn btn-ghost' },
-      {
-        label: isPicked ? 'Take out' : 'Add to session',
-        value: 'toggle',
-        className: 'btn btn-primary'
-      }
-    ]
+    actions
   })
 
   if (choice === 'toggle') pickChore(id)
+  if (choice === 'exclude') setAsideChore(id)
+  if (choice === 'include') sessionPicks.include(id)
 }
 
 // Re-rendering the pool replaces the very control that was just pressed, so
