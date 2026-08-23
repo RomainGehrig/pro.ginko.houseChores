@@ -103,3 +103,41 @@ test('retaining against nothing empties the list', () => {
   sessionPicks.set(['a', 'b'])
   assert.deepEqual(sessionPicks.retain([]), [])
 })
+
+test('setting a picked chore aside moves it out of the session draft', () => {
+  sessionPicks.set(['a', 'b'])
+
+  assert.equal(sessionPicks.exclude('a'), true)
+  assert.deepEqual(sessionPicks.getPickedIds(), ['b'])
+  assert.deepEqual(sessionPicks.getExcludedIds(), ['a'])
+})
+
+test('manually picking a set-aside chore brings it back', () => {
+  sessionPicks.exclude('a')
+
+  assert.equal(sessionPicks.toggle('a'), true)
+  assert.deepEqual(sessionPicks.getPickedIds(), ['a'])
+  assert.deepEqual(sessionPicks.getExcludedIds(), [])
+})
+
+test('restoring a set-aside chore makes it available without picking it', () => {
+  sessionPicks.exclude('a')
+
+  assert.equal(sessionPicks.include('a'), true)
+  assert.deepEqual(sessionPicks.getPickedIds(), [])
+  assert.deepEqual(sessionPicks.getExcludedIds(), [])
+})
+
+test('clearing the draft empties picks and exclusions without dropping subscribers', () => {
+  const heard = []
+  sessionPicks.set(['a'])
+  sessionPicks.exclude('b')
+  sessionPicks.subscribe(ids => heard.push(ids))
+
+  sessionPicks.clear()
+  sessionPicks.toggle('c')
+
+  assert.deepEqual(sessionPicks.getPickedIds(), ['c'])
+  assert.deepEqual(sessionPicks.getExcludedIds(), [])
+  assert.deepEqual(heard, [[], ['c']])
+})

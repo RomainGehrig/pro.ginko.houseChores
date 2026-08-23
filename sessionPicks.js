@@ -1,10 +1,12 @@
-// ABOUTME: The chores hand-picked for the next session, shared by the pool and the Chores ledger.
-// ABOUTME: Ids only, in the order they were dropped in; subscribers repaint whichever screen is up.
+// ABOUTME: The picked and temporarily set-aside chores for the next Quick session.
+// ABOUTME: Ids only; subscribers repaint the pool and the Chores ledger when either list changes.
 
 const subscribers = new Set()
 let pickedIds = []
+let excludedIds = []
 
 const copy = () => pickedIds.slice()
+const copyExcluded = () => excludedIds.slice()
 
 function announce () {
   const ids = copy()
@@ -26,17 +28,39 @@ function normalize (ids) {
 
 export const sessionPicks = {
   getPickedIds: copy,
+  getExcludedIds: copyExcluded,
 
   isPicked: id => pickedIds.includes(id),
+  isExcluded: id => excludedIds.includes(id),
 
   // Reports where the chore ended up, so a caller can say which way it went
   // without asking again.
   toggle (id) {
-    pickedIds = pickedIds.includes(id)
-      ? pickedIds.filter(item => item !== id)
-      : pickedIds.concat([id])
+    if (pickedIds.includes(id)) {
+      pickedIds = pickedIds.filter(item => item !== id)
+    } else {
+      pickedIds = pickedIds.concat([id])
+      excludedIds = excludedIds.filter(item => item !== id)
+    }
     announce()
     return pickedIds.includes(id)
+  },
+
+  exclude (id) {
+    const value = normalize([id])[0]
+    if (!value) return false
+    pickedIds = pickedIds.filter(item => item !== value)
+    if (!excludedIds.includes(value)) excludedIds = excludedIds.concat([value])
+    announce()
+    return true
+  },
+
+  include (id) {
+    const wasExcluded = excludedIds.includes(id)
+    if (!wasExcluded) return false
+    excludedIds = excludedIds.filter(item => item !== id)
+    announce()
+    return true
   },
 
   // The chores are the list's whole reason to exist. A pick whose chore has
@@ -46,16 +70,26 @@ export const sessionPicks = {
   retain (ids) {
     const here = new Set(Array.isArray(ids) ? ids : [])
     const kept = pickedIds.filter(id => here.has(id))
-    if (kept.length === pickedIds.length) return copy()
+    const keptExcluded = excludedIds.filter(id => here.has(id))
+    if (kept.length === pickedIds.length && keptExcluded.length === excludedIds.length) return copy()
     pickedIds = kept
+    excludedIds = keptExcluded
     announce()
     return copy()
   },
 
   set (ids) {
     pickedIds = normalize(ids)
+    const picked = new Set(pickedIds)
+    excludedIds = excludedIds.filter(id => !picked.has(id))
     announce()
     return copy()
+  },
+
+  clear () {
+    pickedIds = []
+    excludedIds = []
+    announce()
   },
 
   subscribe (subscriber) {
@@ -67,6 +101,7 @@ export const sessionPicks = {
   // empty that does not pretend to be a user action.
   reset () {
     pickedIds = []
+    excludedIds = []
     subscribers.clear()
   }
 }
