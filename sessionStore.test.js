@@ -1082,39 +1082,65 @@ test('refresh still normalizes unfinished legacy sessions', async () => {
   }
 })
 
-test('continuation additions apply an authoritative active session without writes', async () => {
-  for (const { method, argument } of [{
-    method: 'attachTasks', argument: ['t2']
-  }, {
-    method: 'quickAdd', argument: 'New task'
-  }]) {
-    const updates = []
-    let creates = 0
-    const session = {
-      _id: 's1', status: 'active', startTime: 1000, taskBundle: ['t1'],
-      accumulatedActiveMs: 5000, activeStartedAt: 6000, checkpointElapsedMs: 0,
-      pausedAt: null, pendingAddition: null
-    }
-    const store = createSessionStore({
-      now: () => 10000,
-      createId: () => 'fixed-id',
-      getSession: async () => structuredClone(session),
-      listExecutions: async () => [],
-      listTasks: async () => [{ _id: 't1', name: 'Sink' }],
-      createTaskRecord: async () => { creates++ },
-      updateSessionRecord: async (id, fields) => updates.push({ id, fields })
-    })
-
-    const aggregate = await store[method]('s1', argument)
-
-    assert.equal(aggregate.session.status, 'active')
-    assert.deepEqual(aggregate.session.taskBundle, ['t1'])
-    assert.equal(updates.length, 0, `${method} wrote an active session`)
-    assert.equal(creates, 0, `${method} created a task for an active session`)
+test('a searched task joins an active session without changing its clock', async () => {
+  let session = {
+    _id: 's1', status: 'active', startTime: 1000, taskBundle: ['t1'],
+    accumulatedActiveMs: 5000, activeStartedAt: 6000, checkpointElapsedMs: 0,
+    pausedAt: null, pendingAddition: null
   }
+  const tasks = new Map([
+    ['t1', { _id: 't1', name: 'Sink', status: 'active' }],
+    ['t2', { _id: 't2', name: 'Mirror', status: 'active' }]
+  ])
+  const store = createSessionStore({
+    now: () => 10000,
+    getSession: async () => structuredClone(session),
+    listExecutions: async () => [],
+    listTasks: async ids => ids.map(id => tasks.get(id)).filter(Boolean),
+    updateSessionRecord: async (id, fields) => {
+      session = { ...session, ...structuredClone(fields) }
+    }
+  })
+
+  const aggregate = await store.attachTasks('s1', ['t2'])
+
+  assert.deepEqual(aggregate.session.taskBundle, ['t1', 't2'])
+  assert.equal(aggregate.session.status, 'active')
+  assert.equal(aggregate.session.accumulatedActiveMs, 5000)
+  assert.equal(aggregate.session.activeStartedAt, 6000)
 })
 
-test('active pending addition stays untouched until the authoritative session is paused', async () => {
+test('a title-only task joins an active session without changing its clock', async () => {
+  let session = {
+    _id: 's1', status: 'active', startTime: 1000, taskBundle: ['t1'],
+    accumulatedActiveMs: 5000, activeStartedAt: 6000, checkpointElapsedMs: 0,
+    pausedAt: null, pendingAddition: null
+  }
+  const tasks = new Map([['t1', { _id: 't1', name: 'Sink', status: 'active' }]])
+  const store = createSessionStore({
+    now: () => 10000,
+    createId: () => 'fixed-id',
+    getSession: async () => structuredClone(session),
+    listExecutions: async () => [],
+    listTasks: async ids => ids.map(id => tasks.get(id)).filter(Boolean),
+    createTaskRecord: async (title, id) => {
+      tasks.set(id, { _id: id, name: title, status: 'proposed' })
+    },
+    updateSessionRecord: async (id, fields) => {
+      session = { ...session, ...structuredClone(fields) }
+    }
+  })
+
+  const aggregate = await store.quickAdd('s1', 'Wipe the mirror')
+
+  assert.deepEqual(aggregate.session.taskBundle, ['t1', 'quick-s1-fixed-id'])
+  assert.equal(aggregate.session.status, 'active')
+  assert.equal(aggregate.session.accumulatedActiveMs, 5000)
+  assert.equal(aggregate.session.activeStartedAt, 6000)
+  assert.equal(tasks.get('quick-s1-fixed-id').name, 'Wipe the mirror')
+})
+
+test('an active pending addition recovers without waiting for a pause', async () => {
   let session = {
     _id: 's1', status: 'active', startTime: 1000, taskBundle: ['t1'],
     accumulatedActiveMs: 5000, activeStartedAt: 6000, checkpointElapsedMs: 0,
@@ -1144,22 +1170,15 @@ test('active pending addition stays untouched until the authoritative session is
   const active = await store.refresh('s1')
 
   assert.equal(active.session.status, 'active')
-  assert.equal(active.session.pendingAddition.taskId, 'quick-s1-pending')
-  assert.deepEqual(createCalls, [])
-  assert.deepEqual(updates, [])
-
-  session = {
-    ...session, status: 'paused', accumulatedActiveMs: 9000,
-    activeStartedAt: null, pausedAt: 10000
-  }
-  const paused = await store.refresh('s1')
-
   assert.deepEqual(createCalls, [{ title: 'Pending task', id: 'quick-s1-pending' }])
-  assert.deepEqual(paused.session.taskBundle, ['t1', 'quick-s1-pending'])
-  assert.equal(paused.session.pendingAddition, null)
+  assert.deepEqual(active.session.taskBundle, ['t1', 'quick-s1-pending'])
+  assert.equal(active.session.pendingAddition, null)
+  assert.equal(active.session.accumulatedActiveMs, 5000)
+  assert.equal(active.session.activeStartedAt, 6000)
+  assert.equal(updates.length, 2)
 })
 
-test('Quick add rechecks paused authority after staging its recovery marker', async () => {
+test('Quick add completes when the session becomes active after staging its marker', async () => {
   let session = {
     _id: 's1', status: 'paused', startTime: 1000, taskBundle: ['t1'],
     accumulatedActiveMs: 9000, activeStartedAt: null, checkpointElapsedMs: 9000,
@@ -1167,13 +1186,17 @@ test('Quick add rechecks paused authority after staging its recovery marker', as
   }
   const updates = []
   const createCalls = []
+  const tasks = new Map([['t1', { _id: 't1', name: 'Sink' }]])
   const store = createSessionStore({
     now: () => 20000,
     createId: () => 'fixed-id',
     getSession: async () => structuredClone(session),
     listExecutions: async () => [],
-    listTasks: async ids => ids.map(id => ({ _id: id, name: id })),
-    createTaskRecord: async (title, id) => createCalls.push({ title, id }),
+    listTasks: async ids => ids.map(id => tasks.get(id)).filter(Boolean),
+    createTaskRecord: async (title, id) => {
+      createCalls.push({ title, id })
+      tasks.set(id, { _id: id, name: title, status: 'proposed' })
+    },
     updateSessionRecord: async (id, fields) => {
       updates.push({ id, fields: structuredClone(fields) })
       session = { ...session, ...structuredClone(fields) }
@@ -1188,9 +1211,10 @@ test('Quick add rechecks paused authority after staging its recovery marker', as
   const aggregate = await store.quickAdd('s1', 'Pending task')
 
   assert.equal(aggregate.session.status, 'active')
-  assert.equal(aggregate.session.pendingAddition.stage, 'creating')
-  assert.deepEqual(createCalls, [])
-  assert.equal(updates.length, 1)
+  assert.equal(aggregate.session.pendingAddition, null)
+  assert.deepEqual(aggregate.session.taskBundle, ['t1', 'quick-s1-fixed-id'])
+  assert.deepEqual(createCalls, [{ title: 'Pending task', id: 'quick-s1-fixed-id' }])
+  assert.equal(updates.length, 3)
 })
 
 test('all store operations hydrate legacy terminal sessions without writes', async () => {
@@ -1336,7 +1360,7 @@ function runningFixture (status = 'active') {
 test('a hand-picked chore joins a session that is still running', async () => {
   const { store } = runningFixture('active')
 
-  const aggregate = await store.attachTasks('s1', ['t2'], { whileRunning: true })
+  const aggregate = await store.attachTasks('s1', ['t2'])
 
   assert.deepEqual(aggregate.session.taskBundle, ['t1', 't2'])
   assert.equal(aggregate.session.status, 'active')
@@ -1345,7 +1369,7 @@ test('a hand-picked chore joins a session that is still running', async () => {
 test('a hand-picked chore with no estimate joins a running session all the same', async () => {
   const { store } = runningFixture('active')
 
-  const aggregate = await store.attachTasks('s1', ['t3'], { whileRunning: true })
+  const aggregate = await store.attachTasks('s1', ['t3'])
 
   assert.deepEqual(aggregate.session.taskBundle, ['t1', 't3'])
 })
@@ -1356,7 +1380,7 @@ test('a hand-picked chore with no estimate joins a running session all the same'
 test('a session that has finished comes back untouched rather than refusing', async () => {
   const { store, updates } = runningFixture('completed')
 
-  const aggregate = await store.attachTasks('s1', ['t2'], { whileRunning: true })
+  const aggregate = await store.attachTasks('s1', ['t2'])
 
   assert.deepEqual(aggregate.session.taskBundle, ['t1'], 'nothing was added')
   assert.equal(aggregate.session.status, 'completed')
@@ -1366,7 +1390,7 @@ test('a session that has finished comes back untouched rather than refusing', as
 test('a hand-picked chore still joins a session waiting at a pause', async () => {
   const { store } = runningFixture('paused')
 
-  const aggregate = await store.attachTasks('s1', ['t2'], { whileRunning: true })
+  const aggregate = await store.attachTasks('s1', ['t2'])
 
   assert.deepEqual(aggregate.session.taskBundle, ['t1', 't2'])
 })
@@ -1377,7 +1401,7 @@ test('a suggested chore is still only attachable at a pause', async () => {
   const { store, updates } = runningFixture('active')
 
   const aggregate = await store.attachTasks(
-    's1', ['t2'], { suggestionTaskIds: ['t2'], whileRunning: true })
+    's1', ['t2'], { suggestionTaskIds: ['t2'] })
 
   assert.deepEqual(aggregate.session.taskBundle, ['t1'])
   assert.deepEqual(updates, [])
@@ -1400,7 +1424,7 @@ test('a finished session takes nothing more', async () => {
     }
   })
 
-  const aggregate = await store.attachTasks('s1', ['t2'], { whileRunning: true })
+  const aggregate = await store.attachTasks('s1', ['t2'])
 
   assert.deepEqual(aggregate.session.taskBundle, ['t1'])
   assert.deepEqual(updates, [])

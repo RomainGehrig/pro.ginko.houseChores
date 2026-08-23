@@ -832,7 +832,7 @@ async function addChoreToSession (task, target) {
 async function addChoreToRunningSession (task) {
   try {
     const aggregate = await sessionStore.attachTasks(
-      state.currentSession._id, [task._id], { whileRunning: true })
+      state.currentSession._id, [task._id])
     setCurrentSessionAggregate(aggregate)
     // Attaching cannot refuse: a session that finished while the sheet was open
     // comes back untouched rather than throwing. Handing that one on to Doing
