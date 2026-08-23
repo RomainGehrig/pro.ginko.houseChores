@@ -1,4 +1,4 @@
-// ABOUTME: Pure candidate and selection rules for continuing a paused session.
+// ABOUTME: Pure candidate and selection rules for adding to an unfinished session.
 // ABOUTME: Limits suggestions while leaving deliberate search unrestricted.
 
 import { prioritizeTasks } from './bundleLogic.js'

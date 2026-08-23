@@ -58,6 +58,9 @@ const coordinatorHasPendingStage = () =>
   completionCoordinator.hasPendingTaskUpdate() ||
   completionCoordinator.hasPendingSessionUpdate()
 
+const sessionAcceptsAdditions = session =>
+  ['active', 'paused'].includes(session?.status)
+
 export function initDoingView () {
   bindDoingContent()
   if (typeof window !== 'undefined' && boundWindow !== window) {
@@ -108,7 +111,7 @@ export async function refreshDoing ({ allowNavigation = true } = {}) {
 
 async function applyAggregate (aggregate, { allowNavigation = true } = {}) {
   setCurrentSessionAggregate(aggregate)
-  if (aggregate.session.status !== 'paused') {
+  if (!sessionAcceptsAdditions(aggregate.session)) {
     continuationTasks = []
     ambiguousSuggestionIds.clear()
   }
@@ -128,9 +131,9 @@ async function applyAggregate (aggregate, { allowNavigation = true } = {}) {
   }
   setNavVisible('doing', true)
   renderDoing()
-  // Paused is when chores get added, so the panel is the paused state itself
-  // rather than something a second button has to open.
-  if (aggregate.session.status === 'paused') await openContinuePicker()
+  // Adding a chore does not change whether the clock is running, so the panel
+  // belongs to the whole unfinished session rather than only its paused state.
+  await openContinuePicker()
 }
 
 async function loadCurrentReview () {
@@ -260,7 +263,8 @@ async function handleDoingClick (event) {
 }
 
 function handleDoingInput (event) {
-  if (event.target?.id !== 'continueSearchInput' || state.currentSession?.status !== 'paused') return
+  if (event.target?.id !== 'continueSearchInput' ||
+    !sessionAcceptsAdditions(state.currentSession)) return
   const typed = event.target.value
   const results = searchContinuationTasks(
     continuationTasks,
@@ -281,14 +285,14 @@ function handleDoingInput (event) {
 async function handleDoingChange (event) {
   const taskId = event.target?.dataset?.continuationSuggestionId
   if (sessionMutationInFlight || !taskId || !event.target.checked ||
-    state.currentSession?.status !== 'paused') return
+    !sessionAcceptsAdditions(state.currentSession)) return
   const candidate = continuationTasks.find(task => task._id === taskId)
   if (!candidate || state.currentSession.taskBundle?.includes(taskId)) return
   await acceptSuggestedTask(candidate, event.target)
 }
 
 async function openContinuePicker () {
-  if (state.currentSession?.status !== 'paused') return
+  if (!sessionAcceptsAdditions(state.currentSession)) return
   const panel = document.getElementById('doingContinuePanel')
   if (!panel) return
 
@@ -333,7 +337,6 @@ async function reconcileAmbiguousSuggestionSelections (retry) {
     pendingSessionRetry = null
     await applyAggregate(aggregate)
     ambiguousSuggestionIds.clear()
-    if (aggregate.session.status === 'paused') await openContinuePicker()
     return true
   } catch (error) {
     renderSessionMutationFailure(
@@ -357,7 +360,7 @@ async function acceptSuggestedTask (candidate, checkbox) {
       return false
     }
     if (state.currentSession?.taskBundle?.includes(candidate._id)) return true
-    if (state.currentSession?.status !== 'paused') return false
+    if (!sessionAcceptsAdditions(state.currentSession)) return false
   }
   const attached = await runContinuationMutation(
     () => sessionStore.attachTasks(
@@ -709,7 +712,6 @@ async function runContinuationMutation (operation, failureMessage, retry, wasApp
     try {
       reconciled = await sessionStore.refresh(state.currentSession._id, Date.now())
       await applyAggregate(reconciled)
-      if (reconciled.session.status === 'paused') await openContinuePicker()
     } catch {
       reconciled = null
     }
@@ -723,7 +725,6 @@ async function runContinuationMutation (operation, failureMessage, retry, wasApp
   await applyAggregate(aggregate)
   sessionMutationInFlight = false
   setSessionMutationControlsDisabled(false)
-  if (aggregate.session.status === 'paused') await openContinuePicker()
   return true
 }
 

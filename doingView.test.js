@@ -720,7 +720,7 @@ test('stale Conclude applies a resumed authoritative session without a write', a
     assert.equal(persistence.session.status, 'active')
     assert.equal(persistence.session.activeStartedAt, 30000)
     assert.equal(state.currentSession.status, 'active')
-    assert.equal(document.control('doingContinuePanel').hidden, true)
+    assert.equal(document.control('doingContinuePanel').hidden, false)
   })
 })
 
@@ -978,6 +978,55 @@ test('focus refresh does not navigate away from a different active view', async 
     // is proof it never ran and the user was not moved.
     assert.equal(document.control('view-tasks').style.display, 'block')
     assert.notEqual(document.control('view-doing').style.display, '')
+  })
+})
+
+test('the active picker adds chores while the same session clock keeps running', async () => {
+  const original = { ...task('original-task'), name: 'Original task', estimatedDuration: 5 }
+  const suggested = {
+    ...task('suggested-2m'), name: 'Clean sink', estimatedDuration: 2,
+    scheduledDate: '2026-08-01'
+  }
+  const searched = {
+    ...task('searched-30m'), name: 'Clean garage', estimatedDuration: 30,
+    scheduledDate: '2026-07-01'
+  }
+  const session = {
+    _id: 'active-add-session', status: 'active', startTime: 10000,
+    taskBundle: ['original-task'], timeBudgetMinutes: 15,
+    accumulatedActiveMs: 60000, activeStartedAt: 10000,
+    pausedAt: null, checkpointElapsedMs: 0, pendingAddition: null
+  }
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [original, suggested, searched],
+    bundle: [original]
+  }, async ({ document, persistence, clock }) => {
+    assert.equal(document.control('doingContinuePanel').hidden, false)
+    assert.ok(document.control('continueSearchInput'))
+
+    clock.setNow(70000)
+    clock.fireIntervals()
+    assert.equal(document.control('sessionTimerDisplay').textContent, '02:00')
+
+    await document.checkSuggestion('suggested-2m')
+    await document.inputControl('continueSearchInput', 'garage')
+    await document.clickSearchResult('searched-30m')
+    await document.inputControl('continueSearchInput', 'Replace hallway bulb')
+    await document.clickControl('continueQuickAddBtn')
+
+    const quickTaskId = persistence.quickCreates[0]._id
+    assert.deepEqual(persistence.session.taskBundle, [
+      'original-task', 'suggested-2m', 'searched-30m', quickTaskId
+    ])
+    assert.equal(persistence.session.status, 'active')
+    assert.equal(persistence.session.accumulatedActiveMs, 60000)
+    assert.equal(persistence.session.activeStartedAt, 10000)
+
+    clock.setNow(130000)
+    clock.fireIntervals()
+    assert.equal(document.control('sessionTimerDisplay').textContent, '03:00')
   })
 })
 

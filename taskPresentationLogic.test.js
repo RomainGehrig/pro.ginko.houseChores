@@ -105,8 +105,8 @@ test('resolved and unavailable cards remain visible without outcome controls whi
   assert.match(markup, /data-task-id="missing"[\s\S]*Unavailable task/)
   assert.doesNotMatch(markup, /data-outcome=/)
 
-  // Paused is where chores get added, so the panel is the paused state itself
-  // rather than something a second button has to open.
+  // The add panel belongs to the session itself rather than hiding behind a
+  // second control.
   assert.match(markup, /id="doingContinuePanel"[^>]*class="[^"]*doing-add/)
   assert.doesNotMatch(markup, /id="doingContinuePanel"[^>]*hidden/)
   assert.doesNotMatch(markup, /id="openContinueBtn"|id="doingDecisionPanel"/)
