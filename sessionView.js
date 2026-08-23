@@ -170,6 +170,21 @@ function setAsideChore (id) {
   sessionPicks.exclude(id)
 }
 
+export function bundleFillNotice (pickedCount, minutes, hasSetAside = false) {
+  const notice = hasSetAside
+    ? pickedCount
+      ? 'Nothing else was added alongside what you picked. Add anything you like anyway.'
+      : 'Nothing was added for ' + formatDuration(minutes) +
+        '. Try a longer stretch, or pick something anyway.'
+    : pickedCount
+      ? 'Nothing else fits alongside what you picked. Add anything you like anyway.'
+      : 'Nothing here fits ' + formatDuration(minutes) +
+        '. Try a longer stretch, or pick something anyway.'
+  return notice + (hasSetAside
+    ? ' Set-aside chores stay out unless you pick them.'
+    : '')
+}
+
 // The app's own proposal is the one thing that stays inside the budget. It
 // builds around what you already put in rather than replacing it: filling is
 // help with the rest of the session, not a verdict on the part you chose.
@@ -197,12 +212,8 @@ function fillBundle () {
 
   // Nothing was added. Which fact that is depends on whether the user had
   // already put something in — and neither of them is a complaint.
-  status.textContent = excludedIds.length
-    ? 'Set-aside chores stay out unless you pick them.'
-    : before.length
-      ? 'Nothing else fits alongside what you picked. Add anything you like anyway.'
-      : 'Nothing here fits ' + formatDuration(selectedMinutes) +
-        '. Try a longer stretch, or pick something anyway.'
+  status.textContent = bundleFillNotice(
+    before.length, selectedMinutes, excludedIds.length > 0)
   status.setAttribute('data-state', 'info')
 }
 

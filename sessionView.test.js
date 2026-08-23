@@ -54,6 +54,17 @@ test('missing and valid budgets update the inline session status without disabli
   assert.equal(custom.disabled, false)
 })
 
+test('Fill feedback keeps the actual outcome when set-aside chores also exist', () => {
+  assert.equal(sessionView.bundleFillNotice(0, 5, true),
+    'Nothing was added for 5 min. Try a longer stretch, or pick something anyway. ' +
+    'Set-aside chores stay out unless you pick them.')
+  assert.equal(sessionView.bundleFillNotice(2, 30, true),
+    'Nothing else was added alongside what you picked. Add anything you like anyway. ' +
+    'Set-aside chores stay out unless you pick them.')
+  assert.equal(sessionView.bundleFillNotice(0, 5, false),
+    'Nothing here fits 5 min. Try a longer stretch, or pick something anyway.')
+})
+
 test('Quick Session task details put completion beside an explicit set-aside action', () => {
   const model = sessionView.quickDetailSheetModel({
     _id: 'task-1',
