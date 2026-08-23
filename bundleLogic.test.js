@@ -65,6 +65,18 @@ test('the proposal carries the picks through with everything else', () => {
   assert.deepEqual(proposal.tasks.map(task => task._id), ['c', 'a', 'b'])
 })
 
+// Setting a chore aside is advice to the machine, not a veto over the user's
+// own choice. Fill must skip it, while an already-kept pick still leads.
+test('a bundle skips set-aside chores but keeps one the user picked anyway', () => {
+  assert.deepEqual(
+    buildBundle(fillTasks, 10, null, [], ['a']).map(task => task._id),
+    ['b'])
+
+  assert.deepEqual(
+    buildBundle(fillTasks, 10, null, ['a'], ['a', 'b']).map(task => task._id),
+    ['a'])
+})
+
 test('session draft keeps the parameters captured with its proposed bundle', () => {
   let selectedCategoryId = 'c1'
   const proposal = buildBundleProposal(tasks, 5, selectedCategoryId, [

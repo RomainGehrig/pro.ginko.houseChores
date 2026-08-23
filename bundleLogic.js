@@ -12,13 +12,15 @@ export function prioritizeTasks(tasks) {
 // is the user's statement of intent, and the app only decides what to add
 // around it. Once the budget is spent nothing more is added, but nothing that
 // was there is ever taken away.
-export function buildBundle(tasks, budgetMinutes, categoryFilterId, keptIds = []) {
+export function buildBundle(tasks, budgetMinutes, categoryFilterId, keptIds = [], excludedIds = []) {
   const byId = new Map(tasks.map(task => [task._id, task]))
   const kept = (keptIds || []).map(id => byId.get(id)).filter(Boolean)
   const keptIdSet = new Set(kept.map(task => task._id))
+  const excludedIdSet = new Set(excludedIds || [])
 
   const eligible = tasks.filter(t => {
     if (keptIdSet.has(t._id)) return false
+    if (excludedIdSet.has(t._id)) return false
     if (categoryFilterId && t.categoryId !== categoryFilterId) return false
     return t.estimatedDuration && t.estimatedDuration > 0
   })
