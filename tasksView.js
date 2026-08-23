@@ -805,18 +805,18 @@ function handleEstimateClick (evt, card) {
   return false
 }
 
-async function markChoreRecentlyDone (task) {
-  const now = Date.now()
+export async function markChoreRecentlyDone (task, {
+  nowMs = Date.now(),
+  update = updateTask,
+  refresh = refreshTasksView
+} = {}) {
   const fields = taskUpdateForOutcome(task, 'completed', {
-    completedAt: now,
-    completionDate: localDateFromDate(new Date(now))
+    completedAt: nowMs,
+    completionDate: localDateFromDate(new Date(nowMs))
   })
-  try {
-    await updateTask(task._id, fields)
-    await refreshTasksView()
-  } catch {
-    showChoresFailure("Couldn't record that. The chore is unchanged.")
-  }
+  await update(task._id, fields)
+  await refresh()
+  if (sessionPicks.isPicked(task._id)) sessionPicks.toggle(task._id)
 }
 
 // Putting a chore in a session is not an edit of the chore, so it leaves the
@@ -885,7 +885,13 @@ async function openChoreEditor (id) {
   ledger.openTaskId = null
   const body = sheetBody()
   if (choice === 'session') return addChoreToSession(task, target)
-  if (choice === 'done') return markChoreRecentlyDone(task)
+  if (choice === 'done') {
+    try {
+      return await markChoreRecentlyDone(task)
+    } catch {
+      showChoresFailure("Couldn't record that. The chore is unchanged.")
+    }
+  }
   if (choice === 'archive') {
     return archiveTaskOptimistically(task, {
       replace: replacement => {

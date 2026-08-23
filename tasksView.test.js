@@ -8,6 +8,7 @@ import {
   buildTaskReferenceFields
 } from './tasksView.js'
 import { LEGACY_CATEGORY_SELECTION } from './categoryLocationLogic.js'
+import { sessionPicks } from './sessionPicks.js'
 
 test('approval writes the reviewed schedule and clears AI suggestions', () => {
   assert.deepEqual(buildApprovedTaskFields({}, {
@@ -42,6 +43,33 @@ test('active schedule edits preserve the current date unless explicitly changed'
     schedule: { type: 'fixed', pattern: { kind: 'weekdays', weekdays: [1] } },
     status: 'approved_recurring'
   })
+})
+
+test('outside completion advances the chore and removes it from the pending session', async () => {
+  const nowMs = new Date(2026, 7, 23, 12, 0, 0).getTime()
+  const writes = []
+  const order = []
+  sessionPicks.reset()
+  sessionPicks.set(['task-1', 'task-2'])
+
+  await tasksView.markChoreRecentlyDone({
+    _id: 'task-1',
+    status: 'approved_recurring',
+    scheduledDate: '2026-08-20',
+    schedule: { type: 'periodic', every: 1, unit: 'week' }
+  }, {
+    nowMs,
+    update: async (...args) => { order.push('write'); writes.push(args) },
+    refresh: async () => { order.push('refresh') }
+  })
+
+  assert.deepEqual(writes, [[
+    'task-1',
+    { lastCompletedDate: nowMs, scheduledDate: '2026-08-30' }
+  ]])
+  assert.deepEqual(order, ['write', 'refresh'])
+  assert.deepEqual(sessionPicks.getPickedIds(), ['task-2'])
+  sessionPicks.reset()
 })
 
 test('an unrelated task edit omits a legacy-only category while references are unavailable', () => {
