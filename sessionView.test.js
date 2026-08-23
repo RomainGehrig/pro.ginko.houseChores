@@ -56,16 +56,20 @@ test('missing and valid budgets update the inline session status without disabli
 // Once a session is under way the picks are no longer what you are putting
 // together — they are the session. Leaving them behind makes the ledger and the
 // floating readout describe a session that has already happened.
-test('starting a session empties the picks, and a restored one leaves them alone', async () => {
+test('starting a session empties the draft, and a restored one leaves it alone', async () => {
   const { sessionPicks } = await import('./sessionPicks.js')
 
   sessionPicks.set(['a', 'b'])
+  sessionPicks.exclude('c')
   sessionView.clearPicksForStart({ restored: false })
   assert.deepEqual(sessionPicks.getPickedIds(), [])
+  assert.deepEqual(sessionPicks.getExcludedIds(), [])
 
   sessionPicks.set(['a', 'b'])
+  sessionPicks.exclude('c')
   sessionView.clearPicksForStart({ restored: true })
   assert.deepEqual(sessionPicks.getPickedIds(), ['a', 'b'],
     'the new bundle was not started, so it is still the one being put together')
-  sessionPicks.set([])
+  assert.deepEqual(sessionPicks.getExcludedIds(), ['c'])
+  sessionPicks.clear()
 })

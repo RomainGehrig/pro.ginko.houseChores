@@ -48,7 +48,7 @@ export function showSessionStartNotice (startResult, status) {
 // leaves them exactly where they were.
 export function clearPicksForStart (startResult) {
   if (startResult?.restored) return false
-  sessionPicks.set([])
+  sessionPicks.clear()
   return true
 }
 
@@ -104,7 +104,7 @@ function handleTodayClick (event) {
   if (detailButton) return openChoreDetail(detailButton.dataset.detailId)
 
   const removeButton = event.target.closest('[data-remove-id]')
-  if (removeButton) return pickChore(removeButton.dataset.removeId)
+  if (removeButton) return setAsideChore(removeButton.dataset.removeId)
 
   const pickButton = event.target.closest('[data-pick-id]')
   if (pickButton) {
@@ -138,7 +138,12 @@ function pickCategory (categoryId) {
 }
 
 function pickChore (id) {
+  if (sessionPicks.isPicked(id)) return setAsideChore(id)
   sessionPicks.toggle(id)
+}
+
+function setAsideChore (id) {
+  sessionPicks.exclude(id)
 }
 
 // The app's own proposal is the one thing that stays inside the budget. It
@@ -151,7 +156,8 @@ function fillBundle () {
     selectedMinutes,
     selectedCategoryId || null,
     selectableReferences(categoryLocationStore.getSnapshot().categories),
-    before
+    before,
+    sessionPicks.getExcludedIds()
   )
   const after = sessionPicks.set(proposal.tasks.map(task => task._id))
 
@@ -246,6 +252,7 @@ function renderToday () {
   const day = today()
   const pool = poolTasks()
   const pickedIds = sessionPicks.getPickedIds()
+  const excludedIds = sessionPicks.getExcludedIds()
   const bundle = pickedTasks()
   const total = bundleTotal(bundle)
   const geometry = vesselGeometry(total, selectedMinutes)
@@ -282,7 +289,7 @@ function renderToday () {
   element('categoryFilter').innerHTML = buildCategoryTabsHtml(categories, selectedCategoryId)
   const categoryName = categories.find(item => item._id === selectedCategoryId)?.name || ''
   element('poolChips').innerHTML = pool.length
-    ? buildPoolChipsHtml(pool, pickedIds, day)
+    ? buildPoolChipsHtml(pool, pickedIds, day, excludedIds)
     : buildPoolEmptyHtml(categoryName)
 
   restoreFocus(focusKey)

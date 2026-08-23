@@ -1966,6 +1966,92 @@ test('Fill it builds around the chores already picked instead of replacing them'
     'Nothing else fits alongside what you picked. Add anything you like anyway.')
 })
 
+test('a chore taken out stays set aside when Quick session is filled again', async () => {
+  const result = await runBrowserScenario({
+    body: '<main id="app"><section id="view-today" class="view">' +
+      '<span id="budgetHeadline"></span><span id="todayDate"></span>' +
+      '<button id="proposeBundleBtn" type="button">Fill it</button>' +
+      '<button id="startSessionBtn" type="button">Start</button>' +
+      '<input id="customMinutes" type="number">' +
+      '<div id="vesselColumn"><div id="vesselLine"><span id="vesselLineLabel"></span></div>' +
+      '<div id="vesselFill"></div></div>' +
+      '<ol id="vesselList"></ol><p id="vesselIdle"></p>' +
+      '<p id="bundleTotalLine"></p><p id="bundleFitLine"></p>' +
+      '<div id="sessionStatus"></div><div id="doingStatus"></div>' +
+      '<div id="categoryFilter"></div><div id="poolChips"></div>' +
+      '</section>' +
+      '<button id="addTasksBtn"></button><button id="enrichBtn"></button>' +
+      '<span id="enrichStatus"></span><div id="proposedCards"></div>' +
+      '<span id="choresCountLine"></span><div id="choresViews"></div>' +
+      '<div id="choresFilters"><input id="choreSearch"><div id="choreCategoryFilter"></div></div>' +
+      '<div id="activeCards"></div><div id="unscheduledCards"></div>' +
+      '<div id="archivedCards"></div><div id="archiveStatus"></div>' +
+      '<div id="choresStatus"></div>' +
+      '</main>',
+    script: `
+      const records = {
+        categories: [], locations: [],
+        tasks: [
+          { _id: 'early', name: 'Water the plants', status: 'active', categoryId: null,
+            locationIds: [], estimatedDuration: 5, scheduledDate: '2026-08-10',
+            schedule: { type: 'one_off' } },
+          { _id: 'next', name: 'Wipe the sills', status: 'active', categoryId: null,
+            locationIds: [], estimatedDuration: 5, scheduledDate: '2026-08-11',
+            schedule: { type: 'one_off' } }
+        ]
+      }
+      const clone = value => structuredClone(value)
+      window.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async () => ({}),
+        updateFields: async () => ({})
+      }
+
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      const { initSessionView } = await import(applicationUrl + 'sessionView.js')
+      const { sessionPicks } = await import(applicationUrl + 'sessionPicks.js')
+      await categoryLocationStore.initialize()
+      await initTasksView()
+      initSessionView()
+
+      const names = () => [...document.querySelectorAll('#vesselList .vessel-entry-name')]
+        .map(node => node.textContent.trim())
+
+      document.getElementById('proposeBundleBtn').click()
+      const firstFill = names()
+      document.querySelector('#vesselList [data-remove-id="early"]').click()
+      const afterTakingOut = names()
+      const setAsideClass = document.querySelector('[data-pick-id="early"]')
+        .closest('.pool-chip-wrap').classList.contains('is-excluded')
+      const setAsideLabel = document.querySelector('[data-pick-id="early"]')
+        .textContent.replace(/\\s+/g, ' ').trim()
+
+      document.getElementById('proposeBundleBtn').click()
+      const afterRefill = names()
+      const excludedAfterRefill = sessionPicks.getExcludedIds()
+
+      document.querySelector('[data-pick-id="early"]').click()
+      const afterManualPick = names()
+      const excludedAfterManualPick = sessionPicks.getExcludedIds()
+
+      const result = {
+        firstFill, afterTakingOut, setAsideClass, setAsideLabel,
+        afterRefill, excludedAfterRefill, afterManualPick, excludedAfterManualPick
+      }
+    `
+  })
+
+  assert.deepEqual(result.firstFill, ['Water the plants', 'Wipe the sills'])
+  assert.deepEqual(result.afterTakingOut, ['Wipe the sills'])
+  assert.equal(result.setAsideClass, true)
+  assert.match(result.setAsideLabel, /Set aside/)
+  assert.deepEqual(result.afterRefill, ['Wipe the sills'])
+  assert.deepEqual(result.excludedAfterRefill, ['early'])
+  assert.deepEqual(result.afterManualPick, ['Wipe the sills', 'Water the plants'])
+  assert.deepEqual(result.excludedAfterManualPick, [])
+})
+
 test('Today sets its budget and its two controls on one desktop row, the session beside the pool', async () => {
   const result = await runBrowserScenario({
     viewport: { width: 1280, height: 900 },
