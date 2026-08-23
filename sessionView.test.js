@@ -69,6 +69,15 @@ test('Quick Session task details put outside completion beside the session actio
   ])
 })
 
+test('a failed Quick Session completion is stated inline without changing the chore', () => {
+  const status = statusElement()
+
+  assert.equal(sessionView.showQuickCompletionFailure(status), true)
+  assert.equal(status.textContent, "Couldn't record that. The chore is unchanged.")
+  assert.equal(status.getAttribute('role'), 'alert')
+  assert.equal(status.getAttribute('data-state'), 'error')
+})
+
 // Once a session is under way the picks are no longer what you are putting
 // together — they are the session. Leaving them behind makes the ledger and the
 // floating readout describe a session that has already happened.

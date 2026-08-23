@@ -63,6 +63,14 @@ export function updateBudgetStatus (status, valid) {
   return Boolean(valid)
 }
 
+export function showQuickCompletionFailure (status) {
+  if (!status) return false
+  status.textContent = "Couldn't record that. The chore is unchanged."
+  status.setAttribute('role', 'alert')
+  status.setAttribute('data-state', 'error')
+  return true
+}
+
 function eligibleTasks () {
   return getActiveTasks().filter(task => Number(task?.estimatedDuration) > 0)
 }
@@ -233,7 +241,13 @@ async function openChoreDetail (id) {
   const choice = await pendingChoice
 
   if (choice === 'toggle') pickChore(id)
-  if (choice === 'done') await markChoreRecentlyDone(task)
+  if (choice === 'done') {
+    try {
+      await markChoreRecentlyDone(task)
+    } catch {
+      showQuickCompletionFailure(element('sessionStatus'))
+    }
+  }
 }
 
 // Re-rendering the pool replaces the very control that was just pressed, so
