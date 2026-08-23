@@ -1881,6 +1881,60 @@ test('Quick Session details mark a chore done only after the second tap', async 
   assert.equal(result.sheetClosed, true)
 })
 
+test('Quick Session completion confirmation stands down after inspecting the facts', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 760 },
+    body: applicationMarkup,
+    script: `
+      const records = {
+        categories: [], locations: [],
+        tasks: [{
+          _id: 'task-1', name: 'Clean kitchen', status: 'approved_recurring',
+          categoryId: null, locationIds: [], estimatedDuration: 20,
+          scheduledDate: '2026-08-21',
+          schedule: { type: 'periodic', every: 1, unit: 'week' }
+        }]
+      }
+      let writes = 0
+      const clone = value => structuredClone(value)
+      window.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async () => ({}),
+        delete: async () => ({}),
+        updateFields: async () => { writes++; return {} }
+      }
+
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      const { initSessionView } = await import(applicationUrl + 'sessionView.js')
+      await categoryLocationStore.initialize()
+      await initTasksView()
+      initSessionView()
+
+      document.querySelector('[data-detail-id="task-1"]').click()
+      await Promise.resolve()
+      const done = document.querySelector('#bottomSheetHeadAction .done-btn')
+      done.click()
+      const armedLabel = done.textContent
+      document.querySelector('#bottomSheetMessage').click()
+
+      const result = {
+        armedLabel,
+        labelAfterInspecting: done.textContent,
+        pressedAfterInspecting: done.getAttribute('aria-pressed'),
+        writes
+      }
+    `
+  })
+
+  assert.deepEqual(result, {
+    armedLabel: 'Tap again to confirm',
+    labelAfterInspecting: 'Mark as done',
+    pressedAfterInspecting: 'false',
+    writes: 0
+  })
+})
+
 const TODAY_BODY =
   '<main id="app"><section id="view-today" class="view">' +
     '<header class="today-head">' +

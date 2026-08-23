@@ -3,9 +3,8 @@
 
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import {
-  choreDoneButtonHtml, choreSessionButtonHtml, editModalHtml, readEditModal
-} from './editModal.js'
+import { editModalHtml, readEditModal } from './editModal.js'
+import { choreDoneButtonHtml, choreSessionButtonHtml } from './choreActions.js'
 
 const SNAPSHOT = {
   categories: [

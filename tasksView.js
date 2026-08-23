@@ -26,10 +26,12 @@ import {
   unscheduledListHtml
 } from './chores/listView.js'
 import { categoryPillsHtml, locationPillsHtml, referenceStateSuffix } from './chores/fieldPills.js'
+import { editModalHtml, readEditModal } from './chores/editModal.js'
 import {
-  choreDoneButtonHtml, choreSessionButtonHtml, editModalHtml, readEditModal
-} from './chores/editModal.js'
-import { doneLabel, unscheduledTasks } from './chores/ledgerLogic.js'
+  armOrConfirmDone, choreDoneButtonHtml, choreSessionButtonHtml,
+  completionFailureMessage, disarmDone
+} from './chores/choreActions.js'
+import { unscheduledTasks } from './chores/ledgerLogic.js'
 import { closeSheetWith, openSheet, sheetBody, sheetHeadAction } from './sheet.js'
 import { optimisticArchive, pendingUndo } from './undoToast.js'
 import { runArchiveAction } from './archiveView.js'
@@ -895,9 +897,7 @@ async function openChoreEditor (id) {
   if (choice === 'done') {
     const result = await markChoreRecentlyDone(task)
     if (!result.ok) {
-      showChoresFailure(result.stage === 'refresh'
-        ? "Recorded, but couldn't refresh the chores."
-        : "Couldn't record that. The chore is unchanged.")
+      showChoresFailure(completionFailureMessage(result))
     }
     return result
   }
@@ -949,11 +949,7 @@ function handleEditorClick (evt) {
   if (done) {
     // Marking a chore done is awkward to take back, so it asks a second time
     // in its own label rather than in a dialogue on top of a dialogue.
-    if (done.getAttribute('aria-pressed') !== 'true') {
-      done.setAttribute('aria-pressed', 'true')
-      done.textContent = doneLabel(true)
-      return
-    }
+    if (!armOrConfirmDone(done)) return
     return closeSheetWith('done')
   }
   if (evt.target.closest('.session-btn')) return closeSheetWith('session')
@@ -962,10 +958,7 @@ function handleEditorClick (evt) {
   // Anything else you touch is you carrying on editing, so the armed
   // confirmation stands down rather than waiting for a stray second press.
   const armed = head?.querySelector('.done-btn')
-  if (armed?.getAttribute('aria-pressed') === 'true') {
-    armed.setAttribute('aria-pressed', 'false')
-    armed.textContent = doneLabel(false)
-  }
+  disarmDone(armed)
 
   if (handleScheduleChoiceClick(evt)) return
   handleEstimateClick(evt, card)
