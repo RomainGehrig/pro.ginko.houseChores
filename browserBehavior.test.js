@@ -3362,10 +3362,11 @@ test('adding a chore from the ledger lands in the session the pool is filling', 
   assert.deepEqual(result.editStaysTwoAnswers, ['Cancel', 'Save'],
     'the edit keeps its two answers; the session control is not one of them')
   assert.deepEqual(result.afterTakingOut, [])
-  assert.deepEqual(result.excludedAfterTakingOut, ['task-active'])
-  assert.deepEqual(result.afterLedgerRefill, [],
-    'Fill does not immediately return a chore taken out from the ledger')
-  assert.deepEqual(result.withUnestimated, ['task-no-estimate'])
+  assert.deepEqual(result.excludedAfterTakingOut, [],
+    'the ledger action only takes out; set-aside is an explicit Quick-session choice')
+  assert.deepEqual(result.afterLedgerRefill, ['task-active'],
+    'a plain ledger removal leaves the chore available to Fill it')
+  assert.deepEqual(result.withUnestimated, ['task-active', 'task-no-estimate'])
   assert.equal(result.noteIsNeutral, true, 'a chore going into a session is not a failure')
   assert.equal(result.headFits, true, 'the title-row controls stay inside the sheet on a phone')
   // On a phone the pair wraps under the title rather than squeezing it: two rows
