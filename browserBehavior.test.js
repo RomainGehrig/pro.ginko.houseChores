@@ -3205,3 +3205,119 @@ test('a chore added to a session that has just finished goes to the next one ins
   assert.equal(result.floatLabel, 'Quick session')
   assert.equal(result.sheetClosed, true)
 })
+
+// A chore can be put in a session before anyone has estimated it. The vessel
+// draws time, and those chores contribute none — but they are in the session,
+// and a session you cannot see the contents of is a session that lost them.
+test('a vessel holding only unestimated chores still shows what is in it', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 760 },
+    body: '<main id="app"><section id="view-today" class="view">' +
+      '<span id="budgetHeadline"></span><span id="todayDate"></span>' +
+      '<button id="proposeBundleBtn" type="button">Fill it</button>' +
+      '<button id="startSessionBtn" type="button">Start</button>' +
+      '<input id="customMinutes" type="number">' +
+      '<div class="vessel">' +
+        '<div id="vesselColumn" class="vessel-column">' +
+          '<div id="vesselLine" class="vessel-line"><span id="vesselLineLabel"></span></div>' +
+          '<div id="vesselFill" class="vessel-fill"></div>' +
+        '</div>' +
+        '<aside class="vessel-side"><ol id="vesselList" class="vessel-list"></ol>' +
+        '<p id="vesselIdle" class="vessel-idle" hidden>Tap a chore below.</p></aside>' +
+      '</div>' +
+      '<p id="bundleTotalLine"></p><p id="bundleFitLine"></p>' +
+      '<div id="sessionStatus"></div><div id="doingStatus"></div>' +
+      '<div id="categoryFilter"></div><div id="poolChips"></div>' +
+      '</section>' +
+      '<button id="addTasksBtn"></button><button id="enrichBtn"></button>' +
+      '<span id="enrichStatus"></span><div id="proposedCards"></div>' +
+      '<span id="choresCountLine"></span><div id="choresViews"></div>' +
+      '<div id="choresFilters"><input id="choreSearch"><div id="choreCategoryFilter"></div></div>' +
+      '<div id="activeCards"></div><div id="unscheduledCards"></div>' +
+      '<div id="archivedCards"></div><div id="archiveStatus"></div>' +
+      '<div id="choresStatus"></div>' +
+      '</main>',
+    script: `
+      const records = {
+        categories: [], locations: [],
+        tasks: [
+          { _id: 'bare-one', name: 'Sort the post', status: 'active', categoryId: null,
+            locationIds: [], estimatedDuration: null, scheduledDate: null, schedule: null },
+          { _id: 'bare-two', name: 'Ring the plumber', status: 'active', categoryId: null,
+            locationIds: [], estimatedDuration: null, scheduledDate: null, schedule: null },
+          { _id: 'timed', name: 'Descale the machine', status: 'active', categoryId: null,
+            locationIds: [], estimatedDuration: 20, scheduledDate: '2026-08-25',
+            schedule: { type: 'one_off' } }
+        ]
+      }
+      const clone = value => structuredClone(value)
+      window.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async () => ({}),
+        updateFields: async () => ({})
+      }
+
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      const { initSessionView } = await import(applicationUrl + 'sessionView.js')
+      const { sessionPicks } = await import(applicationUrl + 'sessionPicks.js')
+      await categoryLocationStore.initialize()
+      await initTasksView()
+      initSessionView()
+
+      // The fill animates into its new height, so a measurement taken mid-flight
+      // reads the animation rather than the rule under test.
+      const settled = document.createElement('style')
+      settled.textContent = '.vessel-fill { transition: none !important }'
+      document.head.appendChild(settled)
+
+      const measure = () => {
+        const fill = document.getElementById('vesselFill')
+        return {
+          fill: Math.round(fill.getBoundingClientRect().height),
+          blocks: [...fill.querySelectorAll('.vessel-block')]
+            .map(block => Math.round(block.getBoundingClientRect().height))
+        }
+      }
+
+      // Only chores nobody has estimated: no minutes at all behind the session.
+      sessionPicks.set(['bare-one', 'bare-two'])
+      await new Promise(resolve => setTimeout(resolve, 30))
+      const bare = measure()
+      const bareNames = [...document.querySelectorAll('#vesselList .vessel-entry-name')]
+        .map(node => node.textContent.trim())
+      const bareIdleHidden = document.getElementById('vesselIdle').hidden
+
+      // With an estimate in the mix the column goes back to drawing time: the
+      // twenty-minute chore owns most of a thirty-minute vessel.
+      sessionPicks.set(['bare-one', 'timed'])
+      await new Promise(resolve => setTimeout(resolve, 30))
+      const mixed = measure()
+
+      // Nothing picked is nothing drawn, and the vessel says so in words.
+      sessionPicks.set([])
+      await new Promise(resolve => setTimeout(resolve, 30))
+      const empty = measure()
+
+      const result = {
+        bare, bareNames, bareIdleHidden, mixed, empty,
+        emptyIdleShown: !document.getElementById('vesselIdle').hidden
+      }
+    `
+  })
+
+  assert.ok(result.bare.fill > 0,
+    'a vessel with chores in it drew nothing: ' + JSON.stringify(result.bare))
+  assert.equal(result.bare.blocks.length, 2)
+  assert.ok(result.bare.blocks.every(height => height >= 24),
+    'blocks too small to read: ' + JSON.stringify(result.bare))
+  assert.deepEqual(result.bareNames, ['Sort the post', 'Ring the plumber'])
+  assert.equal(result.bareIdleHidden, true, 'there is something in it, so it is not idle')
+
+  assert.ok(result.mixed.fill > result.bare.fill,
+    'an estimate in the bundle must still make the fill taller: ' + JSON.stringify(result.mixed))
+  assert.ok(result.mixed.blocks.every(height => height >= 24), JSON.stringify(result.mixed))
+
+  assert.equal(result.empty.fill, 0, 'nothing in the session draws nothing')
+  assert.equal(result.emptyIdleShown, true)
+})

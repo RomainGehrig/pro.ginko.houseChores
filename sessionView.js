@@ -263,6 +263,9 @@ function renderToday () {
   const column = element('vesselColumn')
   column.style.setProperty('--vessel-fill', String(geometry.fillFraction))
   column.style.setProperty('--vessel-line', String(geometry.lineFraction))
+  // Time is not the only thing the column has to draw. A bundle of chores
+  // nobody has estimated is worth no minutes and is still a session.
+  column.style.setProperty('--vessel-blocks', String(bundle.length))
   element('vesselFill').innerHTML = buildVesselFillHtml(bundle, day)
   const line = element('vesselLine')
   line.hidden = !selectedMinutes || selectedMinutes <= 0
