@@ -7,6 +7,8 @@ import { buildChoreNoteHtml, resolveTaskCategoryName } from './taskPresentationL
 import { scheduleSummary } from './scheduleLogic.js'
 
 const minutesOf = task => Number(task?.estimatedDuration) || 0
+const setAsideLabel = task =>
+  'Set ' + escapeHtml(String(task?.name ?? '')) + ' aside for this Quick session'
 
 // A chore can be picked before anyone has estimated it, and it is in the session
 // all the same. It gets the smallest share the column can draw rather than none,
@@ -20,7 +22,7 @@ export function buildVesselFillHtml (bundle, today) {
     const shade = ripenessColor(ripeness(task, today))
     return '<button type="button" class="vessel-block" data-remove-id="' +
       escapeHtml(task._id) + '" style="flex:' + blockShare(task) + ';background:' + shade + '"' +
-      ' aria-label="Take ' + escapeHtml(String(task?.name ?? '')) + ' out of the session">' +
+      ' aria-label="' + setAsideLabel(task) + '">' +
       '<span class="vessel-block-minutes">' +
       formatFactHtml(formatDuration(task?.estimatedDuration)) + '</span>' +
       '<span class="vessel-block-name">' + escapeHtml(String(task?.name ?? '')) + '</span>' +
@@ -31,7 +33,8 @@ export function buildVesselFillHtml (bundle, today) {
 export function buildVesselListHtml (bundle, today) {
   return (bundle || []).map(task =>
     '<li class="vessel-entry rise">' +
-    '<button type="button" class="vessel-entry-btn" data-remove-id="' + escapeHtml(task._id) + '">' +
+    '<button type="button" class="vessel-entry-btn" data-remove-id="' + escapeHtml(task._id) +
+    '" aria-label="' + setAsideLabel(task) + '">' +
     '<span class="vessel-entry-name display">' + escapeHtml(String(task?.name ?? '')) + '</span>' +
     '<span class="vessel-entry-note muted">' + buildChoreNoteHtml(task, today) + '</span>' +
     '</button></li>'

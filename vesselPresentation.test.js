@@ -31,10 +31,11 @@ test('a vessel block is coloured on the ripeness ramp, not a fixed fill', () => 
   assert.match(markup, /background:color-mix\(in srgb, var\(--ripe-warm\) \d+%, var\(--ripe-cold\)\)/)
 })
 
-test('a vessel block is the control that takes a chore back out', () => {
+test('a vessel block says that taking a chore out sets it aside', () => {
   const markup = buildVesselFillHtml([chore()], TODAY)
   assert.match(markup, /data-remove-id="t1"/)
-  assert.match(markup, /aria-label="Take Empty the dishwasher out of the session"/)
+  assert.match(markup,
+    /aria-label="Set Empty the dishwasher aside for this Quick session"/)
 })
 
 test('vessel markup escapes a chore name that looks like markup', () => {
@@ -48,6 +49,8 @@ test('the vessel list names each chore with the fact behind it', () => {
   assert.match(markup, /Empty the dishwasher/)
   assert.match(markup, /last done/)
   assert.match(markup, /data-remove-id="t1"/)
+  assert.match(markup,
+    /aria-label="Set Empty the dishwasher aside for this Quick session"/)
 })
 
 test('an empty bundle draws no blocks and no entries', () => {
