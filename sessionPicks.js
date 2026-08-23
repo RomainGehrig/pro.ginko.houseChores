@@ -70,10 +70,8 @@ export const sessionPicks = {
   retain (ids) {
     const here = new Set(Array.isArray(ids) ? ids : [])
     const kept = pickedIds.filter(id => here.has(id))
-    const keptExcluded = excludedIds.filter(id => here.has(id))
-    if (kept.length === pickedIds.length && keptExcluded.length === excludedIds.length) return copy()
+    if (kept.length === pickedIds.length) return copy()
     pickedIds = kept
-    excludedIds = keptExcluded
     announce()
     return copy()
   },

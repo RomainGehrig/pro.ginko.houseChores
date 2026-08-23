@@ -104,6 +104,15 @@ test('retaining against nothing empties the list', () => {
   assert.deepEqual(sessionPicks.retain([]), [])
 })
 
+test('task-list retention does not shorten a set-aside choice', () => {
+  sessionPicks.set(['a', 'b'])
+  sessionPicks.exclude('a')
+
+  assert.deepEqual(sessionPicks.retain([]), [])
+  assert.deepEqual(sessionPicks.getExcludedIds(), ['a'],
+    'the exclusion lasts for the Quick-session draft, not for one task refresh')
+})
+
 test('setting a picked chore aside moves it out of the session draft', () => {
   sessionPicks.set(['a', 'b'])
 
