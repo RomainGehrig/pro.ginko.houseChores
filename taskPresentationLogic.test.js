@@ -35,7 +35,7 @@ test('uses neutral no-category copy for unavailable AI enrichment', () => {
   })
 })
 
-test('doing markup renders all unresolved task actions and escapes names', () => {
+test('doing markup offers only in-session outcomes and escapes names', () => {
   const markup = buildDoingSessionHtml({
     status: 'active', timeBudgetMinutes: 15
   }, [
@@ -46,7 +46,7 @@ test('doing markup renders all unresolved task actions and escapes names', () =>
   assert.match(markup, /data-task-id="t1"/)
   assert.match(markup, /data-task-id="t2"/)
   assert.equal((markup.match(/data-outcome="done"/g) || []).length, 2)
-  assert.equal((markup.match(/data-outcome="already_done"/g) || []).length, 2)
+  assert.equal((markup.match(/data-outcome="already_done"/g) || []).length, 0)
   assert.equal((markup.match(/data-outcome="cancelled"/g) || []).length, 2)
   assert.match(markup, /&lt;img src=x onerror=alert\(<span class="fig">1<\/span>\)&gt;/)
   assert.doesNotMatch(markup, /<img/)
@@ -66,7 +66,7 @@ test('active unavailable cards are Cancel-only while proposed Quick-add cards st
   assert.match(archivedCard, /data-outcome="cancelled"/)
   assert.doesNotMatch(archivedCard, /data-outcome="done"|data-outcome="already_done"/)
   assert.match(quickCard, /data-outcome="done"/)
-  assert.match(quickCard, /data-outcome="already_done"/)
+  assert.doesNotMatch(quickCard, /data-outcome="already_done"/)
   assert.match(quickCard, /data-outcome="cancelled"/)
 })
 
