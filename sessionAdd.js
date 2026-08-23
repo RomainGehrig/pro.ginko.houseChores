@@ -21,6 +21,13 @@ export function sessionAddTarget (session, taskId) {
   return (session.taskBundle || []).includes(taskId) ? 'in-running' : 'running'
 }
 
+// Attaching to a session cannot refuse — it answers with the session as it
+// really is. One that finished while the sheet was open therefore comes back
+// untouched and unthrown, so what happened is read off the session that came
+// back rather than off the absence of an error.
+export const sessionAddLanded = (session, taskId) =>
+  (session?.taskBundle || []).includes(taskId)
+
 // A chore already in the session under way gets no action: there is no taking
 // one back out mid-session, and a control that would only refuse is worse than
 // no control at all.
@@ -35,6 +42,12 @@ export function sessionAddActionLabel (target, isPicked) {
 export function sessionAddNote ({ name, target, added }) {
   const chore = String(name ?? '')
   if (target === 'running') return chore + ' is in the session you are doing.'
+  // The session it was sent to had already finished. Naming only where the
+  // chore ended up would leave the user to work out for themselves why it is
+  // not where they put it.
+  if (target === 'ended') {
+    return 'That session has finished. ' + chore + ' is in your Quick session.'
+  }
   return chore + (added ? ' is in your Quick session.' : ' is out of your Quick session.')
 }
 

@@ -3098,3 +3098,110 @@ test('the ledger stamps what is in a session and floats what the session holds',
     'out of the session the unscheduled row gives the stamp column back to its name')
   assert.equal(result.noJudgement, true)
 })
+
+// Attaching cannot refuse, so a session that finished while the sheet was open
+// answers with itself, untouched. Reporting that as a successful add is a lie,
+// and handing the finished session to Doing carries the user off the screen
+// they were working on. The chore still has somewhere to go.
+test('a chore added to a session that has just finished goes to the next one instead', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 760 },
+    body: '<button id="addTasksBtn"></button><button id="enrichBtn"></button>' +
+      '<span id="enrichStatus"></span><div id="proposedCards"></div>' +
+      '<span id="choresCountLine"></span><div id="choresViews"></div>' +
+      '<div id="choresFilters"><input id="choreSearch"><div id="choreCategoryFilter"></div></div>' +
+      '<div id="activeCards"></div><div id="unscheduledCards"></div>' +
+      '<div id="archivedCards"></div><div id="archiveStatus"></div>' +
+      '<div id="choresStatus" class="inline-status"></div>' +
+      '<a id="sessionFloat" hidden><span id="sessionFloatLabel"></span>' +
+        '<span id="sessionFloatFacts"></span></a>' +
+      '<div id="sheetScrim" hidden></div>' +
+      '<section id="bottomSheet" hidden role="dialog" aria-modal="true" aria-labelledby="bottomSheetTitle">' +
+        '<div id="bottomSheetHead"><h2 id="bottomSheetTitle"></h2>' +
+        '<div id="bottomSheetHeadAction"></div></div>' +
+        '<p id="bottomSheetMessage"></p><div id="bottomSheetActions"></div>' +
+      '</section>',
+    script: `
+      const records = {
+        categories: [],
+        locations: [],
+        taskExecutions: [],
+        // The server's copy: this session ended while the ledger was open.
+        sessions: [{
+          _id: 's1', status: 'completed', startTime: 1000, endTime: 301000,
+          taskBundle: ['task-inside'], timeBudgetMinutes: 30,
+          accumulatedActiveMs: 300000, activeStartedAt: null, checkpointElapsedMs: 300000
+        }],
+        tasks: [{
+          _id: 'task-inside', name: 'Clean kitchen', status: 'approved_recurring',
+          categoryId: null, locationIds: [], estimatedDuration: 20,
+          scheduledDate: '2026-08-21', schedule: { type: 'periodic', every: 1, unit: 'week' },
+          lastCompletedDate: null
+        }, {
+          _id: 'task-outside', name: 'Sort the post', status: 'active',
+          categoryId: null, locationIds: [], estimatedDuration: 5,
+          scheduledDate: '2026-08-21', schedule: { type: 'one_off' },
+          lastCompletedDate: null
+        }]
+      }
+      const clone = value => structuredClone(value)
+      window.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async () => ({}),
+        updateFields: async () => ({})
+      }
+
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      const { sessionPicks } = await import(applicationUrl + 'sessionPicks.js')
+      const { setCurrentSessionAggregate } = await import(applicationUrl + 'state.js')
+
+      // Whatever Doing would do with the aggregate, it must not be reached: the
+      // session did not take the chore, so there is nothing to hand over.
+      const handedToDoing = []
+      await categoryLocationStore.initialize()
+      await initTasksView({
+        onSessionAggregateChange: aggregate => { handedToDoing.push(aggregate) }
+      })
+
+      // The client still believes the session is running, which is exactly the
+      // state that makes the title row offer to add to it.
+      setCurrentSessionAggregate({
+        session: { _id: 's1', status: 'active', taskBundle: ['task-inside'] },
+        bundle: [records.tasks[0]],
+        executions: []
+      })
+
+      document.querySelector('[data-id="task-outside"] .ledger-row-summary').click()
+      await Promise.resolve()
+      const offered = [...document.querySelectorAll('#bottomSheetHeadAction button')]
+        .map(button => button.textContent)
+      document.querySelector('#bottomSheetHeadAction .session-btn').click()
+      await new Promise(resolve => setTimeout(resolve, 120))
+
+      const result = {
+        offered,
+        handedToDoing: handedToDoing.length,
+        note: document.getElementById('choresStatus').textContent,
+        noteIsNeutral: !document.getElementById('choresStatus').hasAttribute('data-state'),
+        picked: sessionPicks.getPickedIds(),
+        stamp: document.querySelector('[data-id="task-outside"]').dataset.session,
+        // The session that ended stops claiming the chores it held.
+        insideStamp: document.querySelector('[data-id="task-inside"]').dataset.session ?? null,
+        floatLabel: document.getElementById('sessionFloatLabel').textContent,
+        sheetClosed: document.getElementById('bottomSheet').hidden
+      }
+    `
+  })
+
+  assert.deepEqual(result.offered, ['Mark as done', 'Add to session'])
+  assert.equal(result.handedToDoing, 0,
+    'a session that took nothing is never handed to Doing, which would leave the screen')
+  assert.equal(result.note, 'That session has finished. Sort the post is in your Quick session.')
+  assert.equal(result.noteIsNeutral, true, 'a session ending is not the user failing')
+  assert.deepEqual(result.picked, ['task-outside'], 'the chore still went somewhere')
+  assert.equal(result.stamp, 'picked')
+  assert.equal(result.insideStamp, null, 'the finished session stops claiming what it held')
+  assert.equal(result.floatLabel, 'Quick session')
+  assert.equal(result.sheetClosed, true)
+})
