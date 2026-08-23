@@ -53,6 +53,22 @@ test('missing and valid budgets update the inline session status without disabli
   assert.equal(custom.disabled, false)
 })
 
+test('Quick Session task details put outside completion beside the session action', () => {
+  const model = sessionView.quickDetailSheetModel({
+    _id: 'task-1',
+    name: 'Clean kitchen',
+    estimatedDuration: 20,
+    scheduledDate: '2026-08-21',
+    schedule: { type: 'periodic', every: 1, unit: 'week' }
+  }, [], '2026-08-23', true)
+
+  assert.match(model.headerActionHtml, /class="btn done-btn"[^>]*>Mark as done</)
+  assert.match(model.headerActionHtml, /class="btn btn-quiet session-btn"[^>]*>Take out</)
+  assert.deepEqual(model.actions, [
+    { label: 'Close', value: null, className: 'btn btn-ghost' }
+  ])
+})
+
 // Once a session is under way the picks are no longer what you are putting
 // together — they are the session. Leaving them behind makes the ledger and the
 // floating readout describe a session that has already happened.

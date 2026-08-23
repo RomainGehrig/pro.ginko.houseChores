@@ -1,7 +1,7 @@
 // ABOUTME: Today — the budget drawn as a vessel you fill, and the pool you fill it from.
 // ABOUTME: Proposals stay inside the budget; anything picked by hand is never measured against it.
 
-import { getActiveTasks } from './tasksView.js'
+import { getActiveTasks, markChoreRecentlyDone } from './tasksView.js'
 import { buildBundleProposal } from './bundleLogic.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
 import { selectableReferences } from './categoryLocationLogic.js'
@@ -12,8 +12,10 @@ import { sessionStore } from './sessionStore.js'
 import { escapeHtml, formatDuration } from './helpers.js'
 import { localDateFromDate } from './scheduleLogic.js'
 import { poolOrder } from './ripenessLogic.js'
-import { openSheet } from './sheet.js'
+import { closeSheetWith, openSheet, sheetHeadAction } from './sheet.js'
 import { sessionPicks } from './sessionPicks.js'
+import { choreDoneButtonHtml, choreSessionButtonHtml } from './chores/editModal.js'
+import { doneLabel } from './chores/ledgerLogic.js'
 import {
   pickedBundle, bundleTotal, bundleTotalLine, bundleFitLine, vesselGeometry,
   todayDateLine
@@ -196,6 +198,18 @@ function handleContextDetail (event) {
   openChoreDetail(chip.dataset.pickId)
 }
 
+export function quickDetailSheetModel (task, categories, day, isPicked) {
+  return {
+    title: String(task.name ?? ''),
+    bodyHtml: buildChoreDetailHtml(task, categories, day),
+    headerActionHtml: choreDoneButtonHtml() +
+      choreSessionButtonHtml(isPicked ? 'Take out' : 'Add to session'),
+    actions: [
+      { label: 'Close', value: null, className: 'btn btn-ghost' }
+    ]
+  }
+}
+
 async function openChoreDetail (id) {
   cancelHold()
   const task = taskById(id)
@@ -203,20 +217,23 @@ async function openChoreDetail (id) {
   const isPicked = sessionPicks.isPicked(id)
   const categories = selectableReferences(categoryLocationStore.getSnapshot().categories)
 
-  const choice = await openSheet({
-    title: String(task.name ?? ''),
-    bodyHtml: buildChoreDetailHtml(task, categories, today()),
-    actions: [
-      { label: 'Close', value: null, className: 'btn btn-ghost' },
-      {
-        label: isPicked ? 'Take out' : 'Add to session',
-        value: 'toggle',
-        className: 'btn btn-primary'
-      }
-    ]
+  const pendingChoice = openSheet(quickDetailSheetModel(task, categories, today(), isPicked))
+  const head = sheetHeadAction()
+  const done = head?.querySelector('.done-btn')
+  done?.addEventListener('click', () => {
+    if (done.getAttribute('aria-pressed') !== 'true') {
+      done.setAttribute('aria-pressed', 'true')
+      done.textContent = doneLabel(true)
+      return
+    }
+    closeSheetWith('done')
   })
+  head?.querySelector('.session-btn')?.addEventListener('click', () => closeSheetWith('toggle'))
+
+  const choice = await pendingChoice
 
   if (choice === 'toggle') pickChore(id)
+  if (choice === 'done') await markChoreRecentlyDone(task)
 }
 
 // Re-rendering the pool replaces the very control that was just pressed, so
