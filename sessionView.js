@@ -151,13 +151,14 @@ function setAsideChore (id) {
 // help with the rest of the session, not a verdict on the part you chose.
 function fillBundle () {
   const before = sessionPicks.getPickedIds()
+  const excludedIds = sessionPicks.getExcludedIds()
   const proposal = buildBundleProposal(
     eligibleTasks(),
     selectedMinutes,
     selectedCategoryId || null,
     selectableReferences(categoryLocationStore.getSnapshot().categories),
     before,
-    sessionPicks.getExcludedIds()
+    excludedIds
   )
   const after = sessionPicks.set(proposal.tasks.map(task => task._id))
 
@@ -172,10 +173,12 @@ function fillBundle () {
 
   // Nothing was added. Which fact that is depends on whether the user had
   // already put something in — and neither of them is a complaint.
-  status.textContent = before.length
-    ? 'Nothing else fits alongside what you picked. Add anything you like anyway.'
-    : 'Nothing here fits ' + formatDuration(selectedMinutes) +
-      '. Try a longer stretch, or pick something anyway.'
+  status.textContent = excludedIds.length
+    ? 'Set-aside chores stay out unless you pick them.'
+    : before.length
+      ? 'Nothing else fits alongside what you picked. Add anything you like anyway.'
+      : 'Nothing here fits ' + formatDuration(selectedMinutes) +
+        '. Try a longer stretch, or pick something anyway.'
   status.setAttribute('data-state', 'info')
 }
 

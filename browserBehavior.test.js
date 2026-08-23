@@ -2029,6 +2029,7 @@ test('a chore taken out stays set aside when Quick session is filled again', asy
 
       document.getElementById('proposeBundleBtn').click()
       const afterRefill = names()
+      const statusAfterRefill = document.getElementById('sessionStatus').textContent
       const excludedAfterRefill = sessionPicks.getExcludedIds()
 
       document.querySelector('[data-pick-id="early"]').click()
@@ -2037,7 +2038,8 @@ test('a chore taken out stays set aside when Quick session is filled again', asy
 
       const result = {
         firstFill, afterTakingOut, setAsideClass, setAsideLabel,
-        afterRefill, excludedAfterRefill, afterManualPick, excludedAfterManualPick
+        afterRefill, statusAfterRefill, excludedAfterRefill,
+        afterManualPick, excludedAfterManualPick
       }
     `
   })
@@ -2047,6 +2049,7 @@ test('a chore taken out stays set aside when Quick session is filled again', asy
   assert.equal(result.setAsideClass, true)
   assert.match(result.setAsideLabel, /Set aside/)
   assert.deepEqual(result.afterRefill, ['Wipe the sills'])
+  assert.equal(result.statusAfterRefill, 'Set-aside chores stay out unless you pick them.')
   assert.deepEqual(result.excludedAfterRefill, ['early'])
   assert.deepEqual(result.afterManualPick, ['Wipe the sills', 'Water the plants'])
   assert.deepEqual(result.excludedAfterManualPick, [])
