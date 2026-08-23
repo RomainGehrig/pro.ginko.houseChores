@@ -12,7 +12,9 @@ time you have, and let the app build a practical work session around it.
 
 Say how long you have, then pick chores from the pool. **Fill it** proposes the
 rest of the session around whatever you have already picked, and never removes
-anything you chose. Going over the budget is a plain readout, not an error.
+anything you chose. Set a chore aside to keep it out of proposals for this
+Quick session; it stays available if you decide to add it yourself. Going over
+the budget is a plain readout, not an error.
 
 ### The whole ledger
 
