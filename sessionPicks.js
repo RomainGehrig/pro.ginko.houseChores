@@ -39,6 +39,19 @@ export const sessionPicks = {
     return pickedIds.includes(id)
   },
 
+  // The chores are the list's whole reason to exist. A pick whose chore has
+  // left the list is not a chore you mean to do next, and an id that outlives
+  // its chore quietly puts it back in the session if it is ever restored.
+  // Silence when nothing changed: this runs on every refresh of the list.
+  retain (ids) {
+    const here = new Set(Array.isArray(ids) ? ids : [])
+    const kept = pickedIds.filter(id => here.has(id))
+    if (kept.length === pickedIds.length) return copy()
+    pickedIds = kept
+    announce()
+    return copy()
+  },
+
   set (ids) {
     pickedIds = normalize(ids)
     announce()

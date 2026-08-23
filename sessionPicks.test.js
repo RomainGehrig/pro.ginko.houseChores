@@ -73,3 +73,33 @@ test('one subscriber throwing does not rob the others of the change', () => {
   sessionPicks.toggle('a')
   assert.deepEqual(heard, [['a']])
 })
+
+// A pick is a chore you mean to do next. Once the chore has left the list it is
+// not that any more — and an id that outlives its chore silently puts it back in
+// the session if the chore is ever restored.
+test('picks are kept only for the chores that are still there', () => {
+  sessionPicks.set(['a', 'b', 'c'])
+  assert.deepEqual(sessionPicks.retain(['a', 'c', 'd']), ['a', 'c'])
+  assert.deepEqual(sessionPicks.getPickedIds(), ['a', 'c'])
+})
+
+test('keeping every pick changes nothing and tells nobody', () => {
+  const heard = []
+  sessionPicks.set(['a', 'b'])
+  sessionPicks.subscribe(ids => heard.push(ids))
+  assert.deepEqual(sessionPicks.retain(['a', 'b', 'c']), ['a', 'b'])
+  assert.deepEqual(heard, [], 'a repaint for a change nobody made is a repaint nobody asked for')
+})
+
+test('a pick dropped with its chore reaches both screens', () => {
+  const heard = []
+  sessionPicks.set(['a', 'b'])
+  sessionPicks.subscribe(ids => heard.push(ids))
+  sessionPicks.retain(['b'])
+  assert.deepEqual(heard, [['b']])
+})
+
+test('retaining against nothing empties the list', () => {
+  sessionPicks.set(['a', 'b'])
+  assert.deepEqual(sessionPicks.retain([]), [])
+})

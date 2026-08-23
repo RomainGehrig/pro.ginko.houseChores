@@ -142,7 +142,14 @@ export function refreshSessionMarks () {
 }
 
 export async function refreshTasksView() {
-  tasksCache = overlayPendingTaskArchives(await listAllTasks(), pendingTaskArchives)
+  const fetched = await listAllTasks()
+  tasksCache = overlayPendingTaskArchives(fetched, pendingTaskArchives)
+  // A pick is a chore you mean to do next, so one that has left the list is not
+  // a pick any more — left behind, it would put the chore back in the session
+  // the day it is restored. What the server holds is what counts here: an
+  // archive still waiting on its undo keeps its pick, to give back with the
+  // chore if the undo comes.
+  sessionPicks.retain(fetched.filter(stillOnTheList).map(task => task._id))
   renderTasks()
 }
 
@@ -224,8 +231,11 @@ function restoreTaskEditorDrafts (drafts) {
   }
 }
 
+const stillOnTheList = task =>
+  task.status === 'active' || task.status === 'approved_recurring'
+
 export function getActiveTasks() {
-  return tasksCache.filter(t => t.status === 'active' || t.status === 'approved_recurring')
+  return tasksCache.filter(stillOnTheList)
 }
 
 export function archiveTaskOptimistically (task, {
