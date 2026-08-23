@@ -67,15 +67,10 @@ export const sessionPicks = {
   // left the list is not a chore you mean to do next, and an id that outlives
   // its chore quietly puts it back in the session if it is ever restored.
   // Silence when nothing changed: this runs on every refresh of the list.
-  retain (ids, { refresh = false } = {}) {
+  retain (ids) {
     const here = new Set(Array.isArray(ids) ? ids : [])
     const kept = pickedIds.filter(id => here.has(id))
-    if (kept.length === pickedIds.length) {
-      // The ids may be unchanged while the chores behind them have changed.
-      // A task refresh asks every screen using those records to repaint.
-      if (refresh) announce()
-      return copy()
-    }
+    if (kept.length === pickedIds.length) return copy()
     pickedIds = kept
     announce()
     return copy()

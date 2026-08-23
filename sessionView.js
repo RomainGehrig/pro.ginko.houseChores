@@ -1,7 +1,9 @@
 // ABOUTME: Today — the budget drawn as a vessel you fill, and the pool you fill it from.
 // ABOUTME: Proposals stay inside the budget; anything picked by hand is never measured against it.
 
-import { getActiveTasks, markChoreRecentlyDone } from './tasksView.js'
+import {
+  getActiveTasks, markChoreRecentlyDone, subscribeTaskRefresh
+} from './tasksView.js'
 import { buildBundleProposal } from './bundleLogic.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
 import { selectableReferences } from './categoryLocationLogic.js'
@@ -111,6 +113,7 @@ export function initSessionView () {
   element('poolChips').addEventListener('pointercancel', cancelHold)
   element('poolChips').addEventListener('contextmenu', handleContextDetail)
   categoryLocationStore.subscribe(renderToday)
+  subscribeTaskRefresh(refreshToday)
   // The ledger picks into the same list, so the pool repaints on its changes
   // too rather than only on its own.
   sessionPicks.subscribe(refreshToday)

@@ -2213,11 +2213,17 @@ test('a chore taken out stays set aside when Quick session is filled again', asy
 
       sessionPicks.exclude('early')
       records.tasks[0].status = 'archived'
+      let ledgerRepaints = 0
+      const ledgerObserver = new MutationObserver(records => { ledgerRepaints += records.length })
+      ledgerObserver.observe(document.getElementById('activeCards'), { childList: true })
       await refreshTasksView()
+      await Promise.resolve()
       const afterArchivedRefresh = {
         excluded: sessionPicks.getExcludedIds(),
-        stillInPool: Boolean(document.querySelector('[data-pick-id="early"]'))
+        stillInPool: Boolean(document.querySelector('[data-pick-id="early"]')),
+        ledgerRepaints
       }
+      ledgerObserver.disconnect()
 
       document.querySelector('[data-category-id="c1"]').click()
       sessionPicks.set(['filtered'])
@@ -2250,7 +2256,11 @@ test('a chore taken out stays set aside when Quick session is filled again', asy
   assert.deepEqual(result.excludedAfterRefill, ['early'])
   assert.deepEqual(result.afterManualPick, ['Wipe the sills', 'Water the plants'])
   assert.deepEqual(result.excludedAfterManualPick, [])
-  assert.deepEqual(result.afterArchivedRefresh, { excluded: ['early'], stillInPool: false })
+  assert.deepEqual(result.afterArchivedRefresh, {
+    excluded: ['early'],
+    stillInPool: false,
+    ledgerRepaints: 1
+  })
   assert.equal(result.fallbackFocus, 'poolHeading',
     'a chore outside the pool hands focus to the available-chores heading')
 })

@@ -77,6 +77,19 @@ export function overlayPendingTaskArchives (tasks, pendingArchives) {
 // A chore added to a session already under way changes what Doing is showing,
 // and Doing is not this module's to import — index wires its repaint in.
 let applySessionAggregate = null
+const taskRefreshSubscribers = new Set()
+
+export function subscribeTaskRefresh (subscriber) {
+  if (typeof subscriber !== 'function') return () => {}
+  taskRefreshSubscribers.add(subscriber)
+  return () => taskRefreshSubscribers.delete(subscriber)
+}
+
+function announceTaskRefresh () {
+  for (const subscriber of [...taskRefreshSubscribers]) {
+    try { subscriber() } catch { /* one screen must not block another */ }
+  }
+}
 
 export async function initTasksView({ onSessionAggregateChange = null } = {}) {
   applySessionAggregate = onSessionAggregateChange
@@ -151,8 +164,9 @@ export async function refreshTasksView() {
   // the day it is restored. What the server holds is what counts here: an
   // archive still waiting on its undo keeps its pick, to give back with the
   // chore if the undo comes.
-  sessionPicks.retain(fetched.filter(stillOnTheList).map(task => task._id), { refresh: true })
+  sessionPicks.retain(fetched.filter(stillOnTheList).map(task => task._id))
   renderTasks()
+  announceTaskRefresh()
 }
 
 function renderTasks() {
