@@ -38,7 +38,7 @@ import { runArchiveAction } from './archiveView.js'
 import { sessionStore } from './sessionStore.js'
 import { sessionPicks } from './sessionPicks.js'
 import { bundleTotal, pickedBundle } from './pickingLogic.js'
-import { isTaskEligible } from './taskModeLogic.js'
+import { isTaskEligible, taskModeFields } from './taskModeLogic.js'
 import {
   sessionAddActionLabel, sessionAddLanded, sessionAddNote, sessionAddRejected, sessionAddTarget,
   sessionFloatModel, sessionMarks, sessionUnderWay
@@ -688,6 +688,7 @@ export function buildApprovedTaskFields (task, referenceFields, duration, schedu
     estimatedDuration: duration,
     scheduledDate: scheduleResult.scheduledDate,
     schedule: scheduleResult.schedule,
+    ...taskModeFields(task, scheduleResult.taskMode),
     suggestedCategory: null,
     suggestedDuration: null,
     suggestedSchedule: null,
@@ -699,6 +700,7 @@ export function buildActiveTaskScheduleFields (task, scheduleResult) {
   return {
     scheduledDate: scheduleResult.scheduledDate,
     schedule: scheduleResult.schedule,
+    ...taskModeFields(task, scheduleResult.taskMode),
     status: scheduleResult.schedule.type === 'one_off' ? 'active' : 'approved_recurring'
   }
 }

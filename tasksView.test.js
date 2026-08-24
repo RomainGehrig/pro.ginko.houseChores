@@ -70,6 +70,7 @@ test('approval writes the reviewed schedule and clears AI suggestions', () => {
     categoryId: 'c1', category: 'Clean', locationIds: ['l1']
   }, 15, {
     ok: true,
+    taskMode: 'scheduled',
     scheduledDate: '2026-08-21',
     schedule: { type: 'periodic', every: 2, unit: 'week' }
   }), {
@@ -77,6 +78,8 @@ test('approval writes the reviewed schedule and clears AI suggestions', () => {
     estimatedDuration: 15,
     scheduledDate: '2026-08-21',
     schedule: { type: 'periodic', every: 2, unit: 'week' },
+    taskMode: 'scheduled',
+    readiness: null,
     suggestedCategory: null,
     suggestedDuration: null,
     suggestedSchedule: null,
@@ -91,13 +94,40 @@ test('active schedule edits preserve the current date unless explicitly changed'
   }
   assert.deepEqual(buildActiveTaskScheduleFields(task, {
     ok: true,
+    taskMode: 'scheduled',
     scheduledDate: '2026-08-16',
     schedule: { type: 'fixed', pattern: { kind: 'weekdays', weekdays: [1] } }
   }), {
     scheduledDate: '2026-08-16',
     schedule: { type: 'fixed', pattern: { kind: 'weekdays', weekdays: [1] } },
+    taskMode: 'scheduled',
+    readiness: null,
     status: 'approved_recurring'
   })
+})
+
+test('schedule saves preserve readiness only while mode stays as-needed', () => {
+  const readyAsNeeded = {
+    taskMode: 'as_needed',
+    readiness: 'ready'
+  }
+  const asNeededResult = {
+    ok: true,
+    taskMode: 'as_needed',
+    scheduledDate: '2026-08-28',
+    schedule: { type: 'periodic', every: 2, unit: 'day' }
+  }
+  const scheduledResult = { ...asNeededResult, taskMode: 'scheduled' }
+
+  assert.deepEqual(buildActiveTaskScheduleFields(readyAsNeeded, asNeededResult), {
+    scheduledDate: '2026-08-28',
+    schedule: asNeededResult.schedule,
+    status: 'approved_recurring',
+    taskMode: 'as_needed',
+    readiness: 'ready'
+  })
+  assert.equal(buildActiveTaskScheduleFields(readyAsNeeded, scheduledResult).readiness, null)
+  assert.equal(buildApprovedTaskFields({ taskMode: 'scheduled' }, {}, 5, asNeededResult).readiness, 'waiting')
 })
 
 test('outside completion advances the chore and removes it from the pending session', async () => {

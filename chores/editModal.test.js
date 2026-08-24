@@ -84,6 +84,7 @@ function modalRoot (values) {
     ['.edit-name', { value: values.name }],
     ['.est-input', { value: values.estimate }],
     ['.f-category', { value: values.categoryId }],
+    ['[data-schedule-field="task-mode"]', { value: values.taskMode || 'scheduled' }],
     ['[data-schedule-field="date"]', { value: values.scheduledDate }],
     ['[data-schedule-field="type"]', { value: values.type }],
     ['[data-schedule-field="every"]', { value: values.every }],
@@ -121,6 +122,7 @@ test('reads every edited value back, the name trimmed', () => {
     locationIds: ['loc-1', 'loc-2'],
     schedule: {
       ok: true,
+      taskMode: 'scheduled',
       scheduledDate: '2026-09-01',
       schedule: { type: 'periodic', every: 2, unit: 'week' }
     }
@@ -146,6 +148,7 @@ test('an emptied name reads as the name it already had, and never refuses', () =
 test('an unreadable schedule keeps the one the chore had, and saves the rest', () => {
   const previous = {
     name: 'Mop',
+    taskMode: 'as_needed',
     schedule: { type: 'periodic', every: 2, unit: 'week' },
     scheduledDate: '2026-08-20'
   }
@@ -160,6 +163,7 @@ test('an unreadable schedule keeps the one the chore had, and saves the rest', (
   assert.equal(result.categoryId, 'cat-2')
   assert.deepEqual(result.schedule, {
     ok: true,
+    taskMode: 'as_needed',
     schedule: { type: 'periodic', every: 2, unit: 'week' },
     scheduledDate: '2026-08-20'
   })

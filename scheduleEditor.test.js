@@ -14,6 +14,7 @@ test('keeps a blank app-managed date for a flexible AI rule', () => {
     schedule: { type: 'one_off' },
     suggestedSchedule: { type: 'periodic', every: 2, unit: 'week' }
   }, true, '2026-08-07'), {
+    taskMode: 'scheduled',
     scheduledDate: '',
     schedule: { type: 'periodic', every: 2, unit: 'week' },
     dateOwner: 'app'
@@ -25,6 +26,7 @@ test('keeps a blank app-managed date for a one-off task', () => {
     scheduledDate: null,
     schedule: { type: 'one_off' }
   }, false, '2026-08-07'), {
+    taskMode: 'scheduled',
     scheduledDate: '',
     schedule: { type: 'one_off' },
     dateOwner: 'app'
@@ -40,6 +42,7 @@ test('infers an app-managed date from an AI fixed calendar rule', () => {
       pattern: { kind: 'annual_date', month: 2, day: 29 }
     }
   }, true, '2026-08-07'), {
+    taskMode: 'scheduled',
     scheduledDate: '2027-02-28',
     schedule: {
       type: 'fixed',
@@ -57,11 +60,25 @@ test('treats an existing scheduled date as user-managed', () => {
       pattern: { kind: 'annual_date', month: 2, day: 29 }
     }
   }, false, '2026-08-07'), {
+    taskMode: 'scheduled',
     scheduledDate: '2026-08-08',
     schedule: {
       type: 'fixed',
       pattern: { kind: 'annual_date', month: 2, day: 29 }
     },
+    dateOwner: 'user'
+  })
+})
+
+test('keeps an as-needed task mode in the shared editor model', () => {
+  assert.deepEqual(buildScheduleEditorModel({
+    taskMode: 'as_needed',
+    scheduledDate: '2026-08-28',
+    schedule: { type: 'periodic', every: 2, unit: 'day' }
+  }), {
+    taskMode: 'as_needed',
+    scheduledDate: '2026-08-28',
+    schedule: { type: 'periodic', every: 2, unit: 'day' },
     dateOwner: 'user'
   })
 })
@@ -72,9 +89,16 @@ test('renders progressive controls and a human summary', () => {
     schedule: { type: 'fixed', pattern: { kind: 'weekdays', weekdays: [7] } }
   })
   assert.match(markup, /data-schedule-field="date"/)
+  assert.match(markup, /aria-label="Task mode"/)
+  assert.match(markup, /data-schedule-field="task-mode"/)
+  assert.match(markup, />Scheduled</)
+  assert.match(markup, />As needed</)
   assert.match(markup, /data-schedule-field="type"/)
   assert.match(markup, /Flexible cadence/)
   assert.match(markup, /Fixed calendar/)
+  const kindButtons = markup.match(/<button[^>]*data-schedule-set="type"[^>]*>/g) || []
+  assert.equal(kindButtons.length, 3)
+  kindButtons.forEach(button => assert.doesNotMatch(button, /\bdisabled\b/))
   assert.match(markup, /Every Sunday/)
   assert.match(markup, /data-schedule-group="fixed"/)
   assert.match(markup, /data-schedule-date-owner="user"/)
@@ -89,6 +113,15 @@ test('renders progressive controls and a human summary', () => {
     periodicMarkup,
     /About every <span class="fig">2<\/span> weeks after completion/
   )
+
+  const asNeededMarkup = scheduleEditorHtml({
+    taskMode: 'as_needed',
+    scheduledDate: '2026-08-28',
+    schedule: { type: 'periodic', every: 2, unit: 'day' }
+  })
+  assert.match(asNeededMarkup, /data-schedule-date-label>Next check</)
+  assert.match(asNeededMarkup, /aria-label="Next check"/)
+  assert.match(asNeededMarkup, /Check about every <span class="fig">2<\/span> days/)
 })
 
 // Whatever the rhythm, the day is the user's to say: today, some later day, or
@@ -134,6 +167,7 @@ test('every schedule choice carries the value it writes and the state it is in',
     }
   })
   const expectedNames = new Map([
+    ['task-mode', 'Task mode'],
     ['date', 'Scheduled date'],
     ['type', 'Repeat type'],
     ['every', 'Cadence interval'],
@@ -187,12 +221,14 @@ test('the day and month grids offer every choice the calendar allows', () => {
 
 test('converts form values into a validated schedule', () => {
   assert.deepEqual(scheduleFromEditorValues({
+    taskMode: 'scheduled',
     scheduledDate: '2026-08-21',
     type: 'periodic',
     every: '2',
     unit: 'week'
   }), {
     ok: true,
+    taskMode: 'scheduled',
     scheduledDate: '2026-08-21',
     schedule: { type: 'periodic', every: 2, unit: 'week' }
   })
@@ -200,10 +236,12 @@ test('converts form values into a validated schedule', () => {
 
 test('serializes one-off, monthly, and annual editor flows', () => {
   assert.deepEqual(scheduleFromEditorValues({
+    taskMode: 'scheduled',
     scheduledDate: '2026-08-21',
     type: 'one_off'
   }), {
     ok: true,
+    taskMode: 'scheduled',
     scheduledDate: '2026-08-21',
     schedule: { type: 'one_off' }
   })
@@ -224,6 +262,7 @@ test('serializes one-off, monthly, and annual editor flows', () => {
 
 test('rejects an unknown fixed pattern instead of treating it as annual', () => {
   assert.deepEqual(scheduleFromEditorValues({
+    taskMode: 'scheduled',
     scheduledDate: '2026-08-21',
     type: 'fixed',
     fixedKind: 'unknown',
@@ -231,13 +270,18 @@ test('rejects an unknown fixed pattern instead of treating it as annual', () => 
     annualDay: '21'
   }), {
     ok: false,
-    message: 'Choose a valid schedule.'
+    message: 'Choose a valid schedule.',
+    taskMode: 'scheduled'
   })
 })
 
 function scheduleRoot (values) {
   const nodes = new Map([
-    ['[data-schedule-field="date"]', { value: values.scheduledDate }],
+    ['[data-schedule-field="task-mode"]', { value: values.taskMode || 'scheduled' }],
+    ['[data-schedule-field="date"]', {
+      value: values.scheduledDate,
+      setAttribute (name, value) { this[name] = value }
+    }],
     ['[data-schedule-field="type"]', { value: values.type }],
     ['[data-schedule-field="every"]', { value: values.every }],
     ['[data-schedule-field="unit"]', { value: values.unit }],
@@ -251,15 +295,23 @@ function scheduleRoot (values) {
     ['[data-schedule-fixed-group="month_day"]', { hidden: false }],
     ['[data-schedule-fixed-group="annual_date"]', { hidden: false }],
     ['.schedule-date', { hidden: false }],
+    ['[data-schedule-date-label]', { textContent: '' }],
     ['.schedule-date-hint', { hidden: false }],
     ['.schedule-summary', { textContent: '', innerHTML: '' }]
   ])
   const weekdays = values.weekdays.map(value => ({ dataset: { scheduleValue: value } }))
+  const choices = (values.choices || []).map(([field, value]) => ({
+    dataset: { scheduleSet: field, scheduleValue: value },
+    setAttribute (name, nextValue) { this[name] = nextValue }
+  }))
   return {
     dataset: { scheduleDateOwner: values.dateOwner || 'app' },
     querySelector: selector => nodes.get(selector) || null,
-    querySelectorAll: selector =>
-      selector === '[data-schedule-toggle="weekday"][aria-pressed="true"]' ? weekdays : [],
+    querySelectorAll: selector => selector === '[data-schedule-toggle="weekday"][aria-pressed="true"]'
+      ? weekdays
+      : selector === '[data-schedule-set]'
+        ? choices
+        : [],
     node: selector => nodes.get(selector)
   }
 }
@@ -279,8 +331,31 @@ test('reads the stable controls into a validated fixed schedule', () => {
 
   assert.deepEqual(readScheduleEditor(root), {
     ok: true,
+    taskMode: 'scheduled',
     scheduledDate: '2026-08-16',
     schedule: { type: 'fixed', pattern: { kind: 'weekdays', weekdays: [7] } }
+  })
+})
+
+test('reads as-needed mode beside the validated schedule', () => {
+  const root = scheduleRoot({
+    taskMode: 'as_needed',
+    scheduledDate: '2026-08-28',
+    type: 'periodic',
+    every: '2',
+    unit: 'day',
+    fixedKind: 'weekdays',
+    weekdays: [],
+    monthDay: '1',
+    annualMonth: '1',
+    annualDay: '1'
+  })
+
+  assert.deepEqual(readScheduleEditor(root), {
+    ok: true,
+    taskMode: 'as_needed',
+    scheduledDate: '2026-08-28',
+    schedule: { type: 'periodic', every: 2, unit: 'day' }
   })
 })
 
@@ -313,6 +388,35 @@ test('syncs visible schedule groups and summary without changing values', () => 
   // A cadence is not a date. The picker stays out, and stays empty, so the
   // chore goes to Unscheduled unless the user names a day.
   assert.equal(root.node('.schedule-date').hidden, false)
+})
+
+test('syncs contextual inspection copy and the selected task-mode pill', () => {
+  const root = scheduleRoot({
+    taskMode: 'as_needed',
+    scheduledDate: '2026-08-28',
+    dateOwner: 'user',
+    type: 'periodic',
+    every: '2',
+    unit: 'day',
+    fixedKind: 'weekdays',
+    weekdays: [],
+    monthDay: '1',
+    annualMonth: '1',
+    annualDay: '1',
+    choices: [['task-mode', 'scheduled'], ['task-mode', 'as_needed']]
+  })
+
+  syncScheduleEditor(root)
+
+  assert.equal(root.node('[data-schedule-date-label]').textContent, 'Next check')
+  assert.equal(root.node('[data-schedule-field="date"]')['aria-label'], 'Next check')
+  assert.equal(root.node('.schedule-date-hint').textContent, 'Leave it blank to check whenever you choose.')
+  assert.equal(
+    root.node('.schedule-summary').innerHTML,
+    'Check about every <span class="fig">2</span> days'
+  )
+  assert.equal(root.querySelectorAll('[data-schedule-set]')[0]['aria-pressed'], 'false')
+  assert.equal(root.querySelectorAll('[data-schedule-set]')[1]['aria-pressed'], 'true')
 })
 
 test('updates a fixed date while it remains app-managed', () => {

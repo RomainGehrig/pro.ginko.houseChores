@@ -1463,6 +1463,14 @@ label:has(input[type="radio"]) {
   display: none !important;
 }
 
+.schedule-task-modes,
+.schedule-kinds {
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.schedule-task-modes { margin-bottom: 2px; }
+
 .schedule-row {
   align-items: center;
   display: grid;

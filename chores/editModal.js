@@ -46,7 +46,12 @@ export function readEditModal (root, previous = {}) {
   const edited = readScheduleEditor(root)
   const schedule = edited.ok
     ? edited
-    : { ok: true, schedule: previous?.schedule ?? null, scheduledDate: previous?.scheduledDate ?? null }
+    : {
+        ok: true,
+        taskMode: previous?.taskMode ?? 'scheduled',
+        schedule: previous?.schedule ?? null,
+        scheduledDate: previous?.scheduledDate ?? null
+      }
 
   return {
     ok: true,

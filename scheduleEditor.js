@@ -3,6 +3,8 @@
 
 import { escapeAttribute } from './helpers.js'
 import { formatFactHtml } from './helpers.js'
+import { asNeededScheduleSummary } from './asNeededLogic.js'
+import { taskModeOf } from './taskModeLogic.js'
 import {
   isoWeekday,
   localDateFromDate,
@@ -25,6 +27,7 @@ const TYPES = [
   ['periodic', 'Flexible cadence'],
   ['fixed', 'Fixed calendar']
 ]
+const TASK_MODES = [['scheduled', 'Scheduled'], ['as_needed', 'As needed']]
 const UNITS = [['day', 'days'], ['week', 'weeks'], ['month', 'months'], ['year', 'years']]
 const FIXED_KINDS = [['weekdays', 'Weekly'], ['month_day', 'Monthly'], ['annual_date', 'Annually']]
 
@@ -60,6 +63,7 @@ function scheduleFromValues (values = {}) {
 function editorValues (root) {
   const valueFor = field => root.querySelector(`[data-schedule-field="${field}"]`)?.value || ''
   return {
+    taskMode: valueFor('task-mode'),
     scheduledDate: valueFor('date'),
     type: valueFor('type'),
     every: valueFor('every'),
@@ -82,6 +86,7 @@ export function buildScheduleEditorModel (
     normalizeSchedule(task.schedule) || { type: 'one_off' }
   const hasScheduledDate = task.scheduledDate != null && String(task.scheduledDate) !== ''
   return {
+    taskMode: taskModeOf(task),
     scheduledDate: hasScheduledDate
       ? String(task.scheduledDate)
       : (suggestScheduledDate(schedule, today) || ''),
@@ -109,12 +114,20 @@ const gridCell = (field, value, label, on, wide) =>
 // A fixed chore's date comes from its own pattern, so the hint says the app
 // filled it in and the user may still overrule it. Everywhere else the box is
 // genuinely optional, and the hint says where an empty one leaves the chore.
-const dateHintText = type => type === 'fixed'
-  ? 'Suggested from the calendar; choose any date.'
-  : 'Leave it blank and the chore waits in Unscheduled.'
+const dateHintText = (type, taskMode) => {
+  if (taskMode === 'as_needed') {
+    return type === 'fixed'
+      ? 'Suggested from the inspection calendar; choose any date.'
+      : 'Leave it blank to check whenever you choose.'
+  }
+  return type === 'fixed'
+    ? 'Suggested from the calendar; choose any date.'
+    : 'Leave it blank and the chore waits in Unscheduled.'
+}
 
 export function scheduleEditorHtml (model = {}) {
   const schedule = normalizeSchedule(model.schedule) || { type: 'one_off' }
+  const taskMode = taskModeOf(model)
   const scheduledDate = model.scheduledDate == null ? '' : String(model.scheduledDate)
   const dateOwner = model.dateOwner === 'app' ? 'app' : 'user'
   const periodic = schedule.type === 'periodic'
@@ -133,8 +146,13 @@ export function scheduleEditorHtml (model = {}) {
   const monthDay = fixedKind === 'month_day' ? pattern.day : 1
   const annualMonth = fixedKind === 'annual_date' ? pattern.month : 1
   const annualDay = fixedKind === 'annual_date' ? pattern.day : 1
+  const dateLabel = taskMode === 'as_needed' ? 'Next check' : 'Scheduled date'
+  const summary = taskMode === 'as_needed'
+    ? asNeededScheduleSummary(schedule)
+    : scheduleSummary(schedule)
 
   return '<section class="schedule-editor" data-schedule-date-owner="' + dateOwner + '">' +
+    hiddenField('task-mode', 'taskMode', 'Task mode', taskMode) +
     hiddenField('type', 'scheduleType', 'Repeat type', schedule.type) +
     hiddenField('unit', 'scheduleUnit', 'Cadence unit', unit) +
     hiddenField('fixed-kind', 'scheduleFixedKind', 'Fixed calendar pattern', fixedKind) +
@@ -142,16 +160,20 @@ export function scheduleEditorHtml (model = {}) {
     hiddenField('annual-month', 'scheduleAnnualMonth', 'Annual month', annualMonth) +
     hiddenField('annual-day', 'scheduleAnnualDay', 'Annual day', annualDay) +
 
+    '<div class="pill-set schedule-task-modes" role="group" aria-label="Task mode">' +
+      TASK_MODES.map(([value, label]) => choicePill('task-mode', value, label, taskMode === value)).join('') +
+    '</div>' +
+
     '<div class="pill-set schedule-kinds" role="group" aria-label="Repeat type">' +
       TYPES.map(([value, label]) => choicePill('type', value, label, schedule.type === value)).join('') +
     '</div>' +
 
     // The day is asked for whatever the rhythm, because the rhythm says how
     // often and the day says when to start. Blank is one of the answers.
-    '<label class="schedule-row schedule-date">Scheduled date ' +
-      '<input type="date" name="scheduledDate" aria-label="Scheduled date" ' +
-      'data-schedule-field="date" value="' + escapeAttribute(scheduledDate) + '"></label>' +
-    '<p class="schedule-date-hint">' + dateHintText(schedule.type) + '</p>' +
+    '<label class="schedule-row schedule-date"><span data-schedule-date-label>' + dateLabel + '</span>' +
+      '<input type="date" name="scheduledDate" aria-label="' + dateLabel + '" ' +
+      'data-schedule-date-input data-schedule-field="date" value="' + escapeAttribute(scheduledDate) + '"></label>' +
+    '<p class="schedule-date-hint">' + dateHintText(schedule.type, taskMode) + '</p>' +
 
     '<div class="schedule-cadence" data-schedule-group="periodic"' + (periodic ? '' : ' hidden') + '>' +
       '<span class="schedule-word">Every</span>' +
@@ -197,15 +219,19 @@ export function scheduleEditorHtml (model = {}) {
       '</div>' +
     '</div>' +
 
-    '<div class="schedule-summary">' + formatFactHtml(scheduleSummary(schedule)) + '</div>' +
+    '<div class="schedule-summary">' + formatFactHtml(summary) + '</div>' +
   '</section>'
 }
 
 export function scheduleFromEditorValues (values) {
-  return validateScheduleInput({
-    scheduledDate: values?.scheduledDate,
-    schedule: scheduleFromValues(values)
-  })
+  const taskMode = taskModeOf({ taskMode: values?.taskMode })
+  return {
+    ...validateScheduleInput({
+      scheduledDate: values?.scheduledDate,
+      schedule: scheduleFromValues(values)
+    }),
+    taskMode
+  }
 }
 
 export function readScheduleEditor (root) {
@@ -233,6 +259,7 @@ function paintChoices (root, values) {
   for (const choice of root.querySelectorAll('[data-schedule-set]')) {
     const field = choice.dataset.scheduleSet.replace(/-/g, '')
     const current = {
+      taskmode: values.taskMode,
       type: values.type,
       unit: values.unit,
       fixedkind: values.fixedKind,
@@ -285,8 +312,18 @@ export function syncScheduleEditor (root, options = {}) {
   }
 
   const dateHint = root.querySelector('.schedule-date-hint')
-  if (dateHint) dateHint.textContent = dateHintText(values.type)
+  if (dateHint) dateHint.textContent = dateHintText(values.type, values.taskMode)
+
+  const dateLabel = values.taskMode === 'as_needed' ? 'Next check' : 'Scheduled date'
+  const dateLabelElement = root.querySelector('[data-schedule-date-label]')
+  if (dateLabelElement) dateLabelElement.textContent = dateLabel
+  if (dateInput) dateInput.setAttribute('aria-label', dateLabel)
 
   const summary = root.querySelector('.schedule-summary')
-  if (summary) summary.innerHTML = formatFactHtml(scheduleSummary(schedule))
+  if (summary) {
+    const summaryText = values.taskMode === 'as_needed'
+      ? asNeededScheduleSummary(schedule)
+      : scheduleSummary(schedule)
+    summary.innerHTML = formatFactHtml(summaryText)
+  }
 }
