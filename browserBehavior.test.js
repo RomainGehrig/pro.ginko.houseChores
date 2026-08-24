@@ -200,7 +200,15 @@ async function runBrowserScenario (scenario) {
         })
       })
     }
-    rmSync(profileDirectory, { recursive: true, force: true })
+    // Chromium can release files in its temporary profile a fraction after the
+    // process exits. Let Node retry that teardown race instead of turning a
+    // passing browser assertion into an intermittent ENOTEMPTY failure.
+    rmSync(profileDirectory, {
+      recursive: true,
+      force: true,
+      maxRetries: 3,
+      retryDelay: 100
+    })
   }
 }
 
@@ -1783,6 +1791,158 @@ test('a row with no band gives the stamp column back to the chore name', async (
   assert.ok(result.nameWidth > 150, JSON.stringify(result))
 })
 
+test('Quick Session details mark a chore done only after the second tap', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 760 },
+    body: applicationMarkup,
+    script: `
+      const records = {
+        categories: [],
+        locations: [],
+        tasks: [{
+          _id: 'task-1', name: 'Clean kitchen', status: 'approved_recurring',
+          categoryId: null, locationIds: [], estimatedDuration: 20,
+          scheduledDate: '2026-08-21',
+          schedule: { type: 'periodic', every: 1, unit: 'week' },
+          lastCompletedDate: null
+        }, {
+          _id: 'task-2', name: 'Wash laundry', status: 'approved_recurring',
+          categoryId: null, locationIds: [], estimatedDuration: 15,
+          scheduledDate: '2026-08-22',
+          schedule: { type: 'periodic', every: 1, unit: 'week' },
+          lastCompletedDate: null
+        }]
+      }
+      const writes = []
+      const clone = value => structuredClone(value)
+      window.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async () => ({}),
+        delete: async () => ({}),
+        updateFields: async (collection, id, fields) => {
+          writes.push({ collection, id, fields: clone(fields) })
+          Object.assign(records[collection].find(record => record._id === id), fields)
+          return clone(records[collection].find(record => record._id === id))
+        }
+      }
+
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      const { initSessionView } = await import(applicationUrl + 'sessionView.js')
+      const { sessionPicks } = await import(applicationUrl + 'sessionPicks.js')
+      await categoryLocationStore.initialize()
+      await initTasksView()
+      initSessionView()
+      const poolOrderBefore = [...document.querySelectorAll('[data-pick-id]')]
+        .map(button => button.dataset.pickId)
+
+      document.querySelector('[data-detail-id="task-1"]').click()
+      await Promise.resolve()
+      const headLabels = [...document.querySelectorAll('#bottomSheetHeadAction button')]
+        .map(button => button.textContent)
+      const actionLabels = [...document.querySelectorAll('#bottomSheetActions button')]
+        .map(button => button.textContent)
+      const done = document.querySelector('#bottomSheetHeadAction .done-btn')
+      done?.click()
+      const armedLabel = done?.textContent || null
+      const writesAfterFirstTap = writes.length
+      const sheetOpenAfterFirstTap = !document.getElementById('bottomSheet').hidden
+      done?.click()
+
+      const started = Date.now()
+      while (writes.length === 0 && Date.now() - started < 1500) {
+        await new Promise(resolve => setTimeout(resolve, 20))
+      }
+      await new Promise(resolve => setTimeout(resolve, 300))
+
+      const result = {
+        headLabels,
+        actionLabels,
+        armedLabel,
+        writesAfterFirstTap,
+        sheetOpenAfterFirstTap,
+        writes,
+        picked: sessionPicks.getPickedIds(),
+        task: records.tasks[0],
+        poolOrderBefore,
+        poolOrderAfter: [...document.querySelectorAll('[data-pick-id]')]
+          .map(button => button.dataset.pickId),
+        sheetClosed: document.getElementById('bottomSheet').hidden
+      }
+    `
+  })
+
+  assert.deepEqual(result.headLabels, ['Mark as done', 'Add to session'])
+  assert.deepEqual(result.actionLabels, ['Close', 'Set aside'])
+  assert.equal(result.armedLabel, 'Tap again to confirm')
+  assert.equal(result.writesAfterFirstTap, 0)
+  assert.equal(result.sheetOpenAfterFirstTap, true)
+  assert.equal(result.writes.length, 1)
+  assert.equal(result.writes[0].collection, 'tasks')
+  assert.equal(result.writes[0].id, 'task-1')
+  assert.equal(typeof result.writes[0].fields.lastCompletedDate, 'number')
+  assert.match(result.writes[0].fields.scheduledDate, /^\d{4}-\d{2}-\d{2}$/)
+  assert.deepEqual(result.picked, [])
+  assert.deepEqual(result.poolOrderBefore, ['task-1', 'task-2'])
+  assert.deepEqual(result.poolOrderAfter, ['task-2', 'task-1'])
+  assert.equal(result.task.status, 'approved_recurring')
+  assert.equal(result.sheetClosed, true)
+})
+
+test('Quick Session completion confirmation stands down after inspecting the facts', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 760 },
+    body: applicationMarkup,
+    script: `
+      const records = {
+        categories: [], locations: [],
+        tasks: [{
+          _id: 'task-1', name: 'Clean kitchen', status: 'approved_recurring',
+          categoryId: null, locationIds: [], estimatedDuration: 20,
+          scheduledDate: '2026-08-21',
+          schedule: { type: 'periodic', every: 1, unit: 'week' }
+        }]
+      }
+      let writes = 0
+      const clone = value => structuredClone(value)
+      window.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async () => ({}),
+        delete: async () => ({}),
+        updateFields: async () => { writes++; return {} }
+      }
+
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      const { initSessionView } = await import(applicationUrl + 'sessionView.js')
+      await categoryLocationStore.initialize()
+      await initTasksView()
+      initSessionView()
+
+      document.querySelector('[data-detail-id="task-1"]').click()
+      await Promise.resolve()
+      const done = document.querySelector('#bottomSheetHeadAction .done-btn')
+      done.click()
+      const armedLabel = done.textContent
+      document.querySelector('#bottomSheetMessage').click()
+
+      const result = {
+        armedLabel,
+        labelAfterInspecting: done.textContent,
+        pressedAfterInspecting: done.getAttribute('aria-pressed'),
+        writes
+      }
+    `
+  })
+
+  assert.deepEqual(result, {
+    armedLabel: 'Tap again to confirm',
+    labelAfterInspecting: 'Mark as done',
+    pressedAfterInspecting: 'false',
+    writes: 0
+  })
+})
+
 const TODAY_BODY =
   '<main id="app"><section id="view-today" class="view">' +
     '<header class="today-head">' +
@@ -1964,6 +2124,282 @@ test('Fill it builds around the chores already picked instead of replacing them'
   assert.deepEqual(result.afterSecondFill, result.afterFill, 'nothing is lost or duplicated')
   assert.equal(result.status,
     'Nothing else fits alongside what you picked. Add anything you like anyway.')
+})
+
+test('a chore taken out stays set aside when Quick session is filled again', async () => {
+  const result = await runBrowserScenario({
+    body: '<main id="app"><section id="view-today" class="view">' +
+      '<span id="budgetHeadline"></span><span id="todayDate"></span>' +
+      '<button id="proposeBundleBtn" type="button">Fill it</button>' +
+      '<button id="startSessionBtn" type="button">Start</button>' +
+      '<input id="customMinutes" type="number">' +
+      '<div id="vesselColumn"><div id="vesselLine"><span id="vesselLineLabel"></span></div>' +
+      '<div id="vesselFill"></div></div>' +
+      '<ol id="vesselList"></ol><p id="vesselIdle"></p>' +
+      '<p id="bundleTotalLine"></p><p id="bundleFitLine"></p>' +
+      '<div id="sessionStatus"></div><div id="doingStatus"></div>' +
+      '<p id="poolHeading" tabindex="-1">Available chores</p>' +
+      '<div id="categoryFilter"></div><div id="poolChips"></div>' +
+      '</section>' +
+      '<button id="addTasksBtn"></button><button id="enrichBtn"></button>' +
+      '<span id="enrichStatus"></span><div id="proposedCards"></div>' +
+      '<span id="choresCountLine"></span><div id="choresViews"></div>' +
+      '<div id="choresFilters"><input id="choreSearch"><div id="choreCategoryFilter"></div></div>' +
+      '<div id="activeCards"></div><div id="unscheduledCards"></div>' +
+      '<div id="archivedCards"></div><div id="archiveStatus"></div>' +
+      '<div id="choresStatus"></div>' +
+      '</main>',
+    script: `
+      const records = {
+        categories: [
+          { _id: 'c1', name: 'Inside', status: 'active', displayOrder: 0 },
+          { _id: 'c2', name: 'Outside', status: 'active', displayOrder: 1 }
+        ],
+        locations: [],
+        tasks: [
+          { _id: 'early', name: 'Water the plants', status: 'active', categoryId: 'c1',
+            locationIds: [], estimatedDuration: 5, scheduledDate: '2026-08-10',
+            schedule: { type: 'one_off' } },
+          { _id: 'next', name: 'Wipe the sills', status: 'active', categoryId: 'c1',
+            locationIds: [], estimatedDuration: 5, scheduledDate: '2026-08-11',
+            schedule: { type: 'one_off' } },
+          { _id: 'filtered', name: 'Sweep the terrace', status: 'active', categoryId: 'c2',
+            locationIds: [], estimatedDuration: 60, scheduledDate: '2026-08-12',
+            schedule: { type: 'one_off' } }
+        ]
+      }
+      const clone = value => structuredClone(value)
+      window.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async () => ({}),
+        updateFields: async () => ({})
+      }
+
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView, refreshTasksView } = await import(applicationUrl + 'tasksView.js')
+      const { initSessionView } = await import(applicationUrl + 'sessionView.js')
+      const { sessionPicks } = await import(applicationUrl + 'sessionPicks.js')
+      await categoryLocationStore.initialize()
+      await initTasksView()
+      initSessionView()
+
+      const names = () => [...document.querySelectorAll('#vesselList .vessel-entry-name')]
+        .map(node => node.textContent.trim())
+
+      document.getElementById('proposeBundleBtn').click()
+      const firstFill = names()
+      document.querySelector('#vesselList [data-remove-id="early"]').focus()
+      sessionPicks.set(['early', 'next'])
+      const focusAfterUnrelatedRepaint = document.activeElement.dataset.removeId ?? null
+
+      const takeOutControl = document.querySelector('#vesselList [data-remove-id="early"]')
+      takeOutControl.focus()
+      takeOutControl.click()
+      const afterTakingOut = names()
+      const focusAfterTakingOut = document.activeElement.dataset.pickId ?? null
+      const setAsideClass = document.querySelector('[data-pick-id="early"]')
+        .closest('.pool-chip-wrap').classList.contains('is-excluded')
+      const setAsideLabel = document.querySelector('[data-pick-id="early"]')
+        .textContent.replace(/\\s+/g, ' ').trim()
+
+      document.getElementById('proposeBundleBtn').click()
+      const afterRefill = names()
+      const statusAfterRefill = document.getElementById('sessionStatus').textContent
+      const excludedAfterRefill = sessionPicks.getExcludedIds()
+
+      document.querySelector('[data-pick-id="early"]').click()
+      const afterManualPick = names()
+      const excludedAfterManualPick = sessionPicks.getExcludedIds()
+
+      sessionPicks.exclude('early')
+      records.tasks[0].status = 'archived'
+      let ledgerRepaints = 0
+      const ledgerObserver = new MutationObserver(records => { ledgerRepaints += records.length })
+      ledgerObserver.observe(document.getElementById('activeCards'), { childList: true })
+      await refreshTasksView()
+      await Promise.resolve()
+      const afterArchivedRefresh = {
+        excluded: sessionPicks.getExcludedIds(),
+        stillInPool: Boolean(document.querySelector('[data-pick-id="early"]')),
+        ledgerRepaints
+      }
+      ledgerObserver.disconnect()
+
+      document.querySelector('[data-category-id="c1"]').click()
+      sessionPicks.set(['filtered'])
+      const filteredControl = document.querySelector('#vesselList [data-remove-id="filtered"]')
+      filteredControl.focus()
+      filteredControl.click()
+      const fallbackFocus = document.activeElement.id
+
+      const result = {
+        firstFill, focusAfterUnrelatedRepaint,
+        afterTakingOut, focusAfterTakingOut, setAsideClass, setAsideLabel,
+        afterRefill, statusAfterRefill, excludedAfterRefill,
+        afterManualPick, excludedAfterManualPick, afterArchivedRefresh, fallbackFocus
+      }
+    `
+  })
+
+  assert.deepEqual(result.firstFill, ['Water the plants', 'Wipe the sills'])
+  assert.equal(result.focusAfterUnrelatedRepaint, 'early',
+    'an unrelated repaint keeps focus on the vessel control that is still present')
+  assert.deepEqual(result.afterTakingOut, ['Wipe the sills'])
+  assert.equal(result.focusAfterTakingOut, 'early',
+    'focus follows the chore to its still-enabled pool control')
+  assert.equal(result.setAsideClass, true)
+  assert.match(result.setAsideLabel, /Set aside/)
+  assert.deepEqual(result.afterRefill, ['Wipe the sills'])
+  assert.equal(result.statusAfterRefill,
+    'Nothing else was added alongside what you picked. Add anything you like anyway. ' +
+    'Set-aside chores stay out unless you pick them.')
+  assert.deepEqual(result.excludedAfterRefill, ['early'])
+  assert.deepEqual(result.afterManualPick, ['Wipe the sills', 'Water the plants'])
+  assert.deepEqual(result.excludedAfterManualPick, [])
+  assert.deepEqual(result.afterArchivedRefresh, {
+    excluded: ['early'],
+    stillInPool: false,
+    ledgerRepaints: 1
+  })
+  assert.equal(result.fallbackFocus, 'poolHeading',
+    'a chore outside the pool hands focus to the available-chores heading')
+})
+
+test('chore details can set a task aside and offer it again without picking it', async () => {
+  const result = await runBrowserScenario({
+    body: '<main id="app"><section id="view-today" class="view">' +
+      '<span id="budgetHeadline"></span><span id="todayDate"></span>' +
+      '<button id="proposeBundleBtn" type="button">Fill it</button>' +
+      '<button id="startSessionBtn" type="button">Start</button>' +
+      '<input id="customMinutes" type="number">' +
+      '<div id="vesselColumn"><div id="vesselLine"><span id="vesselLineLabel"></span></div>' +
+      '<div id="vesselFill"></div></div>' +
+      '<ol id="vesselList"></ol><p id="vesselIdle"></p>' +
+      '<p id="bundleTotalLine"></p><p id="bundleFitLine"></p>' +
+      '<div id="sessionStatus"></div><div id="doingStatus"></div>' +
+      '<div id="categoryFilter"></div><div id="poolChips"></div>' +
+      '</section>' +
+      '<button id="addTasksBtn"></button><button id="enrichBtn"></button>' +
+      '<span id="enrichStatus"></span><div id="proposedCards"></div>' +
+      '<span id="choresCountLine"></span><div id="choresViews"></div>' +
+      '<div id="choresFilters"><input id="choreSearch"><div id="choreCategoryFilter"></div></div>' +
+      '<div id="activeCards"></div><div id="unscheduledCards"></div>' +
+      '<div id="archivedCards"></div><div id="archiveStatus"></div>' +
+      '<div id="choresStatus"></div>' +
+      '</main>' +
+      '<div id="sheetScrim" hidden></div>' +
+      '<section id="bottomSheet" hidden data-state="closed" role="dialog" aria-modal="true" ' +
+        'aria-labelledby="bottomSheetTitle">' +
+        '<div id="bottomSheetHead"><h2 id="bottomSheetTitle"></h2>' +
+          '<div id="bottomSheetHeadAction"></div></div>' +
+        '<p id="bottomSheetMessage"></p>' +
+        '<div id="bottomSheetActions"></div>' +
+      '</section>',
+    script: `
+      const records = {
+        categories: [], locations: [],
+        tasks: [{
+          _id: 'early', name: 'Water the plants', status: 'active', categoryId: null,
+          locationIds: [], estimatedDuration: 5, scheduledDate: '2026-08-10',
+          schedule: { type: 'one_off' }
+        }]
+      }
+      const clone = value => structuredClone(value)
+      window.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async () => ({}),
+        updateFields: async () => ({})
+      }
+
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      const { initSessionView } = await import(applicationUrl + 'sessionView.js')
+      const { sessionPicks } = await import(applicationUrl + 'sessionPicks.js')
+      await categoryLocationStore.initialize()
+      await initTasksView()
+      initSessionView()
+
+      const actionLabels = () => [...document.querySelectorAll('#bottomSheetActions button')]
+        .map(button => button.textContent.trim())
+      const headLabels = () => [...document.querySelectorAll('#bottomSheetHeadAction button')]
+        .map(button => button.textContent.trim())
+      const choose = async label => {
+        [...document.querySelectorAll('#bottomSheetActions button')]
+          .find(button => button.textContent.trim() === label).click()
+        document.getElementById('bottomSheet').dispatchEvent(
+          new TransitionEvent('transitionend', { propertyName: 'transform', bubbles: true }))
+        await new Promise(resolve => setTimeout(resolve, 0))
+      }
+
+      document.querySelector('[data-detail-id="early"]').click()
+      const initialActions = actionLabels()
+      const initialHeadActions = headLabels()
+      await choose('Set aside')
+      const afterSetAside = {
+        picked: sessionPicks.getPickedIds(),
+        excluded: sessionPicks.getExcludedIds(),
+        marked: document.querySelector('[data-pick-id="early"]')
+          .closest('.pool-chip-wrap').classList.contains('is-excluded')
+      }
+
+      document.querySelector('[data-detail-id="early"]').click()
+      const excludedActions = actionLabels()
+      const excludedHeadActions = headLabels()
+      await choose('Offer again')
+
+      const result = {
+        initialActions, initialHeadActions,
+        afterSetAside,
+        excludedActions, excludedHeadActions,
+        afterOfferAgain: {
+          picked: sessionPicks.getPickedIds(),
+          excluded: sessionPicks.getExcludedIds()
+        }
+      }
+    `
+  })
+
+  assert.deepEqual(result.initialHeadActions, ['Mark as done', 'Add to session'])
+  assert.deepEqual(result.initialActions, ['Close', 'Set aside'])
+  assert.deepEqual(result.afterSetAside, { picked: [], excluded: ['early'], marked: true })
+  assert.deepEqual(result.excludedHeadActions, ['Mark as done', 'Add to session'])
+  assert.deepEqual(result.excludedActions, ['Close', 'Offer again'])
+  assert.deepEqual(result.afterOfferAgain, { picked: [], excluded: [] })
+})
+
+test('a set-aside pool chip stays neutral and fully interactive', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 640 },
+    body: '<main id="app"><span class="pool-chip-wrap is-excluded">' +
+      '<button type="button" class="pool-chip" data-pick-id="early" aria-pressed="false">' +
+        '<span class="pool-chip-dot"></span><span class="pool-chip-name">Water the plants</span>' +
+        '<span class="pool-chip-minutes">5 min</span>' +
+        '<span class="pool-chip-state">Set aside</span>' +
+      '</button>' +
+      '<button type="button" class="pool-chip-info">&hellip;</button>' +
+      '</span></main>',
+    script: `
+      const wrapper = document.querySelector('.pool-chip-wrap')
+      const chip = document.querySelector('.pool-chip')
+      const state = document.querySelector('.pool-chip-state')
+      const result = {
+        borderStyle: getComputedStyle(wrapper).borderStyle,
+        opacity: getComputedStyle(wrapper).opacity,
+        cursor: getComputedStyle(chip).cursor,
+        targetHeight: chip.getBoundingClientRect().height,
+        stateTransform: getComputedStyle(state).textTransform
+      }
+    `
+  })
+
+  assert.deepEqual(result, {
+    borderStyle: 'dashed',
+    opacity: '1',
+    cursor: 'pointer',
+    targetHeight: result.targetHeight,
+    stateTransform: 'uppercase'
+  })
+  assert.ok(result.targetHeight >= 44.5, JSON.stringify(result))
 })
 
 test('Today sets its budget and its two controls on one desktop row, the session beside the pool', async () => {
@@ -2799,7 +3235,19 @@ test('Setup shows one vocabulary at a time on a phone and both side by side on a
 test('adding a chore from the ledger lands in the session the pool is filling', async () => {
   const result = await runBrowserScenario({
     viewport: { width: 390, height: 760 },
-    body: '<button id="addTasksBtn"></button><button id="enrichBtn"></button>' +
+    body: '<section id="view-today">' +
+      '<span id="budgetHeadline"></span><span id="todayDate"></span>' +
+      '<button id="proposeBundleBtn" type="button">Fill it</button>' +
+      '<button id="startSessionBtn" type="button">Start</button>' +
+      '<input id="customMinutes" type="number">' +
+      '<div id="vesselColumn"><div id="vesselLine"><span id="vesselLineLabel"></span></div>' +
+      '<div id="vesselFill"></div></div>' +
+      '<ol id="vesselList"></ol><p id="vesselIdle"></p>' +
+      '<p id="bundleTotalLine"></p><p id="bundleFitLine"></p>' +
+      '<div id="sessionStatus"></div><div id="doingStatus"></div>' +
+      '<div id="categoryFilter"></div><div id="poolChips"></div>' +
+      '</section>' +
+      '<button id="addTasksBtn"></button><button id="enrichBtn"></button>' +
       '<span id="enrichStatus"></span><div id="proposedCards"></div>' +
       '<span id="choresCountLine"></span><div id="choresViews"></div>' +
       '<div id="choresFilters"><input id="choreSearch"><div id="choreCategoryFilter"></div></div>' +
@@ -2837,9 +3285,11 @@ test('adding a chore from the ledger lands in the session the pool is filling', 
 
       const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
       const { initTasksView, selectLedgerView } = await import(applicationUrl + 'tasksView.js')
+      const { initSessionView } = await import(applicationUrl + 'sessionView.js')
       const { sessionPicks } = await import(applicationUrl + 'sessionPicks.js')
       await categoryLocationStore.initialize()
       await initTasksView()
+      initSessionView()
 
       // The session control lives in the title row beside Mark as done, not
       // among the answers to the edit.
@@ -2865,8 +3315,13 @@ test('adding a chore from the ledger lands in the session the pool is filling', 
       await Promise.resolve()
       const reopenedLabels = headLabels()
       const editStaysTwoAnswers = actionLabels()
-      document.querySelector('#bottomSheetActions button').click()
+      document.querySelector('#bottomSheetHeadAction .session-btn').click()
       await new Promise(resolve => setTimeout(resolve, 60))
+      const afterTakingOut = sessionPicks.getPickedIds()
+      const excludedAfterTakingOut = sessionPicks.getExcludedIds()
+
+      document.getElementById('proposeBundleBtn').click()
+      const afterLedgerRefill = sessionPicks.getPickedIds()
 
       // A chore nobody has estimated is still a chore you can decide to do.
       await pressSessionAction('task-no-estimate')
@@ -2892,6 +3347,9 @@ test('adding a chore from the ledger lands in the session the pool is filling', 
         noteAfterAdding,
         reopenedLabels,
         editStaysTwoAnswers,
+        afterTakingOut,
+        excludedAfterTakingOut,
+        afterLedgerRefill,
         headFits,
         headRows,
         noHorizontalOverflow: document.documentElement.scrollWidth <= window.innerWidth,
@@ -2915,6 +3373,11 @@ test('adding a chore from the ledger lands in the session the pool is filling', 
   assert.deepEqual(result.reopenedLabels, ['Mark as done', 'Take out'])
   assert.deepEqual(result.editStaysTwoAnswers, ['Cancel', 'Save'],
     'the edit keeps its two answers; the session control is not one of them')
+  assert.deepEqual(result.afterTakingOut, [])
+  assert.deepEqual(result.excludedAfterTakingOut, [],
+    'the ledger action only takes out; set-aside is an explicit Quick-session choice')
+  assert.deepEqual(result.afterLedgerRefill, ['task-active'],
+    'a plain ledger removal leaves the chore available to Fill it')
   assert.deepEqual(result.withUnestimated, ['task-active', 'task-no-estimate'])
   assert.equal(result.noteIsNeutral, true, 'a chore going into a session is not a failure')
   assert.equal(result.headFits, true, 'the title-row controls stay inside the sheet on a phone')

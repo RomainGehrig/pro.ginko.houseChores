@@ -72,7 +72,6 @@ const outcomeButton = (task, outcome, label, className) =>
 const outcomeActionsHtml = task => task.unavailable
   ? outcomeButton(task, 'cancelled', 'Skip', 'btn btn-ghost')
   : outcomeButton(task, 'done', 'Done', 'btn btn-sage doing-done-btn') +
-    outcomeButton(task, 'already_done', 'Already done', 'btn btn-secondary') +
     outcomeButton(task, 'cancelled', 'Skip', 'btn btn-ghost')
 
 const outcomeLabel = outcome => ({

@@ -765,7 +765,7 @@ test('production completion reconciles periodic to one-off edits made after sess
   }, {
     ...task('task-1'),
     schedule: { type: 'one_off' }
-  }, 'already_done')
+  }, 'done')
 
   assert.equal(taskUpdate.id, 'task-1')
   assert.equal(taskUpdate.fields.status, 'archived')

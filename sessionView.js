@@ -1,19 +1,28 @@
 // ABOUTME: Today — the budget drawn as a vessel you fill, and the pool you fill it from.
 // ABOUTME: Proposals stay inside the budget; anything picked by hand is never measured against it.
 
-import { getActiveTasks } from './tasksView.js'
+import {
+  getActiveTasks, markChoreRecentlyDone, subscribeTaskRefresh
+} from './tasksView.js'
 import { buildBundleProposal } from './bundleLogic.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
 import { selectableReferences } from './categoryLocationLogic.js'
-import { setCurrentSessionAggregate } from './state.js'
+import { setCurrentSessionAggregate, state } from './state.js'
 import { showView, setNavVisible } from './router.js'
 import { startDoing } from './doingView.js'
 import { sessionStore } from './sessionStore.js'
 import { escapeHtml, formatDuration } from './helpers.js'
 import { localDateFromDate } from './scheduleLogic.js'
 import { poolOrder } from './ripenessLogic.js'
-import { openSheet } from './sheet.js'
+import { closeSheetWith, openSheet, sheetBody, sheetHeadAction } from './sheet.js'
 import { sessionPicks } from './sessionPicks.js'
+import {
+  armOrConfirmDone, choreDoneButtonHtml, choreSessionButtonHtml,
+  completionFailureMessage, disarmDone
+} from './chores/choreActions.js'
+import {
+  sessionAddActionLabel, sessionAddLanded, sessionAddNote, sessionAddTarget
+} from './sessionAdd.js'
 import {
   pickedBundle, bundleTotal, bundleTotalLine, bundleFitLine, vesselGeometry,
   todayDateLine
@@ -48,7 +57,7 @@ export function showSessionStartNotice (startResult, status) {
 // leaves them exactly where they were.
 export function clearPicksForStart (startResult) {
   if (startResult?.restored) return false
-  sessionPicks.set([])
+  sessionPicks.clear()
   return true
 }
 
@@ -61,13 +70,30 @@ export function updateBudgetStatus (status, valid) {
   return Boolean(valid)
 }
 
+export function showQuickCompletionResult (status, result) {
+  if (!status) return result?.ok === true
+  if (result?.ok) {
+    status.textContent = ''
+    status.setAttribute('role', 'status')
+    status.removeAttribute?.('data-state')
+    return true
+  }
+
+  const refreshFailed = result?.stage === 'refresh'
+  status.textContent = completionFailureMessage(result)
+  status.setAttribute('role', refreshFailed ? 'status' : 'alert')
+  status.setAttribute('data-state', refreshFailed ? 'info' : 'error')
+  return false
+}
+
 function eligibleTasks () {
   return getActiveTasks().filter(task => Number(task?.estimatedDuration) > 0)
 }
 
 function poolTasks () {
   const inCategory = eligibleTasks().filter(task =>
-    !selectedCategoryId || task.categoryId === selectedCategoryId)
+    (!selectedCategoryId || task.categoryId === selectedCategoryId) &&
+    sessionAddTarget(state.currentSession, task._id) !== 'in-running')
   return poolOrder(inCategory, today())
 }
 
@@ -87,6 +113,7 @@ export function initSessionView () {
   element('poolChips').addEventListener('pointercancel', cancelHold)
   element('poolChips').addEventListener('contextmenu', handleContextDetail)
   categoryLocationStore.subscribe(renderToday)
+  subscribeTaskRefresh(refreshToday)
   // The ledger picks into the same list, so the pool repaints on its changes
   // too rather than only on its own.
   sessionPicks.subscribe(refreshToday)
@@ -104,7 +131,7 @@ function handleTodayClick (event) {
   if (detailButton) return openChoreDetail(detailButton.dataset.detailId)
 
   const removeButton = event.target.closest('[data-remove-id]')
-  if (removeButton) return pickChore(removeButton.dataset.removeId)
+  if (removeButton) return setAsideChore(removeButton.dataset.removeId)
 
   const pickButton = event.target.closest('[data-pick-id]')
   if (pickButton) {
@@ -138,7 +165,27 @@ function pickCategory (categoryId) {
 }
 
 function pickChore (id) {
+  if (sessionPicks.isPicked(id)) return setAsideChore(id)
   sessionPicks.toggle(id)
+}
+
+function setAsideChore (id) {
+  sessionPicks.exclude(id)
+}
+
+export function bundleFillNotice (pickedCount, minutes, hasSetAside = false) {
+  const notice = hasSetAside
+    ? pickedCount
+      ? 'Nothing else was added alongside what you picked. Add anything you like anyway.'
+      : 'Nothing was added for ' + formatDuration(minutes) +
+        '. Try a longer stretch, or pick something anyway.'
+    : pickedCount
+      ? 'Nothing else fits alongside what you picked. Add anything you like anyway.'
+      : 'Nothing here fits ' + formatDuration(minutes) +
+        '. Try a longer stretch, or pick something anyway.'
+  return notice + (hasSetAside
+    ? ' Set-aside chores stay out unless you pick them.'
+    : '')
 }
 
 // The app's own proposal is the one thing that stays inside the budget. It
@@ -146,12 +193,14 @@ function pickChore (id) {
 // help with the rest of the session, not a verdict on the part you chose.
 function fillBundle () {
   const before = sessionPicks.getPickedIds()
+  const excludedIds = sessionPicks.getExcludedIds()
   const proposal = buildBundleProposal(
     eligibleTasks(),
     selectedMinutes,
     selectedCategoryId || null,
     selectableReferences(categoryLocationStore.getSnapshot().categories),
-    before
+    before,
+    excludedIds
   )
   const after = sessionPicks.set(proposal.tasks.map(task => task._id))
 
@@ -166,10 +215,8 @@ function fillBundle () {
 
   // Nothing was added. Which fact that is depends on whether the user had
   // already put something in — and neither of them is a complaint.
-  status.textContent = before.length
-    ? 'Nothing else fits alongside what you picked. Add anything you like anyway.'
-    : 'Nothing here fits ' + formatDuration(selectedMinutes) +
-      '. Try a longer stretch, or pick something anyway.'
+  status.textContent = bundleFillNotice(
+    before.length, selectedMinutes, excludedIds.length > 0)
   status.setAttribute('data-state', 'info')
 }
 
@@ -196,27 +243,114 @@ function handleContextDetail (event) {
   openChoreDetail(chip.dataset.pickId)
 }
 
+export function quickDetailSheetModel (
+  task, categories, day, isPicked, currentSession = null, isExcluded = false
+) {
+  const target = sessionAddTarget(currentSession, task._id)
+  const actions = [{ label: 'Close', value: null, className: 'btn btn-ghost' }]
+  if (target === 'next' && !isPicked) {
+    actions.push({
+      label: isExcluded ? 'Offer again' : 'Set aside',
+      value: isExcluded ? 'include' : 'exclude',
+      className: 'btn btn-secondary'
+    })
+  }
+  const sessionActionLabel = target === 'next' && isPicked
+    ? 'Set aside'
+    : sessionAddActionLabel(target, isPicked)
+  return {
+    title: String(task.name ?? ''),
+    bodyHtml: buildChoreDetailHtml(task, categories, day),
+    headerActionHtml: (target === 'in-running' ? '' : choreDoneButtonHtml()) +
+      choreSessionButtonHtml(sessionActionLabel),
+    actions
+  }
+}
+
+export async function addQuickChoreToSession (task, target, {
+  currentSession = state.currentSession,
+  attachTasks = (...args) => sessionStore.attachTasks(...args),
+  setAggregate = setCurrentSessionAggregate,
+  renderRunning = startDoing,
+  isPicked = id => sessionPicks.isPicked(id),
+  togglePick = id => sessionPicks.toggle(id)
+} = {}) {
+  if (target !== 'running') {
+    if (target === 'in-running') return { target, added: false, aggregate: null }
+    return { target: 'next', added: togglePick(task._id), aggregate: null }
+  }
+
+  if (!currentSession?._id) throw new Error('The session being done is no longer available.')
+  const aggregate = await attachTasks(
+    currentSession._id, [task._id], { whileRunning: true })
+  setAggregate(aggregate)
+
+  if (!sessionAddLanded(aggregate.session, task._id)) {
+    const added = isPicked(task._id) || togglePick(task._id)
+    return { target: 'ended', added, aggregate }
+  }
+
+  await renderRunning(aggregate)
+  return { target: 'running', added: true, aggregate }
+}
+
+function showQuickSessionPlacement (task, placement) {
+  const status = element('sessionStatus')
+  status.textContent = sessionAddNote({
+    name: task.name,
+    target: placement.target,
+    added: placement.added
+  })
+  status.setAttribute('role', 'status')
+  status.setAttribute('data-state', 'info')
+}
+
 async function openChoreDetail (id) {
   cancelHold()
   const task = taskById(id)
   if (!task) return
   const isPicked = sessionPicks.isPicked(id)
+  const isExcluded = sessionPicks.isExcluded(id)
+  const target = sessionAddTarget(state.currentSession, id)
   const categories = selectableReferences(categoryLocationStore.getSnapshot().categories)
 
-  const choice = await openSheet({
-    title: String(task.name ?? ''),
-    bodyHtml: buildChoreDetailHtml(task, categories, today()),
-    actions: [
-      { label: 'Close', value: null, className: 'btn btn-ghost' },
-      {
-        label: isPicked ? 'Take out' : 'Add to session',
-        value: 'toggle',
-        className: 'btn btn-primary'
-      }
-    ]
+  const pendingChoice = openSheet(
+    quickDetailSheetModel(
+      task, categories, today(), isPicked, state.currentSession, isExcluded))
+  const head = sheetHeadAction()
+  const done = head?.querySelector('.done-btn')
+  done?.addEventListener('click', () => {
+    if (!armOrConfirmDone(done)) return
+    closeSheetWith('done')
+  })
+  sheetBody()?.addEventListener('click', () => disarmDone(done))
+  head?.querySelector('.session-btn')?.addEventListener('click', () => {
+    closeSheetWith(target === 'next' && isPicked ? 'exclude' : 'session')
   })
 
-  if (choice === 'toggle') pickChore(id)
+  const choice = await pendingChoice
+
+  if (choice === 'session') {
+    try {
+      const placement = await addQuickChoreToSession(task, target)
+      if (placement.target === 'running') renderToday()
+      showQuickSessionPlacement(task, placement)
+    } catch (error) {
+      const status = element('sessionStatus')
+      status.textContent = 'Could not add that to the session you are doing: ' + error.message
+      status.setAttribute('role', 'alert')
+      status.setAttribute('data-state', 'error')
+    }
+  }
+  if (choice === 'done') {
+    const result = await markChoreRecentlyDone(task)
+    // Removing a pick already repaints through the shared store. A chore that
+    // was only in the pool has no such event, so repaint its new rhythm here.
+    if (result.ok && !isPicked) renderToday()
+    showQuickCompletionResult(element('sessionStatus'), result)
+  }
+  if (choice === 'exclude') setAsideChore(id)
+  if (choice === 'include') sessionPicks.include(id)
 }
 
 // Re-rendering the pool replaces the very control that was just pressed, so
@@ -228,13 +362,17 @@ function rememberFocus () {
   if (!key) return null
   const attribute = active.dataset.pickId ? 'data-pick-id'
     : active.dataset.detailId ? 'data-detail-id'
-      : active.dataset.removeId ? 'data-remove-id' : 'data-category-id'
+      : active.dataset.removeId
+        ? (sessionPicks.isPicked(active.dataset.removeId) ? 'data-remove-id' : 'data-pick-id')
+        : 'data-category-id'
   return attribute + '="' + key + '"'
 }
 
 function restoreFocus (selector) {
   if (!selector) return
-  document.querySelector('#view-today [' + selector + ']')?.focus()
+  const matchingControl = document.querySelector('#view-today [' + selector + ']')
+  if (matchingControl) return matchingControl.focus()
+  if (selector.startsWith('data-pick-id=')) element('poolHeading')?.focus()
 }
 
 function renderToday () {
@@ -246,6 +384,7 @@ function renderToday () {
   const day = today()
   const pool = poolTasks()
   const pickedIds = sessionPicks.getPickedIds()
+  const excludedIds = sessionPicks.getExcludedIds()
   const bundle = pickedTasks()
   const total = bundleTotal(bundle)
   const geometry = vesselGeometry(total, selectedMinutes)
@@ -282,7 +421,7 @@ function renderToday () {
   element('categoryFilter').innerHTML = buildCategoryTabsHtml(categories, selectedCategoryId)
   const categoryName = categories.find(item => item._id === selectedCategoryId)?.name || ''
   element('poolChips').innerHTML = pool.length
-    ? buildPoolChipsHtml(pool, pickedIds, day)
+    ? buildPoolChipsHtml(pool, pickedIds, day, excludedIds)
     : buildPoolEmptyHtml(categoryName)
 
   restoreFocus(focusKey)

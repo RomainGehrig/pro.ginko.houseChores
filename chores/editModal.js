@@ -5,27 +5,6 @@ import { buildTaskEditorModel } from '../categoryLocationLogic.js'
 import { escapeAttribute, escapeHtml } from '../helpers.js'
 import { buildScheduleEditorModel, scheduleEditorHtml, readScheduleEditor } from '../scheduleEditor.js'
 import { categoryPillsHtml, estimateStepperHtml, locationPillsHtml } from './fieldPills.js'
-import { doneLabel } from './ledgerLogic.js'
-
-// Recording a completion is not an edit — it is the other thing you open a
-// chore to do — so it rides in the sheet's title row rather than at the head of
-// the fields. It still asks a second time in its own label, being awkward to
-// take back.
-export function choreDoneButtonHtml (confirming = false) {
-  return '<button type="button" class="btn done-btn" aria-pressed="' +
-    (confirming ? 'true' : 'false') + '">' + doneLabel(confirming) + '</button>'
-}
-
-// Putting the chore in a session is the other thing you open a chore to do, so
-// it stands beside marking it done. It is the quieter of the two: filing a
-// completion is a write, this is a plan. No label means the chore has nowhere to
-// go — a session already has it — and then there is no control rather than one
-// that could only refuse.
-export function choreSessionButtonHtml (label) {
-  if (!label) return ''
-  return '<button type="button" class="btn btn-quiet session-btn">' +
-    escapeHtml(String(label)) + '</button>'
-}
 
 export function editModalHtml (task, snapshot, state = {}) {
   const model = buildTaskEditorModel(task, snapshot)
