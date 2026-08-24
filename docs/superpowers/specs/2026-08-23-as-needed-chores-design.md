@@ -1,7 +1,7 @@
 # As-needed chores — design specification
 
-**Date:** 2026-08-23  
-**Status:** approved in conversation; awaiting written-spec review  
+**Date:** 2026-08-23
+**Status:** approved in conversation; awaiting written-spec review
 **Scope:** first version of condition-gated chores
 
 ## 1. Purpose
