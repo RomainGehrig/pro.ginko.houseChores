@@ -954,13 +954,13 @@ const PRIMARY_NAV_BODY =
   '<nav class="bottom-nav" aria-label="Primary">' +
     '<p class="nav-wordmark display">Chore Planner</p>' +
     '<a data-route="today" href="#/today">Quick session</a>' +
+    '<a data-route="as-needed" href="#/as-needed">As needed</a>' +
     '<a data-route="chores" href="#/chores">Chores</a>' +
     '<a data-route="inbox" href="#/inbox">Capture <span class="nav-count fig">12</span></a>' +
     '<a data-route="log" href="#/log" aria-current="page">Log</a>' +
-    '<a data-route="setup" href="#/setup">Setup</a>' +
   '</nav>'
 
-test('the navigation names destinations as the design writes them and marks the one you are on', async () => {
+test('primary navigation names the five destinations in their exact route order', async () => {
   const result = await runBrowserScenario({
     viewport: { width: 390, height: 640 },
     mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
@@ -970,7 +970,8 @@ test('the navigation names destinations as the design writes them and marks the 
       const resting = document.querySelector('[data-route="today"]')
       const hereStyle = getComputedStyle(here)
       const result = {
-        labels: [...document.querySelectorAll('.bottom-nav a')].map(a => a.firstChild.textContent.trim()),
+        destinations: [...document.querySelectorAll('.bottom-nav a')]
+          .map(a => [a.firstChild.textContent.trim(), a.getAttribute('href')]),
         transform: [...document.querySelectorAll('.bottom-nav a')]
           .map(a => getComputedStyle(a).textTransform),
         // The result crosses back as Latin-1, so the separator travels as its
@@ -986,7 +987,13 @@ test('the navigation names destinations as the design writes them and marks the 
     `
   })
 
-  assert.deepEqual(result.labels, ['Quick session', 'Chores', 'Capture', 'Log', 'Setup'])
+  assert.deepEqual(result.destinations, [
+    ['Quick session', '#/today'],
+    ['As needed', '#/as-needed'],
+    ['Chores', '#/chores'],
+    ['Capture', '#/inbox'],
+    ['Log', '#/log']
+  ])
   assert.ok(result.transform.every(value => value === 'none'), JSON.stringify(result.transform))
   assert.deepEqual(result.countBefore, [0x22, 0xb7, 0x20, 0x22],
     'the capture count reads "Capture · 12", as in the doc')
@@ -1118,7 +1125,7 @@ test('the primary navigation turns into a side rail on a desktop and stays a bar
         lefts: links.map(link => Math.round(link.getBoundingClientRect().left)),
         tops: links.map(link => Math.round(link.getBoundingClientRect().top)),
         appPaddingLeft: getComputedStyle(app).paddingLeft,
-        currentBackground: getComputedStyle(links[3]).backgroundColor,
+        currentBackground: getComputedStyle(links[4]).backgroundColor,
         restingBackground: getComputedStyle(links[0]).backgroundColor,
         scrollWidth: document.documentElement.scrollWidth,
         viewportWidth: window.innerWidth
@@ -1135,6 +1142,63 @@ test('the primary navigation turns into a side rail on a desktop and stays a bar
   assert.ok(Number.parseFloat(desktop.appPaddingLeft) >= 188, JSON.stringify(desktop))
   assert.notEqual(desktop.currentBackground, desktop.restingBackground, JSON.stringify(desktop))
   assert.ok(desktop.scrollWidth <= desktop.viewportWidth, JSON.stringify(desktop))
+})
+
+test('As needed route renders its ledger shell and the Chores Setup link opens Setup', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 800 },
+    mediaFeatures: [{ name: 'prefers-color-scheme', value: 'light' }],
+    body: applicationMarkup,
+    script: `
+      const consoleErrors = []
+      console.error = (...values) => consoleErrors.push(values.map(String).join(' '))
+      window.location.hash = '#/as-needed'
+      const { initRouter } = await import(applicationUrl + 'router.js')
+      initRouter()
+      const asNeeded = document.getElementById('view-as-needed')
+      const asNeededHeading = asNeeded?.querySelector('.route-heading')
+      const setupLink = document.querySelector('#view-chores .ledger-head a[href="#/setup"]')
+      const before = {
+        hash: window.location.hash,
+        heading: asNeededHeading?.textContent.trim(),
+        headingFocused: document.activeElement === asNeededHeading,
+        screenDisplay: asNeeded ? getComputedStyle(asNeeded).display : null,
+        groupedContainer: document.getElementById('asNeededCards')?.classList.contains('ledger-pane'),
+        currentRoute: document.querySelector('.bottom-nav [aria-current="page"]')?.dataset.route,
+        setupHref: setupLink?.getAttribute('href')
+      }
+      setupLink?.click()
+      await new Promise(resolve => setTimeout(resolve, 0))
+      const setup = document.getElementById('view-setup')
+      const result = {
+        consoleErrors,
+        before,
+        after: {
+          hash: window.location.hash,
+          screenDisplay: setup ? getComputedStyle(setup).display : null,
+          headingFocused: document.activeElement === setup?.querySelector('.route-heading'),
+          primaryCurrent: document.querySelector('.bottom-nav [aria-current="page"]')?.dataset.route || null
+        }
+      }
+    `
+  })
+
+  assert.deepEqual(result.consoleErrors, [])
+  assert.deepEqual(result.before, {
+    hash: '#/as-needed',
+    heading: 'As needed. Things to check',
+    headingFocused: true,
+    screenDisplay: 'block',
+    groupedContainer: true,
+    currentRoute: 'as-needed',
+    setupHref: '#/setup'
+  })
+  assert.deepEqual(result.after, {
+    hash: '#/setup',
+    screenDisplay: 'block',
+    headingFocused: true,
+    primaryCurrent: null
+  })
 })
 
 test('contextual work navigation stays in flow with usable targets at phone and desktop widths', async () => {
@@ -2674,11 +2738,12 @@ const LEDGER_HEAD_SCRIPT = `
   }
   const filters = document.getElementById('choresFilters')
   const result = {
-    title: box('.ledger-title'),
+    title: box('#view-chores .ledger-title'),
     search: box('#choreSearch'),
     views: box('#choresViews'),
     cats: box('#choreCategoryFilter'),
-    headingSize: getComputedStyle(document.querySelector('.ledger-head .route-heading')).fontSize,
+    headingSize: getComputedStyle(
+      document.querySelector('#view-chores .ledger-head .route-heading')).fontSize,
     searchRadius: getComputedStyle(document.getElementById('choreSearch')).borderRadius,
     hiddenLeavesNothing: (() => {
       filters.hidden = true

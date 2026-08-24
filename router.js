@@ -4,11 +4,12 @@
 // round: opening the app is more often "what have I got" than "start something
 // now", and the round is one tap away when it is the answer.
 const DEFAULT_ROUTE = { name: 'chores', param: null }
-const SIMPLE_ROUTES = new Set(['today', 'inbox', 'chores', 'archive', 'doing', 'log', 'setup'])
+const SIMPLE_ROUTES = new Set(['today', 'as-needed', 'inbox', 'chores', 'archive', 'doing', 'log', 'setup'])
 const PARAMETER_ROUTES = new Set(['chore', 'receipt'])
-const SCREEN_NAMES = ['today', 'inbox', 'chores', 'setup', 'doing', 'review', 'log']
+const SCREEN_NAMES = ['today', 'as-needed', 'inbox', 'chores', 'setup', 'doing', 'review', 'log']
 const ROUTE_SCREENS = {
   today: 'today',
+  'as-needed': 'as-needed',
   inbox: 'inbox',
   chores: 'chores',
   chore: 'chores',
@@ -20,11 +21,11 @@ const ROUTE_SCREENS = {
 }
 const PRIMARY_ROUTE_BY_ROUTE = {
   today: 'today',
+  'as-needed': 'as-needed',
   inbox: 'inbox',
   chores: 'chores',
   chore: 'chores',
   archive: 'chores',
-  setup: 'setup',
   log: 'log'
 }
 const LEGACY_ROUTES = {
@@ -82,7 +83,7 @@ function routeForView (name, param) {
 function navigationItems () {
   if (typeof document === 'undefined') return []
   if (typeof document.querySelectorAll === 'function') return [...document.querySelectorAll('.bottom-nav [data-route]')]
-  return ['today', 'chores', 'inbox', 'log', 'setup']
+  return ['today', 'as-needed', 'chores', 'inbox', 'log']
     .map(name => document.querySelector?.('.bottom-nav [data-route="' + name + '"]'))
     .filter(Boolean)
 }

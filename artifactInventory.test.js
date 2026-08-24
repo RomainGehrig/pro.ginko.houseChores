@@ -75,7 +75,7 @@ test('Review provides a named static duration-offer region before Finish', async
   assert.ok(offersAt < finishAt)
 })
 
-test('route shell declares four primary canonical anchors, seven focus headings, and static live regions', async () => {
+test('route shell declares five primary canonical anchors, eight focus headings, and static live regions', async () => {
   const html = await readFile(new URL('./index.html', import.meta.url), 'utf8')
   const navMarkup = html.match(/<nav class="bottom-nav" aria-label="Primary">([\s\S]*?)<\/nav>/)?.[1] || ''
   const nav = [...navMarkup.matchAll(/<a[^>]*data-route="([^"]+)"[^>]*href="([^"]+)"[^>]*>/g)]
@@ -84,14 +84,14 @@ test('route shell declares four primary canonical anchors, seven focus headings,
   const routeHeadings = [...html.matchAll(/<h1[^>]*class="route-heading[^"]*"[^>]*tabindex="-1"[^>]*>/g)]
   const allH1Headings = [...html.matchAll(/<h1\b[^>]*>/g)]
 
-  // Chores sits second, next to the screen the app now opens on; capture is a
-  // thing you do occasionally, not a place you steer by.
+  // The five destinations keep the order of the approved primary journey.
+  // Setup remains reachable from the Chores header without occupying this bar.
   assert.deepEqual(nav, [
     ['today', '#/today'],
+    ['as-needed', '#/as-needed'],
     ['chores', '#/chores'],
     ['inbox', '#/inbox'],
-    ['log', '#/log'],
-    ['setup', '#/setup']
+    ['log', '#/log']
   ])
   const inboxAnchor = navMarkup.match(/<a[^>]*id="inboxNav"[^>]*>/)?.[0] || ''
   assert.doesNotMatch(inboxAnchor, /\shidden(?:\s|>)/)
@@ -102,14 +102,16 @@ test('route shell declares four primary canonical anchors, seven focus headings,
   assert.match(html, /data-context-route="doing"[^>]*href="#\/doing"[^>]*hidden[^>]*>Resume round<\/a>/)
   assert.match(html, /data-context-route="review"[^>]*href="#\/receipt"[^>]*hidden[^>]*>Return to review<\/a>/)
   assert.deepEqual(screenIds, [
-    'view-today', 'view-inbox', 'view-chores',
+    'view-today', 'view-as-needed', 'view-inbox', 'view-chores',
     'view-setup', 'view-doing', 'view-review', 'view-log'
   ])
-  assert.equal(routeHeadings.length, 7)
-  assert.equal(allH1Headings.length, 7)
+  assert.equal(routeHeadings.length, 8)
+  assert.equal(allH1Headings.length, 8)
   assert.doesNotMatch(html, /<h1[^>]*>Chore Planner<\/h1>/)
   assert.match(html, /id="sessionStatus"[^>]*role="status"/)
+  assert.match(html, /id="asNeededStatus"[^>]*role="status"/)
   assert.match(html, /id="choresStatus"[^>]*role="status"/)
+  assert.match(html, /<section id="view-chores"[\s\S]*?<a[^>]*href="#\/setup"[^>]*>Setup<\/a>/)
   assert.match(html, /id="archiveStatus"[^>]*role="status"/)
   assert.match(html, /id="undoToast"[^>]*hidden[^>]*role="status"[^>]*aria-live="polite"/)
   assert.match(html, /id="undoToastMessage"/)

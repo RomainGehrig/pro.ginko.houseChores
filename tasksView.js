@@ -38,7 +38,8 @@ import { runArchiveAction } from './archiveView.js'
 import { sessionStore } from './sessionStore.js'
 import { sessionPicks } from './sessionPicks.js'
 import { bundleTotal, pickedBundle } from './pickingLogic.js'
-import { isTaskEligible, taskModeFields } from './taskModeLogic.js'
+import { isAsNeededTask, isTaskEligible, taskModeFields } from './taskModeLogic.js'
+import { asNeededCategoryPillsHtml, asNeededScreenHtml } from './asNeededView.js'
 import {
   sessionAddActionLabel, sessionAddLanded, sessionAddNote, sessionAddRejected, sessionAddTarget,
   sessionFloatModel, sessionMarks, sessionUnderWay
@@ -62,6 +63,13 @@ const ledger = {
   openTaskId: null,
   confirmDoneId: null,
   confirmDeleteId: null
+}
+
+const asNeededState = {
+  query: '',
+  categoryId: '',
+  confirmingDoneId: null,
+  datePrompt: null
 }
 
 export function overlayPendingTaskArchives (tasks, pendingArchives) {
@@ -101,6 +109,12 @@ export async function initTasksView({ onSessionAggregateChange = null } = {}) {
   document.getElementById('choreSearch').addEventListener('input', event => {
     ledger.query = event.target.value
     renderLedger()
+  })
+  document.getElementById('asNeededCards')?.addEventListener('click', handleAsNeededClick)
+  document.getElementById('asNeededCategoryFilter')?.addEventListener('click', handleAsNeededCategoryClick)
+  document.getElementById('asNeededSearch')?.addEventListener('input', event => {
+    asNeededState.query = event.target.value
+    renderAsNeeded()
   })
 
   categoryLocationStore.subscribe(renderTasksAfterReferencePublication)
@@ -160,6 +174,7 @@ function renderTasks() {
   const snapshot = categoryLocationStore.getSnapshot()
   renderProposed()
   renderLedger(snapshot)
+  renderAsNeeded(snapshot)
   syncEnrichmentAvailability()
 }
 
@@ -241,6 +256,44 @@ const availableLiveTask = task => liveTask(task) && isTaskEligible(task)
 
 export function getActiveTasks() {
   return tasksCache.filter(availableLiveTask)
+}
+
+export function getAsNeededTasks () {
+  return tasksCache.filter(task => liveTask(task) && isAsNeededTask(task))
+}
+
+function asNeededFilterCategoryName (snapshot) {
+  return (snapshot.categories || [])
+    .find(category => category._id === asNeededState.categoryId)?.name || 'All'
+}
+
+function currentAsNeededState (snapshot) {
+  return {
+    ...asNeededState,
+    filter: {
+      query: asNeededState.query,
+      category: asNeededFilterCategoryName(snapshot)
+    }
+  }
+}
+
+function renderAsNeeded (snapshot = categoryLocationStore.getSnapshot()) {
+  const container = document.getElementById('asNeededCards')
+  if (!container) return
+
+  const tasks = getAsNeededTasks()
+  const state = currentAsNeededState(snapshot)
+  const readyCount = tasks.filter(task => task.readiness === 'ready').length
+  const countLine = document.getElementById('asNeededCountLine')
+  if (countLine) countLine.textContent = tasks.length + ' as needed · ' + readyCount + ' ready'
+
+  const categoryFilter = document.getElementById('asNeededCategoryFilter')
+  if (categoryFilter) {
+    categoryFilter.innerHTML = asNeededCategoryPillsHtml(
+      selectableReferences(snapshot.categories), state)
+  }
+  container.innerHTML = asNeededScreenHtml(
+    tasks, snapshot, localDateFromDate(new Date()), state)
 }
 
 export function archiveTaskOptimistically (task, {
@@ -781,6 +834,13 @@ function handleLedgerCategoryClick (evt) {
   renderLedger()
 }
 
+function handleAsNeededCategoryClick (evt) {
+  const tab = evt.target.closest('[data-category-id]')
+  if (!tab) return
+  asNeededState.categoryId = tab.dataset.categoryId || ''
+  renderAsNeeded()
+}
+
 // The estimate is one value written from three places — the two steps, the
 // presets and the field itself — so they all go through here.
 function setRowEstimate (card, minutes) {
@@ -943,6 +1003,7 @@ async function openChoreEditor (id) {
     tasksCache = tasksCache.map(item =>
       item._id === task._id ? { ...item, ...fields } : item)
     renderLedger()
+    renderAsNeeded()
   } catch {
     showChoresFailure("Couldn't save that. The chore is unchanged.")
   }
@@ -1000,6 +1061,13 @@ function handleEditorChange (evt) {
 function handleLedgerClick (evt) {
   const card = evt.target.closest('.ledger-row')
   if (!card || !evt.target.closest('.ledger-row-summary')) return
+  openChoreEditor(card.dataset.id)
+}
+
+function handleAsNeededClick (evt) {
+  const edit = evt.target.closest('.as-needed-edit')
+  const card = edit?.closest('.as-needed-row')
+  if (!card) return
   openChoreEditor(card.dataset.id)
 }
 

@@ -550,8 +550,8 @@ label:has(input[type="radio"]) {
 }
 
 /* One nav, two shapes: a bar under the thumb on a phone, a rail down the side
-   of the same 1020px band on a desktop. Setup stays in both — dropping it from
-   the phone would leave the screen with no way in. */
+   of the same 1020px band on a desktop. The five frequent destinations keep
+   their order in both shapes; Setup lives with the Chores ledger it configures. */
 .bottom-nav {
   background: var(--plate);
   border-top: 1px solid var(--rule);
@@ -1048,7 +1048,8 @@ label:has(input[type="radio"]) {
 
 /* The ledger's line sits between the filters and the first band, so it needs
    air under it as well as over it — a band label is a heading, not a caption. */
-#choresStatus {
+#choresStatus,
+#asNeededStatus {
   margin-bottom: var(--s3);
 }
 
@@ -1084,6 +1085,15 @@ label:has(input[type="radio"]) {
 
 .ledger-title {
   min-width: 0;
+}
+
+.ledger-setup-link {
+  align-items: center;
+  color: var(--graphite);
+  display: inline-flex;
+  font-size: var(--t-note);
+  min-height: 45px;
+  padding: 0 var(--s2);
 }
 
 .ledger-head .route-heading {
@@ -1169,7 +1179,8 @@ label:has(input[type="radio"]) {
   padding: 16px;
 }
 
-.ledger-row-summary {
+.ledger-row-summary,
+.as-needed-edit {
   align-items: center;
   background: transparent;
   border: 0;
@@ -1185,6 +1196,45 @@ label:has(input[type="radio"]) {
   padding: 0;
   text-align: left;
   width: 100%;
+}
+
+/* The inspection destination keeps the Chores summary intact, then gives its
+   direct readiness choices a separate line. Dates continue inline only when a
+   one-off chore needs the user to choose the next factual check date. */
+.as-needed-row {
+  display: grid;
+  gap: var(--s2);
+}
+
+.as-needed-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  padding-left: 70px;
+}
+
+.as-needed-actions > button {
+  background: transparent;
+  border-color: var(--edge);
+  color: var(--ink);
+  font-size: var(--t-note);
+}
+
+.as-needed-date-prompt {
+  align-items: end;
+  display: grid;
+  gap: var(--s2);
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  width: 100%;
+}
+
+.as-needed-date-prompt label {
+  grid-column: 1 / -1;
+  margin: 0;
+}
+
+.as-needed-date-prompt .as-needed-date {
+  margin-top: var(--s1);
 }
 
 /* An unscheduled chore carries no band stamp, so the column the stamp would
@@ -1388,6 +1438,18 @@ label:has(input[type="radio"]) {
   .row-tag {
     display: none;
   }
+
+  .as-needed-actions {
+    padding-left: 0;
+  }
+
+  .as-needed-date-prompt {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .as-needed-date-prompt label {
+    grid-column: 1 / -1;
+  }
 }
 
 /* On a desktop the head is one row — heading, search, view control, bottoms
@@ -1410,6 +1472,16 @@ label:has(input[type="radio"]) {
   #choresFilters { display: contents; }
   #choreSearch { border-radius: var(--r-pill); font-size: 13.5px; grid-area: search; }
   #choreCategoryFilter { grid-area: cats; }
+
+  .as-needed-head {
+    grid-template-areas:
+      "title search"
+      "cats  cats";
+    grid-template-columns: minmax(0, 1fr) 220px;
+  }
+  #asNeededFilters { display: contents; }
+  #asNeededSearch { border-radius: var(--r-pill); font-size: 13.5px; grid-area: search; }
+  #asNeededCategoryFilter { grid-area: cats; }
 
   .ledger-head .route-heading {
     font-size: 36px;

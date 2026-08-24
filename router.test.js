@@ -5,8 +5,8 @@ import test from 'node:test'
 import assert from 'node:assert/strict'
 import { hasRequestedRoute, initRouter, parseRoute, setNavVisible, showView } from './router.js'
 
-const screenNames = ['today', 'inbox', 'chores', 'setup', 'doing', 'review', 'log']
-const primaryRoutes = ['today', 'chores', 'inbox', 'log', 'setup']
+const screenNames = ['today', 'as-needed', 'inbox', 'chores', 'setup', 'doing', 'review', 'log']
+const primaryRoutes = ['today', 'as-needed', 'chores', 'inbox', 'log']
 
 function installRouterDom (hash = '') {
   const views = new Map(screenNames.map(name => {
@@ -75,6 +75,7 @@ test('parseRoute recognizes every final route and decodes its parameter', () => 
     ['#', { name: 'chores', param: null }],
     ['#/', { name: 'chores', param: null }],
     ['#/today', { name: 'today', param: null }],
+    ['#/as-needed', { name: 'as-needed', param: null }],
     ['#/inbox', { name: 'inbox', param: null }],
     ['#/chores', { name: 'chores', param: null }],
     ['#/archive', { name: 'archive', param: null }],
@@ -99,7 +100,7 @@ test('parseRoute falls back to chores for malformed, missing, unknown, and extra
 
 test('each final route shows its Stage 3 screen, focuses its heading, and canonicalizes fallback', () => {
   const expectedScreens = {
-    today: 'today', inbox: 'inbox', chores: 'chores', chore: 'chores', archive: 'chores',
+    today: 'today', 'as-needed': 'as-needed', inbox: 'inbox', chores: 'chores', chore: 'chores', archive: 'chores',
     setup: 'setup', doing: 'doing', receipt: 'review', log: 'log'
   }
 
@@ -110,6 +111,9 @@ test('each final route shows its Stage 3 screen, focuses its heading, and canoni
     initRouter()
     assert.equal(dom.views.get(screen).style.display, '', hash)
     assert.equal(dom.views.get(screen).heading.focusCalls, 1, hash)
+    assert.deepEqual([...dom.views.entries()]
+      .filter(([, view]) => view.style.display !== 'none')
+      .map(([name]) => name), [screen], hash)
   }
 
   const fallback = installRouterDom('#/not-a-route')
@@ -121,8 +125,8 @@ test('each final route shows its Stage 3 screen, focuses its heading, and canoni
 
 test('primary navigation maps routes to the sole factual current destination', () => {
   const expectedPrimary = {
-    today: 'today', inbox: 'inbox', chores: 'chores', chore: 'chores', archive: 'chores',
-    setup: 'setup', log: 'log', doing: null, receipt: null
+    today: 'today', 'as-needed': 'as-needed', inbox: 'inbox', chores: 'chores',
+    chore: 'chores', archive: 'chores', setup: null, log: 'log', doing: null, receipt: null
   }
 
   for (const [route, primary] of Object.entries(expectedPrimary)) {

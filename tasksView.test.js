@@ -11,6 +11,30 @@ import {
 } from './tasksView.js'
 import { LEGACY_CATEGORY_SELECTION } from './categoryLocationLogic.js'
 import { sessionPicks } from './sessionPicks.js'
+import { closeSheetWith } from './sheet.js'
+
+const domNode = () => {
+  const listeners = new Map()
+  return {
+    hidden: false,
+    textContent: '',
+    innerHTML: '',
+    disabled: false,
+    dataset: {},
+    children: [],
+    listeners,
+    classList: { toggle: () => {}, contains: () => false },
+    addEventListener: (type, listener) => listeners.set(type, listener),
+    setAttribute: () => {},
+    removeAttribute: () => {},
+    querySelector: () => null,
+    querySelectorAll: () => [],
+    replaceChildren () { this.children = [] },
+    appendChild (child) { this.children.push(child) },
+    contains: () => false,
+    getBoundingClientRect: () => ({})
+  }
+}
 
 test('active-task cache and retained session picks exclude waiting as-needed chores', async () => {
   const originalFreezr = globalThis.freezr
@@ -57,6 +81,100 @@ test('active-task cache and retained session picks exclude waiting as-needed cho
     assert.deepEqual(sessionPicks.getPickedIds(), ['scheduled', 'ready'])
   } finally {
     sessionPicks.retain = originalRetain
+    sessionPicks.reset()
+    if (originalFreezr === undefined) delete globalThis.freezr
+    else globalThis.freezr = originalFreezr
+    if (originalDocument === undefined) delete globalThis.document
+    else globalThis.document = originalDocument
+  }
+})
+
+test('As needed renders every live as-needed chore from the shared cache and opens its shared editor', async () => {
+  const originalFreezr = globalThis.freezr
+  const originalDocument = globalThis.document
+  const nodes = new Map()
+  const node = id => {
+    if (!nodes.has(id)) nodes.set(id, domNode())
+    return nodes.get(id)
+  }
+  const records = [
+    {
+      _id: 'scheduled', name: 'Mop kitchen', status: 'active', taskMode: 'scheduled',
+      readiness: null, scheduledDate: '2026-08-24', schedule: { type: 'one_off' }
+    },
+    {
+      _id: 'ready', name: 'Empty rain barrel', status: 'approved_recurring',
+      taskMode: 'as_needed', readiness: 'ready', scheduledDate: '2026-08-23',
+      schedule: { type: 'periodic', every: 2, unit: 'day' }
+    },
+    {
+      _id: 'waiting-now', name: 'Check dehumidifier', status: 'active',
+      taskMode: 'as_needed', readiness: 'waiting', scheduledDate: '2026-08-20',
+      schedule: { type: 'periodic', every: 1, unit: 'week' }
+    },
+    {
+      _id: 'waiting-later', name: 'Inspect salt level', status: 'approved_recurring',
+      taskMode: 'as_needed', readiness: 'waiting', scheduledDate: '2099-12-20',
+      schedule: { type: 'fixed', pattern: { kind: 'annual_date', month: 12, day: 20 } }
+    },
+    {
+      _id: 'archived', name: 'Archived inspection', status: 'archived',
+      taskMode: 'as_needed', readiness: 'ready', scheduledDate: '2026-08-22',
+      schedule: { type: 'one_off' }
+    }
+  ]
+
+  const bottomSheet = node('bottomSheet')
+  bottomSheet.dataset.state = 'closed'
+  const sheetActions = node('bottomSheetActions')
+  sheetActions.querySelectorAll = selector => selector === 'button:not([disabled])'
+    ? sheetActions.children
+    : []
+  const sheetMessage = node('bottomSheetMessage')
+  sheetMessage.querySelector = () => null
+  bottomSheet.querySelectorAll = () => sheetActions.children
+
+  globalThis.document = {
+    documentElement: { dataset: {} },
+    activeElement: null,
+    getElementById: id => id === 'sessionFloat' ? null : node(id),
+    addEventListener: () => {},
+    createElement: () => {
+      const created = domNode()
+      created.focus = () => {}
+      return created
+    }
+  }
+  globalThis.freezr = { query: async collection => collection === 'tasks' ? structuredClone(records) : [] }
+  sessionPicks.reset()
+
+  try {
+    await tasksView.initTasksView()
+
+    assert.deepEqual(tasksView.getAsNeededTasks().map(task => task._id), [
+      'ready', 'waiting-now', 'waiting-later'
+    ])
+    assert.equal(node('asNeededCountLine').textContent, '3 as needed · 1 ready')
+    assert.match(node('asNeededCards').innerHTML, /data-id="ready"/)
+    assert.match(node('asNeededCards').innerHTML, /data-id="waiting-now"/)
+    assert.match(node('asNeededCards').innerHTML, /data-id="waiting-later"/)
+    assert.doesNotMatch(node('asNeededCards').innerHTML, /data-id="scheduled"|data-id="archived"/)
+
+    const card = { dataset: { id: 'waiting-now' } }
+    const edit = { closest: selector => selector === '.as-needed-row' ? card : null }
+    const click = node('asNeededCards').listeners.get('click')
+    assert.equal(typeof click, 'function')
+    click({
+      target: {
+        closest: selector => selector === '.as-needed-edit' ? edit : null
+      }
+    })
+
+    assert.equal(node('bottomSheetTitle').textContent, 'Edit chore')
+    assert.match(node('bottomSheetMessage').innerHTML, /class="edit-modal"/)
+    assert.match(node('bottomSheetMessage').innerHTML, /Check dehumidifier/)
+    closeSheetWith(null)
+  } finally {
     sessionPicks.reset()
     if (originalFreezr === undefined) delete globalThis.freezr
     else globalThis.freezr = originalFreezr
