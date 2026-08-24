@@ -45,6 +45,44 @@ test('active schedule edits preserve the current date unless explicitly changed'
   })
 })
 
+test('an editor save merges onto the cache entry current when its write finishes', async () => {
+  const original = {
+    _id: 'concurrent-edit', name: 'Descale kettle', estimatedDuration: 5,
+    status: 'active', schedule: { type: 'one_off' }
+  }
+  await tasksView.refreshTaskCache({ readTasks: async () => [original] })
+  let releaseWrite
+  let markWriteStarted
+  const writeGate = new Promise(resolve => { releaseWrite = resolve })
+  const writeStarted = new Promise(resolve => { markWriteStarted = resolve })
+
+  assert.equal(typeof tasksView.saveTaskEditorFields, 'function')
+  const saving = tasksView.saveTaskEditorFields(original._id, {
+    name: 'Descale the kettle', estimatedDuration: 8
+  }, {
+    update: async () => {
+      markWriteStarted()
+      await writeGate
+    }
+  })
+  await writeStarted
+  tasksView.replaceCachedTask({
+    ...original,
+    lastCompletedDate: 999,
+    scheduledDate: '2026-09-01'
+  })
+  releaseWrite()
+  await saving
+
+  assert.deepEqual(tasksView.getActiveTasks(), [{
+    ...original,
+    name: 'Descale the kettle',
+    estimatedDuration: 8,
+    lastCompletedDate: 999,
+    scheduledDate: '2026-09-01'
+  }])
+})
+
 test('outside completion advances the chore and removes it from the pending session', async () => {
   const nowMs = new Date(2026, 7, 23, 12, 0, 0).getTime()
   const writes = []

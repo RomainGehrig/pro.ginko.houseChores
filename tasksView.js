@@ -271,6 +271,14 @@ export function replaceCachedTask (replacement) {
   return true
 }
 
+export async function saveTaskEditorFields (taskId, fields, {
+  update = updateTask
+} = {}) {
+  await update(taskId, fields)
+  const current = tasksCache.find(task => task._id === taskId)
+  if (current) replaceCachedTask({ ...current, ...fields })
+}
+
 export function archiveTaskOptimistically (task, {
   replace,
   clearEditing,
@@ -956,8 +964,7 @@ async function openChoreEditor (id) {
   }
 
   try {
-    await updateTask(task._id, fields)
-    replaceCachedTask({ ...task, ...fields })
+    await saveTaskEditorFields(task._id, fields)
     renderLedger()
   } catch {
     showChoresFailure("Couldn't save that. The chore is unchanged.")
