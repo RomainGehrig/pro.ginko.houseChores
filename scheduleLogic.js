@@ -120,14 +120,19 @@ export function taskUpdateForOutcome (task, outcome, completion) {
   if (outcome === 'cancelled') return null
 
   const schedule = normalizeSchedule(task.schedule)
+  let update
   if (schedule?.type === 'one_off') {
-    return { lastCompletedDate: completion.completedAt, status: 'archived' }
+    update = { lastCompletedDate: completion.completedAt, status: 'archived' }
+  } else {
+    update = {
+      lastCompletedDate: completion.completedAt,
+      scheduledDate: nextScheduledDate(task, completion.completionDate)
+    }
   }
 
-  return {
-    lastCompletedDate: completion.completedAt,
-    scheduledDate: nextScheduledDate(task, completion.completionDate)
-  }
+  return task.taskMode === 'as_needed'
+    ? { ...update, readiness: 'waiting' }
+    : update
 }
 
 function joinNames (names) {

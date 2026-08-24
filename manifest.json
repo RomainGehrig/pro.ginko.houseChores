@@ -62,6 +62,14 @@
       "Description": "Node tests covering schedule normalization, legacy compatibility, validation, summaries, matching, and completion advancement."
     },
     {
+      "path": "asNeededLogic.js",
+      "Description": "Pure readiness transitions and inspection-language schedule summaries for condition-gated chores."
+    },
+    {
+      "path": "asNeededLogic.test.js",
+      "Description": "Node tests covering as-needed confirmation, deferral dates, and inspection-language summaries."
+    },
+    {
       "path": "slip.js",
       "Description": "Pure due-group assignment and saturating ripeness ordering for chores."
     },

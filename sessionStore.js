@@ -41,6 +41,9 @@ function validTaskUpdateSnapshot (execution) {
   const snapshot = { lastCompletedDate: completedAt }
   if (typeof source.scheduledDate === 'string') snapshot.scheduledDate = source.scheduledDate
   if (source.status === 'archived') snapshot.status = 'archived'
+  if (source.readiness === 'waiting' || source.readiness === 'ready') {
+    snapshot.readiness = source.readiness
+  }
   return snapshot
 }
 

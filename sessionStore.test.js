@@ -21,7 +21,8 @@ test('fresh store repairs the exact task update persisted with an execution', as
     activeElapsedMs: 60000, outcome: 'done',
     taskUpdateSnapshot: {
       lastCompletedDate: 1723111200000,
-      scheduledDate: '2026-08-15'
+      scheduledDate: '2026-08-15',
+      readiness: 'waiting'
     }
   }]
   let failOnce = true
@@ -47,6 +48,38 @@ test('fresh store repairs the exact task update persisted with an execution', as
 
   assert.equal(tasks.get('weekly').scheduledDate, '2026-08-15')
   assert.equal(tasks.get('weekly').lastCompletedDate, 1723111200000)
+  assert.equal(tasks.get('weekly').readiness, 'waiting')
+})
+
+test('recovery discards an unknown readiness while retaining valid schedule fields', async () => {
+  const task = {
+    _id: 'weekly', status: 'active', scheduledDate: '2026-08-08',
+    readiness: 'ready', lastCompletedDate: null
+  }
+  const updates = []
+  const store = createSessionStore({
+    getSession: async () => activeSession({ taskBundle: ['weekly'] }),
+    listExecutions: async () => [{
+      taskId: 'weekly', sessionId: 's1', endTime: 1000,
+      taskUpdateSnapshot: {
+        lastCompletedDate: 1000,
+        scheduledDate: '2026-08-15',
+        readiness: 'future_value'
+      }
+    }],
+    listTasks: async () => [structuredClone(task)],
+    updateSessionRecord: async () => {},
+    updateTaskRecord: async (id, fields) => updates.push({ id, fields })
+  })
+
+  const aggregate = await store.refresh('s1', 1000)
+
+  const expectedUpdate = {
+    lastCompletedDate: 1000,
+    scheduledDate: '2026-08-15'
+  }
+  assert.deepEqual(updates, [{ id: 'weekly', fields: expectedUpdate }])
+  assert.deepEqual(aggregate.bundle[0], { ...task, ...expectedUpdate })
 })
 
 test('fresh store does not repeat a task update whose response was lost', async () => {
