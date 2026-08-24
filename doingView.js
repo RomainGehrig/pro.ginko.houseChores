@@ -4,7 +4,7 @@
 import { state, setCurrentSessionAggregate } from './state.js'
 import { completionAttemptIdFor, createExecution } from './executionData.js'
 import { taskFieldsBeforeUpdate } from './reopenLogic.js'
-import { listTasksByIds, updateTask } from './taskData.js'
+import { listAllTasks, listTasksByIds, updateTask } from './taskData.js'
 import { updateSession } from './sessionData.js'
 import { formatFactHtml, formatTimer } from './helpers.js'
 import { fitsLabel, remainingLine } from './doingLines.js'
@@ -20,7 +20,6 @@ import { createCompletionCoordinator } from './completionSaveLogic.js'
 import { prepareCompletionAttempt, retryCompletionForStage } from './doingCompletionLogic.js'
 import { localDateFromDate } from './scheduleLogic.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
-import { getActiveTasks, refreshTasksView } from './tasksView.js'
 import { showView, setNavVisible } from './router.js'
 import { renderReviewLoadError, startReview } from './reviewView.js'
 import { sessionStore } from './sessionStore.js'
@@ -45,6 +44,8 @@ let pendingSessionRetry = null
 let boundDoingContent = null
 let boundWindow = null
 let continuationTasks = []
+let continuationTasksLoaded = false
+let continuationSessionId = null
 const ambiguousSuggestionIds = new Set()
 
 const completionCoordinator = createCompletionCoordinator({
@@ -60,6 +61,9 @@ const coordinatorHasPendingStage = () =>
 
 const sessionAcceptsAdditions = session =>
   ['active', 'paused'].includes(session?.status)
+
+const activeContinuationTask = task =>
+  task?.status === 'active' || task?.status === 'approved_recurring'
 
 export function initDoingView () {
   bindDoingContent()
@@ -88,7 +92,7 @@ export function startDoing (aggregate) {
     session: state.currentSession,
     bundle: state.currentBundle,
     executions: state.currentExecutions
-  })
+  }, { reloadContinuationTasks: true })
 }
 
 export async function refreshDoing ({ allowNavigation = true } = {}) {
@@ -98,7 +102,7 @@ export async function refreshDoing ({ allowNavigation = true } = {}) {
   try {
     const aggregate = await sessionStore.refresh(state.currentSession._id, Date.now())
     pendingSessionRetry = null
-    await applyAggregate(aggregate, { allowNavigation })
+    await applyAggregate(aggregate, { allowNavigation, reloadContinuationTasks: true })
     return aggregate
   } catch (error) {
     renderSessionMutationFailure(
@@ -109,10 +113,21 @@ export async function refreshDoing ({ allowNavigation = true } = {}) {
   }
 }
 
-async function applyAggregate (aggregate, { allowNavigation = true } = {}) {
+async function applyAggregate (aggregate, {
+  allowNavigation = true,
+  reloadContinuationTasks = false
+} = {}) {
+  const addPanelDraft = captureAddPanelDraft()
+  if (continuationSessionId !== aggregate.session._id) {
+    continuationSessionId = aggregate.session._id
+    continuationTasks = []
+    continuationTasksLoaded = false
+  }
   setCurrentSessionAggregate(aggregate)
   if (!sessionAcceptsAdditions(aggregate.session)) {
     continuationTasks = []
+    continuationTasksLoaded = false
+    continuationSessionId = null
     ambiguousSuggestionIds.clear()
   }
   if (aggregate.session.status === 'completed') {
@@ -133,7 +148,10 @@ async function applyAggregate (aggregate, { allowNavigation = true } = {}) {
   renderDoing()
   // Adding a chore does not change whether the clock is running, so the panel
   // belongs to the whole unfinished session rather than only its paused state.
-  await openContinuePicker()
+  await openContinuePicker({
+    draft: addPanelDraft,
+    reloadTasks: reloadContinuationTasks || !continuationTasksLoaded
+  })
 }
 
 async function loadCurrentReview () {
@@ -264,6 +282,67 @@ function renderSessionMutationFailure (message, retry) {
   renderStatusRetry(message, 'retrySessionMutationBtn', 'Retry')
 }
 
+function captureAddPanelDraft () {
+  const search = document.getElementById('continueSearchInput')
+  if (!search) return null
+  return {
+    query: search.value,
+    focused: document.activeElement === search,
+    selectionStart: search.selectionStart,
+    selectionEnd: search.selectionEnd
+  }
+}
+
+function renderContinuationQuery (typed) {
+  const results = searchContinuationTasks(
+    continuationTasks,
+    typed,
+    state.currentSession.taskBundle || []
+  )
+  const container = document.getElementById('continueSearchResults')
+  if (container) container.innerHTML = buildContinuationSearchResultsHtml(results)
+
+  // The doc gives this field both jobs, so anything the chores do not already
+  // answer to is offered as a new one on the same keystroke.
+  const quickAdd = document.getElementById('continueQuickAdd')
+  if (quickAdd) {
+    quickAdd.innerHTML = canQuickAdd(typed, continuationTasks) ? buildQuickAddHtml(typed) : ''
+  }
+}
+
+function restoreAddPanelDraft (draft) {
+  if (!draft) return
+  const search = document.getElementById('continueSearchInput')
+  if (!search) return
+  search.value = draft.query
+  renderContinuationQuery(draft.query)
+  if (!draft.focused) return
+  search.focus()
+  if (typeof search.setSelectionRange === 'function' &&
+    Number.isInteger(draft.selectionStart) && Number.isInteger(draft.selectionEnd)) {
+    search.setSelectionRange(draft.selectionStart, draft.selectionEnd)
+  }
+}
+
+function renderContinuationTasksFailure (error) {
+  const status = document.getElementById('continueTasksStatus')
+  if (!status) return
+  status.replaceChildren()
+  status.textContent = 'Could not refresh chores: ' + error.message + '. '
+  status.setAttribute('role', 'alert')
+  status.setAttribute('data-state', 'error')
+  const retryButton = document.createElement('button')
+  retryButton.id = 'retryContinueTasksBtn'
+  retryButton.textContent = 'Retry chores'
+  status.appendChild(retryButton)
+}
+
+async function reloadContinuationTasks () {
+  const tasks = await listAllTasks()
+  continuationTasks = tasks.filter(activeContinuationTask)
+  continuationTasksLoaded = true
+}
+
 async function handleDoingClick (event) {
   const button = event.target?.closest?.('button')
   if (!button) return
@@ -271,6 +350,7 @@ async function handleDoingClick (event) {
   if (button.id === 'retryCompletionBtn') return retryCompletion(button)
   if (button.id === 'retrySessionMutationBtn') return retrySessionMutation(button)
   if (sessionMutationInFlight) return
+  if (button.id === 'retryContinueTasksBtn') return retryContinueTasks()
 
   if (button.dataset.continuationSearchId) {
     return attachSearchedTask(button.dataset.continuationSearchId)
@@ -291,21 +371,7 @@ async function handleDoingClick (event) {
 function handleDoingInput (event) {
   if (event.target?.id !== 'continueSearchInput' ||
     !sessionAcceptsAdditions(state.currentSession)) return
-  const typed = event.target.value
-  const results = searchContinuationTasks(
-    continuationTasks,
-    typed,
-    state.currentSession.taskBundle || []
-  )
-  const container = document.getElementById('continueSearchResults')
-  if (container) container.innerHTML = buildContinuationSearchResultsHtml(results)
-
-  // The doc gives this field both jobs, so anything the chores do not already
-  // answer to is offered as a new one on the same keystroke.
-  const quickAdd = document.getElementById('continueQuickAdd')
-  if (quickAdd) {
-    quickAdd.innerHTML = canQuickAdd(typed, continuationTasks) ? buildQuickAddHtml(typed) : ''
-  }
+  renderContinuationQuery(event.target.value)
 }
 
 async function handleDoingChange (event) {
@@ -317,27 +383,32 @@ async function handleDoingChange (event) {
   await acceptSuggestedTask(candidate, event.target)
 }
 
-async function openContinuePicker () {
+async function openContinuePicker ({ draft = null, reloadTasks = false } = {}) {
   if (!sessionAcceptsAdditions(state.currentSession)) return
   const panel = document.getElementById('doingContinuePanel')
   if (!panel) return
-
-  try {
-    await refreshTasksView()
-    continuationTasks = getActiveTasks()
-  } catch (error) {
-    renderSessionMutationFailure(
-      'Could not load tasks for continuing: ' + error.message,
-      openContinuePicker
-    )
-    return
-  }
 
   const nowMs = Date.now()
   const remainingMs = remainingBudgetMs(state.currentSession, nowMs)
   panel.innerHTML = buildAddPanelHtml(remainingMs)
   panel.hidden = false
+
+  let loadError = null
+  if (reloadTasks) {
+    try {
+      await reloadContinuationTasks()
+    } catch (error) {
+      loadError = error
+    }
+  }
   updateAddPanelTiming(activeElapsedMs(state.currentSession, nowMs), nowMs)
+  restoreAddPanelDraft(draft)
+  if (loadError) renderContinuationTasksFailure(loadError)
+}
+
+async function retryContinueTasks () {
+  const draft = captureAddPanelDraft()
+  await openContinuePicker({ draft, reloadTasks: true })
 }
 
 async function reconcileAmbiguousSuggestionSelections (retry) {
@@ -402,7 +473,12 @@ function attachSearchedTask (taskId) {
 }
 
 function quickAddContinuation (retryIntent = null) {
-  const title = retryIntent?.title || document.getElementById('continueSearchInput')?.value
+  const search = document.getElementById('continueSearchInput')
+  const title = retryIntent?.title || search?.value
+  if (!retryIntent && search) {
+    search.value = ''
+    renderContinuationQuery('')
+  }
   return runContinuationMutation(
     () => sessionStore.quickAdd(state.currentSession._id, title, retryIntent),
     'Could not add the quick task',

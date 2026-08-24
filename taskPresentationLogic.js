@@ -164,6 +164,7 @@ export function buildAddPanelHtml (remainingMs) {
     '<p class="muted doing-add-note" id="continueRemaining"></p>' +
     '<p class="eyebrow eyebrow-quiet doing-add-fits" id="continueFits">' +
       escapeHtml(fitsLabel(remainingMs)) + '</p>' +
+    '<div id="continueTasksStatus" class="inline-status" role="status"></div>' +
     '<div id="continueSuggestions" class="continue-rows"></div>' +
     '<input id="continueSearchInput" class="input doing-add-search" type="search" ' +
       'placeholder="Search a chore, or type a new one" ' +

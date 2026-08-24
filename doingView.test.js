@@ -22,6 +22,8 @@ function createControl (id = '') {
     textContent: '',
     type: '',
     value: '',
+    selectionStart: 0,
+    selectionEnd: 0,
     style: {},
     classList: { toggle () {} },
     addEventListener (type, listener) {
@@ -122,6 +124,11 @@ function createDoingDocument ({ failFirstReviewDisplay = false } = {}) {
       dynamicIds.add(control.id)
     }
     control._dynamicChildren = []
+    control.focus = () => { document.activeElement = control }
+    control.setSelectionRange = (start, end) => {
+      control.selectionStart = start
+      control.selectionEnd = end
+    }
     control.onBeforeChildren = () => {
       for (const child of control._dynamicChildren) unregister(child)
       control._dynamicChildren = []
@@ -186,6 +193,7 @@ function createDoingDocument ({ failFirstReviewDisplay = false } = {}) {
   }
 
   const document = {
+    activeElement: null,
     getElementById: id => nodes.get(id) || null,
     createElement: tagName => {
       const control = createControl()
@@ -299,6 +307,8 @@ function createPersistence ({
   loseFirstExecutionResponse = false,
   loseFirstTaskUpdateResponse = false,
   loseQuickAddAttachmentResponse = false,
+  failTaskReads = 0,
+  failSecondTaskReadAfterExecution = false,
   failSessionUpdates = 0,
   failFirstTerminalReviewExecutionRead = false
 }) {
@@ -315,12 +325,27 @@ function createPersistence ({
   let remainingSessionUpdateFailures = failSessionUpdates
   let shouldLoseTaskUpdateResponse = loseFirstTaskUpdateResponse
   let shouldLoseQuickAddAttachmentResponse = loseQuickAddAttachmentResponse
+  let remainingTaskReadFailures = failTaskReads
+  let taskReadsBeforePostExecutionFailure = null
   let remainingTerminalReviewExecutionReadFailures = failFirstTerminalReviewExecutionRead ? 1 : 0
 
   const freezr = {
     query: async collection => {
       if (collection === 'sessions') return [clone(session)]
-      if (collection === 'tasks') return [...tasks.values()].map(clone)
+      if (collection === 'tasks') {
+        if (remainingTaskReadFailures > 0) {
+          remainingTaskReadFailures--
+          throw new Error('tasks offline')
+        }
+        if (taskReadsBeforePostExecutionFailure === 0) {
+          taskReadsBeforePostExecutionFailure = null
+          throw new Error('tasks offline')
+        }
+        if (taskReadsBeforePostExecutionFailure !== null) {
+          taskReadsBeforePostExecutionFailure--
+        }
+        return [...tasks.values()].map(clone)
+      }
       if (collection === 'taskExecutions') {
         if (session.status === 'completed' && remainingTerminalReviewExecutionReadFailures > 0) {
           remainingTerminalReviewExecutionReadFailures--
@@ -343,6 +368,7 @@ function createPersistence ({
       const id = options.data_object_id || 'execution-' + executionCalls
       const record = { _id: id, ...clone(data) }
       executions.set(id, record)
+      if (failSecondTaskReadAfterExecution) taskReadsBeforePostExecutionFailure = 1
       if (loseFirstExecutionResponse && executionCalls === 1) throw new Error('response lost')
       return clone(record)
     },
@@ -407,6 +433,8 @@ async function withDoingEnvironment ({
   loseFirstExecutionResponse,
   loseFirstTaskUpdateResponse,
   loseQuickAddAttachmentResponse,
+  failTaskReads,
+  failSecondTaskReadAfterExecution,
   failSessionUpdates,
   failFirstTerminalReviewExecutionRead,
   failFirstReviewDisplay
@@ -423,6 +451,8 @@ async function withDoingEnvironment ({
     loseFirstExecutionResponse,
     loseFirstTaskUpdateResponse,
     loseQuickAddAttachmentResponse,
+    failTaskReads,
+    failSecondTaskReadAfterExecution,
     failSessionUpdates,
     failFirstTerminalReviewExecutionRead
   })
@@ -1027,6 +1057,93 @@ test('the active picker adds chores while the same session clock keeps running',
     clock.setNow(130000)
     clock.fireIntervals()
     assert.equal(document.control('sessionTimerDisplay').textContent, '03:00')
+  })
+})
+
+test('an aggregate refresh restores the active add-panel draft', async () => {
+  const original = { ...task('original-task'), name: 'Original task' }
+  const waiting = { ...task('waiting-task'), name: 'Waiting task' }
+  const searched = { ...task('searched-task'), name: 'Clean garage' }
+  const session = {
+    _id: 'draft-preservation-session', status: 'active', startTime: 10000,
+    taskBundle: ['original-task', 'waiting-task'], timeBudgetMinutes: 15,
+    accumulatedActiveMs: 0, activeStartedAt: 10000,
+    pausedAt: null, checkpointElapsedMs: 0, pendingAddition: null
+  }
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [original, waiting, searched],
+    bundle: [original, waiting]
+  }, async ({ document, persistence }) => {
+    await document.inputControl('continueSearchInput', 'garage')
+    const search = document.control('continueSearchInput')
+    search.focus()
+    search.setSelectionRange(2, 5)
+
+    await document.clickOutcome('original-task', 'done')
+
+    const restored = document.control('continueSearchInput')
+    assert.equal(restored.value, 'garage')
+    assert.equal(document.activeElement, restored)
+    assert.equal(restored.selectionStart, 2)
+    assert.equal(restored.selectionEnd, 5)
+    await document.clickSearchResult('searched-task')
+    assert.ok(persistence.session.taskBundle.includes('searched-task'))
+  })
+})
+
+test('a saved outcome does not make a second task read that can obscure it', async () => {
+  const original = { ...task('original-task'), name: 'Original task' }
+  const waiting = { ...task('waiting-task'), name: 'Waiting task' }
+  const session = {
+    _id: 'candidate-read-session', status: 'active', startTime: 10000,
+    taskBundle: ['original-task', 'waiting-task'], timeBudgetMinutes: 15,
+    accumulatedActiveMs: 0, activeStartedAt: 10000,
+    pausedAt: null, checkpointElapsedMs: 0, pendingAddition: null
+  }
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [original, waiting],
+    bundle: [original, waiting],
+    failSecondTaskReadAfterExecution: true
+  }, async ({ document, persistence }) => {
+    await document.clickOutcome('original-task', 'done')
+
+    assert.equal(persistence.executionCalls, 1)
+    assert.ok(state.currentExecutions.some(execution =>
+      execution.taskId === 'original-task' && execution.outcome === 'done'
+    ))
+    assert.equal(document.control('retrySessionMutationBtn'), null)
+    assert.ok(document.control('continueSearchInput'))
+  })
+})
+
+test('an unavailable candidate list leaves the session usable and retries inside its panel', async () => {
+  const original = { ...task('original-task'), name: 'Original task' }
+  const searched = { ...task('searched-task'), name: 'Clean garage' }
+  const session = {
+    _id: 'candidate-retry-session', status: 'active', startTime: 10000,
+    taskBundle: ['original-task'], timeBudgetMinutes: 15,
+    accumulatedActiveMs: 0, activeStartedAt: 10000,
+    pausedAt: null, checkpointElapsedMs: 0, pendingAddition: null
+  }
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [original, searched],
+    bundle: [original],
+    failTaskReads: 1
+  }, async ({ document }) => {
+    assert.ok(document.outcomeControl('original-task', 'done'))
+    assert.equal(document.control('retrySessionMutationBtn'), null)
+    assert.match(document.control('continueTasksStatus').textContent, /Could not refresh chores/)
+    assert.ok(document.control('retryContinueTasksBtn'))
+
+    await document.clickControl('retryContinueTasksBtn')
+    await document.inputControl('continueSearchInput', 'garage')
+    await document.clickSearchResult('searched-task')
   })
 })
 
