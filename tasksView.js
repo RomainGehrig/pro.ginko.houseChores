@@ -793,8 +793,12 @@ function syncEnrichmentAvailability() {
 
 // A fact about what just happened, in the colour everything else is in. The
 // failure line below it is the only thing on this screen that is not neutral.
-function showChoresNote (message) {
-  const status = document.getElementById('choresStatus')
+function editorStatus (origin) {
+  return document.getElementById(origin === 'as-needed' ? 'asNeededStatus' : 'choresStatus')
+}
+
+function showEditorNote (message, origin = 'chores') {
+  const status = editorStatus(origin)
   status.textContent = message
   status.removeAttribute('data-state')
   status.setAttribute('role', 'status')
@@ -808,8 +812,8 @@ function clearChoresNote () {
   status.setAttribute('role', 'status')
 }
 
-function showChoresFailure (message) {
-  const status = document.getElementById('choresStatus')
+function showEditorFailure (message, origin = 'chores') {
+  const status = editorStatus(origin)
   status.textContent = message
   status.dataset.state = 'error'
   status.setAttribute('role', 'alert')
@@ -899,14 +903,14 @@ export async function markChoreRecentlyDone (task, {
 // Putting a chore in a session is not an edit of the chore, so it leaves the
 // editor rather than waiting for Save. Which session it means is settled before
 // the sheet opens, so the label and the act cannot disagree.
-async function addChoreToSession (task, target) {
-  if (target === 'running') return addChoreToRunningSession(task)
+async function addChoreToSession (task, target, origin) {
+  if (target === 'running') return addChoreToRunningSession(task, origin)
 
   const added = sessionPicks.toggle(task._id)
-  showChoresNote(sessionAddNote({ name: task.name, target: 'next', added }))
+  showEditorNote(sessionAddNote({ name: task.name, target: 'next', added }), origin)
 }
 
-async function addChoreToRunningSession (task) {
+async function addChoreToRunningSession (task, origin) {
   try {
     const aggregate = await sessionStore.attachTasks(
       state.currentSession._id, [task._id], { whileRunning: true })
@@ -918,34 +922,35 @@ async function addChoreToRunningSession (task) {
     if (!sessionAddLanded(aggregate.session, task._id)) {
       if (sessionAddRejected(aggregate, task._id)) {
         renderLedger()
-        showChoresNote(sessionAddNote({ name: task.name, target: 'unavailable', added: false }))
+        showEditorNote(
+          sessionAddNote({ name: task.name, target: 'unavailable', added: false }), origin)
         return
       }
-      return addChoreToFinishedSession(task)
+      return addChoreToFinishedSession(task, origin)
     }
     await applySessionAggregate?.(aggregate)
     // The picks store did not move, so nothing else will repaint the list.
     renderLedger()
-    showChoresNote(sessionAddNote({ name: task.name, target: 'running', added: true }))
+    showEditorNote(sessionAddNote({ name: task.name, target: 'running', added: true }), origin)
   } catch (error) {
-    showChoresFailure('Could not add that to the session you are doing: ' + error.message)
+    showEditorFailure('Could not add that to the session you are doing: ' + error.message, origin)
   }
 }
 
 // The session it was going into has finished. The chore still has somewhere to
 // go, so it goes to the one being put together rather than nowhere at all.
-function addChoreToFinishedSession (task) {
+function addChoreToFinishedSession (task, origin) {
   if (!sessionPicks.isPicked(task._id)) sessionPicks.toggle(task._id)
   // The session in hand is a finished one now, so the stamps it was casting
   // have to go whether or not the pick itself moved.
   renderLedger()
-  showChoresNote(sessionAddNote({ name: task.name, target: 'ended', added: true }))
+  showEditorNote(sessionAddNote({ name: task.name, target: 'ended', added: true }), origin)
 }
 
 // The editor is a dialogue of its own, so an edit can be abandoned without
 // having already been written. Only Save writes, and it writes everything at
 // once — including the name, which the row itself never let you touch.
-async function openChoreEditor (id) {
+async function openChoreEditor (id, origin = 'chores') {
   const task = tasksCache.find(item => item._id === id)
   if (!task) return
   const snapshot = categoryLocationStore.getSnapshot()
@@ -953,12 +958,14 @@ async function openChoreEditor (id) {
   ledger.confirmDoneId = null
 
   // Both title-row controls are about the chore rather than about the edit:
-  // one files a completion, the other puts it in a session.
+  // one files a completion, the other puts eligible work in a session.
   const target = sessionAddTarget(state.currentSession, id)
+  const sessionAction = isTaskEligible(task)
+    ? choreSessionButtonHtml(sessionAddActionLabel(target, sessionPicks.isPicked(id)))
+    : ''
   const choice = await openSheet({
     title: 'Edit chore',
-    headerActionHtml: choreDoneButtonHtml() +
-      choreSessionButtonHtml(sessionAddActionLabel(target, sessionPicks.isPicked(id))),
+    headerActionHtml: choreDoneButtonHtml() + sessionAction,
     bodyHtml: editModalHtml(task, snapshot),
     actions: [
       { label: 'Cancel', value: null, className: 'btn btn-ghost' },
@@ -968,11 +975,11 @@ async function openChoreEditor (id) {
 
   ledger.openTaskId = null
   const body = sheetBody()
-  if (choice === 'session') return addChoreToSession(task, target)
+  if (choice === 'session') return addChoreToSession(task, target, origin)
   if (choice === 'done') {
     const result = await markChoreRecentlyDone(task)
     if (!result.ok) {
-      showChoresFailure(completionFailureMessage(result))
+      showEditorFailure(completionFailureMessage(result), origin)
     }
     return result
   }
@@ -983,7 +990,7 @@ async function openChoreEditor (id) {
       },
       clearEditing: () => {},
       render: renderTasks,
-      showFailure: showChoresFailure,
+      showFailure: message => showEditorFailure(message, origin),
       pending: pendingTaskArchives
     })
   }
@@ -1005,7 +1012,7 @@ async function openChoreEditor (id) {
     renderLedger()
     renderAsNeeded()
   } catch {
-    showChoresFailure("Couldn't save that. The chore is unchanged.")
+    showEditorFailure("Couldn't save that. The chore is unchanged.", origin)
   }
 }
 
@@ -1061,14 +1068,14 @@ function handleEditorChange (evt) {
 function handleLedgerClick (evt) {
   const card = evt.target.closest('.ledger-row')
   if (!card || !evt.target.closest('.ledger-row-summary')) return
-  openChoreEditor(card.dataset.id)
+  openChoreEditor(card.dataset.id, 'chores')
 }
 
 function handleAsNeededClick (evt) {
   const edit = evt.target.closest('.as-needed-edit')
   const card = edit?.closest('.as-needed-row')
   if (!card) return
-  openChoreEditor(card.dataset.id)
+  openChoreEditor(card.dataset.id, 'as-needed')
 }
 
 async function handleArchivedClick (evt) {

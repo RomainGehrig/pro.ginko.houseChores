@@ -89,7 +89,7 @@ test('active-task cache and retained session picks exclude waiting as-needed cho
   }
 })
 
-test('As needed renders every live as-needed chore from the shared cache and opens its shared editor', async () => {
+test('As needed uses the shared editor without offering waiting work or losing origin feedback', async () => {
   const originalFreezr = globalThis.freezr
   const originalDocument = globalThis.document
   const nodes = new Map()
@@ -160,20 +160,37 @@ test('As needed renders every live as-needed chore from the shared cache and ope
     assert.match(node('asNeededCards').innerHTML, /data-id="waiting-later"/)
     assert.doesNotMatch(node('asNeededCards').innerHTML, /data-id="scheduled"|data-id="archived"/)
 
-    const card = { dataset: { id: 'waiting-now' } }
-    const edit = { closest: selector => selector === '.as-needed-row' ? card : null }
     const click = node('asNeededCards').listeners.get('click')
     assert.equal(typeof click, 'function')
-    click({
-      target: {
-        closest: selector => selector === '.as-needed-edit' ? edit : null
-      }
-    })
+    const openEditor = id => {
+      const card = { dataset: { id } }
+      const edit = { closest: selector => selector === '.as-needed-row' ? card : null }
+      click({
+        target: {
+          closest: selector => selector === '.as-needed-edit' ? edit : null
+        }
+      })
+    }
+
+    openEditor('waiting-now')
 
     assert.equal(node('bottomSheetTitle').textContent, 'Edit chore')
     assert.match(node('bottomSheetMessage').innerHTML, /class="edit-modal"/)
     assert.match(node('bottomSheetMessage').innerHTML, /Check dehumidifier/)
+    const waitingHeaderActions = node('bottomSheetHeadAction').innerHTML
     closeSheetWith(null)
+    await Promise.resolve()
+
+    openEditor('ready')
+    assert.match(node('bottomSheetHeadAction').innerHTML, /class="btn btn-quiet session-btn"/)
+    closeSheetWith('done')
+    await new Promise(resolve => setTimeout(resolve, 0))
+
+    assert.match(node('asNeededStatus').textContent,
+      /Couldn't record that\. The chore is unchanged\./)
+    assert.equal(node('asNeededStatus').dataset.state, 'error')
+    assert.equal(node('choresStatus').textContent, '')
+    assert.doesNotMatch(waitingHeaderActions, /session-btn|Add to session/)
   } finally {
     sessionPicks.reset()
     if (originalFreezr === undefined) delete globalThis.freezr

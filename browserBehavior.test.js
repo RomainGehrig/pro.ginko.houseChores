@@ -1201,6 +1201,107 @@ test('As needed route renders its ledger shell and the Chores Setup link opens S
   })
 })
 
+test('As needed editor omits waiting session promises and returns feedback to its origin', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 800 },
+    mediaFeatures: [
+      { name: 'prefers-color-scheme', value: 'light' },
+      { name: 'prefers-reduced-motion', value: 'reduce' }
+    ],
+    body: applicationMarkup,
+    script: `
+      const consoleErrors = []
+      console.error = (...values) => consoleErrors.push(values.map(String).join(' '))
+      const records = {
+        categories: [],
+        locations: [],
+        tasks: [{
+          _id: 'waiting', name: 'Check dehumidifier', status: 'approved_recurring',
+          taskMode: 'as_needed', readiness: 'waiting', categoryId: null, locationIds: [],
+          estimatedDuration: 10, scheduledDate: '2026-08-20',
+          schedule: { type: 'periodic', every: 1, unit: 'week' }, lastCompletedDate: null
+        }, {
+          _id: 'ready', name: 'Empty rain barrel', status: 'approved_recurring',
+          taskMode: 'as_needed', readiness: 'ready', categoryId: null, locationIds: [],
+          estimatedDuration: 10, scheduledDate: '2026-08-23',
+          schedule: { type: 'periodic', every: 2, unit: 'day' }, lastCompletedDate: null
+        }, {
+          _id: 'ready-failure', name: 'Inspect backup pump', status: 'approved_recurring',
+          taskMode: 'as_needed', readiness: 'ready', categoryId: null, locationIds: [],
+          estimatedDuration: 15, scheduledDate: '2026-08-24',
+          schedule: { type: 'periodic', every: 1, unit: 'month' }, lastCompletedDate: null
+        }]
+      }
+      let rejectCompletion = false
+      const clone = value => structuredClone(value)
+      globalThis.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async () => ({}),
+        updateFields: async (_collection, _id, fields) => {
+          if (rejectCompletion && Object.hasOwn(fields, 'lastCompletedDate')) {
+            throw new Error('write offline')
+          }
+          return {}
+        }
+      }
+
+      window.location.hash = '#/as-needed'
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      const { initRouter } = await import(applicationUrl + 'router.js')
+      await categoryLocationStore.initialize()
+      await initTasksView()
+      initRouter()
+
+      const headerLabels = () => [...document.querySelectorAll('#bottomSheetHeadAction button')]
+        .map(button => button.textContent)
+      const open = async id => {
+        document.querySelector('#asNeededCards [data-id="' + id + '"] .as-needed-edit').click()
+        await Promise.resolve()
+        return headerLabels()
+      }
+      const closeWith = async selector => {
+        document.querySelector(selector).click()
+        await new Promise(resolve => setTimeout(resolve, 70))
+      }
+
+      const waitingLabels = await open('waiting')
+      await closeWith('#bottomSheetActions button')
+
+      const readyLabels = await open('ready')
+      await closeWith('#bottomSheetHeadAction .session-btn')
+      const sessionFeedback = {
+        asNeeded: document.getElementById('asNeededStatus').textContent,
+        chores: document.getElementById('choresStatus').textContent
+      }
+
+      rejectCompletion = true
+      await open('ready-failure')
+      document.querySelector('#bottomSheetHeadAction .done-btn').click()
+      await closeWith('#bottomSheetHeadAction .done-btn')
+      const failureFeedback = {
+        asNeeded: document.getElementById('asNeededStatus').textContent,
+        asNeededRole: document.getElementById('asNeededStatus').getAttribute('role'),
+        chores: document.getElementById('choresStatus').textContent
+      }
+
+      const result = { consoleErrors, waitingLabels, readyLabels, sessionFeedback, failureFeedback }
+    `
+  })
+
+  assert.deepEqual(result.consoleErrors, [])
+  assert.deepEqual(result.sessionFeedback, {
+    asNeeded: 'Empty rain barrel is in your Quick session.',
+    chores: ''
+  })
+  assert.match(result.failureFeedback.asNeeded,
+    /Couldn't record that\. The chore is unchanged\. Reason: write offline\./)
+  assert.equal(result.failureFeedback.asNeededRole, 'alert')
+  assert.equal(result.failureFeedback.chores, '')
+  assert.deepEqual(result.waitingLabels, ['Mark as done'])
+  assert.deepEqual(result.readyLabels, ['Mark as done', 'Add to session'])
+})
+
 test('contextual work navigation stays in flow with usable targets at phone and desktop widths', async () => {
   for (const viewport of [{ width: 390, height: 640 }, { width: 1280, height: 800 }]) {
     const result = await runBrowserScenario({
