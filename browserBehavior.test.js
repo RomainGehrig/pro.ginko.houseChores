@@ -1302,6 +1302,347 @@ test('As needed editor omits waiting session promises and returns feedback to it
   assert.deepEqual(result.readyLabels, ['Mark as done', 'Add to session'])
 })
 
+test('as-needed chore lifecycle stays aligned across As needed, Chores, and Quick', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 800 },
+    mediaFeatures: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+    body: applicationMarkup,
+    script: `
+      const consoleErrors = []
+      console.error = (...values) => consoleErrors.push(values.map(String).join(' '))
+      const records = { categories: [], locations: [], tasks: [] }
+      const writes = []
+      let nextTaskId = 0
+      const clone = value => structuredClone(value)
+      globalThis.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async (collection, fields, options = {}) => {
+          const id = options.data_object_id ||
+            (collection === 'tasks' ? 'task-' + (++nextTaskId) : collection + '-new')
+          let record = (records[collection] || []).find(item => item._id === id)
+          if (record) Object.assign(record, clone(fields))
+          else {
+            record = { _id: id, ...clone(fields) }
+            records[collection].push(record)
+          }
+          return clone(record)
+        },
+        updateFields: async (collection, id, fields) => {
+          writes.push({ collection, id, fields: clone(fields) })
+          const record = records[collection].find(item => item._id === id)
+          Object.assign(record, clone(fields))
+          return clone(record)
+        },
+        delete: async () => ({})
+      }
+
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      const { initSessionView } = await import(applicationUrl + 'sessionView.js')
+      const { sessionPicks } = await import(applicationUrl + 'sessionPicks.js')
+      await categoryLocationStore.initialize()
+      await initTasksView()
+      initSessionView()
+
+      const waitFor = async (predicate, label) => {
+        const started = Date.now()
+        while (!predicate() && Date.now() - started < 1800) {
+          await new Promise(resolve => setTimeout(resolve, 20))
+        }
+        if (!predicate()) throw new Error('Timed out waiting for ' + label)
+      }
+      const choose = (card, field, value) => {
+        card.querySelector('[data-schedule-set="' + field + '"]' +
+          '[data-schedule-value="' + value + '"]').click()
+      }
+      const capture = async (name, configure) => {
+        document.getElementById('newTaskInput').value = name
+        document.getElementById('addTasksBtn').click()
+        await waitFor(() => [...document.querySelectorAll('#proposedCards [data-id]')]
+          .some(card => card.querySelector('.task-name')?.textContent === name), 'captured ' + name)
+        const record = records.tasks.find(task => task.name === name)
+        const card = document.querySelector('#proposedCards [data-id="' + record._id + '"]')
+        configure(card)
+        card.querySelector('.approve-btn').click()
+        await waitFor(() => record.status !== 'proposed' && document.querySelector(
+          '#asNeededCards [data-id="' + record._id + '"]'), 'approved repaint ' + name)
+        return record
+      }
+      const groupFor = id => document.querySelector(
+        '#asNeededCards [data-id="' + id + '"]')?.closest('.as-needed-group')
+        ?.querySelector('.ledger-eyebrow span')?.textContent || null
+      const surfaces = id => ({
+        asNeededGroup: groupFor(id),
+        chores: Boolean(document.querySelector('#activeCards [data-id="' + id + '"]')),
+        quick: Boolean(document.querySelector('#poolChips [data-pick-id="' + id + '"]')),
+        picked: sessionPicks.getPickedIds().includes(id)
+      })
+
+      const periodic = await capture('Empty dishwasher', card => {
+        choose(card, 'task-mode', 'as_needed')
+        choose(card, 'type', 'periodic')
+        choose(card, 'unit', 'day')
+        const every = card.querySelector('[data-schedule-field="every"]')
+        every.value = '2'
+        every.dispatchEvent(new Event('input', { bubbles: true }))
+        card.querySelector('.f-duration').value = '5'
+      })
+      const oneOff = await capture('Order replacement filter', card => {
+        choose(card, 'task-mode', 'as_needed')
+        card.querySelector('.f-duration').value = '10'
+      })
+
+      const waiting = surfaces(periodic._id)
+      document.querySelector('#asNeededCards [data-id="' + periodic._id + '"] .as-needed-ready').click()
+      await waitFor(() => periodic.readiness === 'ready' && groupFor(periodic._id) === 'Ready',
+        'ready repaint')
+      const ready = surfaces(periodic._id)
+
+      document.querySelector('#poolChips [data-pick-id="' + periodic._id + '"]').click()
+      await waitFor(() => sessionPicks.isPicked(periodic._id), 'picked bundle')
+      const pickedBeforeWaiting = sessionPicks.getPickedIds()
+      document.querySelector('#asNeededCards [data-id="' + periodic._id + '"] .as-needed-not-ready').click()
+      await waitFor(() => periodic.readiness === 'waiting' && !sessionPicks.isPicked(periodic._id),
+        'waiting repaint')
+      const waitingAgain = surfaces(periodic._id)
+
+      await waitFor(() => Boolean(document.querySelector(
+        '#asNeededCards [data-id="' + oneOff._id + '"] .as-needed-later')),
+      'one-off waiting action')
+      document.querySelector(
+        '#asNeededCards [data-id="' + oneOff._id + '"] .as-needed-later').click()
+      await waitFor(() => Boolean(document.querySelector(
+        '#asNeededCards [data-id="' + oneOff._id + '"] .as-needed-date')), 'one-off date prompt')
+      const date = document.querySelector(
+        '#asNeededCards [data-id="' + oneOff._id + '"] .as-needed-date')
+      date.value = '2026-09-02'
+      document.querySelector(
+        '#asNeededCards [data-id="' + oneOff._id + '"] .as-needed-date-save').click()
+      await waitFor(() => oneOff.scheduledDate === '2026-09-02' && !document.querySelector(
+        '#asNeededCards [data-id="' + oneOff._id + '"] .as-needed-date'),
+      'one-off date save repaint')
+
+      const result = {
+        consoleErrors,
+        waiting,
+        ready,
+        pickedBeforeWaiting,
+        waitingAgain,
+        periodic: clone(periodic),
+        oneOff: clone(oneOff),
+        oneOffPromptGone: !document.querySelector(
+          '#asNeededCards [data-id="' + oneOff._id + '"] .as-needed-date'),
+        readinessWrites: writes.filter(write =>
+          Object.hasOwn(write.fields, 'readiness') &&
+          Object.keys(write.fields).every(key => ['readiness', 'scheduledDate'].includes(key)))
+      }
+    `
+  })
+
+  assert.deepEqual(result.consoleErrors, [])
+  assert.deepEqual(result.waiting, {
+    asNeededGroup: 'Someday', chores: false, quick: false, picked: false
+  })
+  assert.deepEqual(result.ready, {
+    asNeededGroup: 'Ready', chores: true, quick: true, picked: false
+  })
+  assert.deepEqual(result.pickedBeforeWaiting, ['task-1'])
+  assert.deepEqual(result.waitingAgain, {
+    asNeededGroup: 'This week', chores: false, quick: false, picked: false
+  })
+  assert.deepEqual(result.periodic.schedule, { type: 'periodic', every: 2, unit: 'day' })
+  assert.equal(result.periodic.readiness, 'waiting')
+  assert.equal(result.oneOff.readiness, 'waiting')
+  assert.equal(result.oneOff.scheduledDate, '2026-09-02')
+  assert.equal(result.oneOffPromptGone, true)
+  assert.deepEqual(result.readinessWrites.map(write => [write.id, write.fields]), [
+    ['task-1', { readiness: 'ready', scheduledDate: '2026-08-24' }],
+    ['task-1', { readiness: 'waiting', scheduledDate: '2026-08-26' }],
+    ['task-2', { readiness: 'waiting', scheduledDate: '2026-09-02' }]
+  ])
+})
+
+test('as-needed write failure restores the prior group, surfaces, and pick', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 800 },
+    mediaFeatures: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+    body: applicationMarkup,
+    script: `
+      const consoleErrors = []
+      console.error = (...values) => consoleErrors.push(values.map(String).join(' '))
+      const records = {
+        categories: [], locations: [],
+        tasks: [{
+          _id: 'pump', name: 'Inspect backup pump', status: 'approved_recurring',
+          taskMode: 'as_needed', readiness: 'ready', categoryId: null, locationIds: [],
+          estimatedDuration: 15, scheduledDate: '2026-08-24',
+          schedule: { type: 'periodic', every: 1, unit: 'month' }, lastCompletedDate: null
+        }]
+      }
+      let rejectReadiness = true
+      let updateAttempts = 0
+      const clone = value => structuredClone(value)
+      globalThis.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async () => ({}),
+        updateFields: async (collection, id, fields) => {
+          updateAttempts++
+          if (rejectReadiness && Object.hasOwn(fields, 'readiness')) {
+            rejectReadiness = false
+            throw new Error('write offline')
+          }
+          const record = records[collection].find(item => item._id === id)
+          Object.assign(record, clone(fields))
+          return clone(record)
+        }
+      }
+
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      const { initSessionView } = await import(applicationUrl + 'sessionView.js')
+      const { sessionPicks } = await import(applicationUrl + 'sessionPicks.js')
+      await categoryLocationStore.initialize()
+      await initTasksView()
+      initSessionView()
+
+      document.querySelector('#poolChips [data-pick-id="pump"]').click()
+      await new Promise(resolve => setTimeout(resolve, 30))
+      document.querySelector('#asNeededCards [data-id="pump"] .as-needed-not-ready').click()
+      const started = Date.now()
+      while (!document.getElementById('asNeededStatus').textContent && Date.now() - started < 1800) {
+        await new Promise(resolve => setTimeout(resolve, 20))
+      }
+
+      const row = document.querySelector('#asNeededCards [data-id="pump"]')
+      const result = {
+        consoleErrors,
+        updateAttempts,
+        record: clone(records.tasks[0]),
+        group: row?.closest('.as-needed-group')?.querySelector('.ledger-eyebrow span')?.textContent,
+        chores: Boolean(document.querySelector('#activeCards [data-id="pump"]')),
+        quick: Boolean(document.querySelector('#poolChips [data-pick-id="pump"]')),
+        quickPressed: document.querySelector('#poolChips [data-pick-id="pump"]')
+          ?.getAttribute('aria-pressed'),
+        picked: sessionPicks.getPickedIds(),
+        message: document.getElementById('asNeededStatus').textContent,
+        role: document.getElementById('asNeededStatus').getAttribute('role')
+      }
+    `
+  })
+
+  assert.deepEqual(result.consoleErrors, [])
+  assert.equal(result.updateAttempts, 1)
+  assert.equal(result.record.readiness, 'ready')
+  assert.equal(result.record.scheduledDate, '2026-08-24')
+  assert.equal(result.group, 'Ready')
+  assert.equal(result.chores, true)
+  assert.equal(result.quick, true)
+  assert.equal(result.quickPressed, 'true')
+  assert.deepEqual(result.picked, ['pump'])
+  assert.equal(result.message, "Couldn't update that. The chore is unchanged.")
+  assert.equal(result.role, 'alert')
+})
+
+test('Doing keeps as-needed snapshot when stored readiness changes to waiting', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 800 },
+    mediaFeatures: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+    body: applicationMarkup,
+    script: `
+      const consoleErrors = []
+      console.error = (...values) => consoleErrors.push(values.map(String).join(' '))
+      const records = {
+        categories: [], locations: [], taskExecutions: [], sessions: [],
+        tasks: [{
+          _id: 'dishwasher', name: 'Empty dishwasher', status: 'approved_recurring',
+          taskMode: 'as_needed', readiness: 'ready', categoryId: null, locationIds: [],
+          estimatedDuration: 5, scheduledDate: '2026-08-24',
+          schedule: { type: 'periodic', every: 2, unit: 'day' }, lastCompletedDate: null
+        }]
+      }
+      let nextSessionId = 0
+      const clone = value => structuredClone(value)
+      globalThis.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async (collection, fields, options = {}) => {
+          const id = options.data_object_id ||
+            (collection === 'sessions' ? 'session-' + (++nextSessionId) : collection + '-new')
+          const record = { _id: id, ...clone(fields) }
+          records[collection].push(record)
+          return clone(record)
+        },
+        updateFields: async (collection, id, fields) => {
+          const record = records[collection].find(item => item._id === id)
+          Object.assign(record, clone(fields))
+          return clone(record)
+        },
+        delete: async () => ({})
+      }
+
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView, refreshTasksView } = await import(applicationUrl + 'tasksView.js')
+      const { initSessionView } = await import(applicationUrl + 'sessionView.js')
+      const { initDoingView, refreshDoing } = await import(applicationUrl + 'doingView.js')
+      const { state } = await import(applicationUrl + 'state.js')
+      await categoryLocationStore.initialize()
+      await initTasksView()
+      initSessionView()
+      initDoingView()
+
+      document.querySelector('#poolChips [data-pick-id="dishwasher"]').click()
+      document.getElementById('startSessionBtn').click()
+      const started = Date.now()
+      while (!document.querySelector('#doingContent [data-task-id="dishwasher"]') &&
+        Date.now() - started < 1800) {
+        await new Promise(resolve => setTimeout(resolve, 20))
+      }
+
+      const before = {
+        bundle: [...state.currentSession.taskBundle],
+        unavailable: state.currentBundle[0]?.unavailable === true,
+        actions: [...document.querySelectorAll(
+          '#doingContent [data-task-id="dishwasher"] [data-outcome]')]
+          .map(button => button.textContent)
+      }
+
+      records.tasks[0].readiness = 'waiting'
+      await refreshTasksView()
+      const aggregate = await refreshDoing({ allowNavigation: false })
+      const row = document.querySelector('#doingContent [data-task-id="dishwasher"]')
+      const result = {
+        consoleErrors,
+        before,
+        persistedBundle: [...records.sessions[0].taskBundle],
+        aggregateBundle: aggregate.bundle.map(task => ({
+          id: task._id, readiness: task.readiness, unavailable: task.unavailable === true
+        })),
+        stateBundle: state.currentBundle.map(task => ({
+          id: task._id, readiness: task.readiness, unavailable: task.unavailable === true
+        })),
+        rowName: row?.querySelector('.task-name')?.textContent,
+        actions: [...(row?.querySelectorAll('[data-outcome]') || [])]
+          .map(button => button.textContent),
+        stillInChores: Boolean(document.querySelector('#activeCards [data-id="dishwasher"]')),
+        stillInQuick: Boolean(document.querySelector('#poolChips [data-pick-id="dishwasher"]'))
+      }
+    `
+  })
+
+  assert.deepEqual(result.consoleErrors, [])
+  assert.deepEqual(result.before, {
+    bundle: ['dishwasher'], unavailable: false, actions: ['Done', 'Skip']
+  })
+  assert.deepEqual(result.persistedBundle, ['dishwasher'])
+  assert.deepEqual(result.aggregateBundle, [{
+    id: 'dishwasher', readiness: 'waiting', unavailable: true
+  }])
+  assert.deepEqual(result.stateBundle, result.aggregateBundle)
+  assert.equal(result.rowName, 'Empty dishwasher')
+  assert.deepEqual(result.actions, ['Skip'])
+  assert.equal(result.stillInChores, false)
+  assert.equal(result.stillInQuick, false)
+})
+
 test('contextual work navigation stays in flow with usable targets at phone and desktop widths', async () => {
   for (const viewport of [{ width: 390, height: 640 }, { width: 1280, height: 800 }]) {
     const result = await runBrowserScenario({

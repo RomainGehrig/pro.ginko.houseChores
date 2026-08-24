@@ -36,6 +36,80 @@ const domNode = () => {
   }
 }
 
+async function withAsNeededActionHarness (records, run) {
+  const originalFreezr = globalThis.freezr
+  const originalDocument = globalThis.document
+  const nodes = new Map()
+  const writes = []
+  const node = id => {
+    if (!nodes.has(id)) nodes.set(id, domNode())
+    return nodes.get(id)
+  }
+
+  globalThis.document = {
+    documentElement: { dataset: {} },
+    activeElement: null,
+    getElementById: id => id === 'sessionFloat' ? null : node(id),
+    addEventListener: () => {},
+    createElement: () => domNode()
+  }
+  globalThis.freezr = {
+    query: async collection => collection === 'tasks' ? structuredClone(records) : [],
+    updateFields: async (collection, id, fields) => {
+      assert.equal(collection, 'tasks')
+      writes.push([id, structuredClone(fields)])
+      Object.assign(records.find(task => task._id === id), structuredClone(fields))
+      return structuredClone(records.find(task => task._id === id))
+    }
+  }
+  sessionPicks.reset()
+
+  try {
+    await tasksView.initTasksView()
+    node('customMinutes').value = '1'
+    const delegatedClick = node('asNeededCards').listeners.get('click')
+    assert.equal(typeof delegatedClick, 'function')
+
+    const clickAction = async (className, id, {
+      action = '',
+      date = '',
+      pressed = false
+    } = {}) => {
+      const input = { value: date }
+      const prompt = domNode()
+      prompt.querySelector = selector => selector === '.as-needed-date' ? input : null
+      const card = domNode()
+      card.dataset.id = id
+      card.querySelector = selector => selector === '.as-needed-date' ? input : null
+      const attributes = new Map([['aria-pressed', String(pressed)]])
+      const button = {
+        dataset: { id, ...(action ? { action } : {}) },
+        textContent: className === 'as-needed-done' ? 'Mark as done' : '',
+        classList: { contains: name => name === className },
+        getAttribute: name => attributes.get(name) ?? null,
+        setAttribute: (name, value) => attributes.set(name, String(value)),
+        closest: selector => {
+          if (selector === '.' + className) return button
+          if (selector === '.as-needed-row') return card
+          if (selector === '.as-needed-date-prompt') return prompt
+          return null
+        }
+      }
+      await delegatedClick({ target: button })
+      await Promise.resolve()
+      return { button, card, input, prompt }
+    }
+
+    await run({ records, writes, node, clickAction })
+  } finally {
+    sessionPicks.reset()
+    if (originalFreezr === undefined) delete globalThis.freezr
+    else globalThis.freezr = originalFreezr
+    if (originalDocument === undefined) delete globalThis.document
+    else globalThis.document = originalDocument
+  }
+}
+
 test('active-task cache and retained session picks exclude waiting as-needed chores', async () => {
   const originalFreezr = globalThis.freezr
   const originalDocument = globalThis.document
@@ -200,6 +274,132 @@ test('As needed uses the shared editor without offering waiting work or losing o
   }
 })
 
+test('As needed readiness actions repaint eligibility and remove an unavailable pick', async () => {
+  const records = [{
+    _id: 'periodic-ready', name: 'Empty dishwasher', status: 'approved_recurring',
+    taskMode: 'as_needed', readiness: 'waiting', categoryId: null, locationIds: [],
+    estimatedDuration: 600, scheduledDate: '2099-01-01',
+    schedule: { type: 'periodic', every: 2, unit: 'day' }, lastCompletedDate: null
+  }, {
+    _id: 'periodic-later', name: 'Check softener', status: 'approved_recurring',
+    taskMode: 'as_needed', readiness: 'waiting', categoryId: null, locationIds: [],
+    estimatedDuration: null, scheduledDate: '2099-06-01',
+    schedule: { type: 'periodic', every: 2, unit: 'day' }, lastCompletedDate: null
+  }, {
+    _id: 'fixed-not-ready', name: 'Inspect gutters', status: 'approved_recurring',
+    taskMode: 'as_needed', readiness: 'ready', categoryId: null, locationIds: [],
+    estimatedDuration: 900, scheduledDate: '2099-12-25',
+    schedule: { type: 'fixed', pattern: { kind: 'weekdays', weekdays: [5] } },
+    lastCompletedDate: null
+  }]
+
+  await withAsNeededActionHarness(records, async ({ writes, node, clickAction }) => {
+    sessionPicks.set(['fixed-not-ready'])
+    assert.doesNotMatch(node('asNeededCards').innerHTML,
+      /class="as-needed-(?:ready|later|not-ready|done)"[^>]*\bdisabled\b/)
+
+    await clickAction('as-needed-ready', 'periodic-ready')
+
+    assert.deepEqual(writes[0], ['periodic-ready', {
+      readiness: 'ready', scheduledDate: '2026-08-24'
+    }])
+    assert.equal(records[0].readiness, 'ready')
+    assert.ok(tasksView.getActiveTasks().some(task => task._id === 'periodic-ready'))
+    const readyMarkup = node('asNeededCards').innerHTML.match(
+      /id="as-needed-ready"[\s\S]*?<\/section>/)?.[0] || ''
+    assert.match(readyMarkup, /data-id="periodic-ready"/)
+
+    await clickAction('as-needed-later', 'periodic-later')
+
+    assert.deepEqual(writes[1], ['periodic-later', {
+      readiness: 'waiting', scheduledDate: '2026-08-26'
+    }])
+    assert.equal(records[1].scheduledDate, '2026-08-26')
+
+    await clickAction('as-needed-not-ready', 'fixed-not-ready')
+
+    assert.deepEqual(writes[2], ['fixed-not-ready', {
+      readiness: 'waiting', scheduledDate: '2026-08-28'
+    }])
+    assert.equal(records[2].readiness, 'waiting')
+    assert.deepEqual(sessionPicks.getPickedIds(), [])
+    assert.equal(tasksView.getActiveTasks().some(task => task._id === 'fixed-not-ready'), false)
+    assert.match(node('asNeededCards').innerHTML, /data-id="fixed-not-ready"/)
+  })
+})
+
+test('As needed one-off dates and two-tap completion use their explicit boundaries', async () => {
+  const records = [{
+    _id: 'once-later', name: 'Order filter', status: 'active',
+    taskMode: 'as_needed', readiness: 'waiting', categoryId: null, locationIds: [],
+    estimatedDuration: null, scheduledDate: '2026-08-24',
+    schedule: { type: 'one_off' }, lastCompletedDate: null
+  }, {
+    _id: 'once-cancel', name: 'Check spare key', status: 'active',
+    taskMode: 'as_needed', readiness: 'waiting', categoryId: null, locationIds: [],
+    estimatedDuration: 1200, scheduledDate: '2099-01-01',
+    schedule: { type: 'one_off' }, lastCompletedDate: null
+  }, {
+    _id: 'repeat-done', name: 'Rinse filter', status: 'approved_recurring',
+    taskMode: 'as_needed', readiness: 'ready', categoryId: null, locationIds: [],
+    estimatedDuration: 5, scheduledDate: '2026-01-01',
+    schedule: { type: 'periodic', every: 3, unit: 'day' }, lastCompletedDate: null
+  }, {
+    _id: 'once-done', name: 'Replace bulb', status: 'active',
+    taskMode: 'as_needed', readiness: 'ready', categoryId: null, locationIds: [],
+    estimatedDuration: 1, scheduledDate: '2026-08-24',
+    schedule: { type: 'one_off' }, lastCompletedDate: null
+  }]
+
+  await withAsNeededActionHarness(records, async ({ writes, node, clickAction }) => {
+    await clickAction('as-needed-later', 'once-later')
+    assert.equal(writes.length, 0)
+    assert.match(node('asNeededCards').innerHTML, /id="as-needed-date-once-later"/)
+
+    const invalid = await clickAction('as-needed-date-save', 'once-later', {
+      action: 'later', date: 'not-a-date'
+    })
+    assert.equal(writes.length, 0)
+    assert.match(node('asNeededCards').innerHTML, /id="as-needed-date-once-later"/)
+    assert.equal(invalid.prompt.children.at(-1)?.textContent, 'Choose a valid date.')
+
+    await clickAction('as-needed-date-save', 'once-later', {
+      action: 'later', date: '2026-09-02'
+    })
+    assert.deepEqual(writes[0], ['once-later', {
+      readiness: 'waiting', scheduledDate: '2026-09-02'
+    }])
+    assert.equal(records[0].scheduledDate, '2026-09-02')
+    assert.doesNotMatch(node('asNeededCards').innerHTML, /id="as-needed-date-once-later"/)
+
+    await clickAction('as-needed-later', 'once-cancel')
+    const writesBeforeCancel = writes.length
+    assert.match(node('asNeededCards').innerHTML, /id="as-needed-date-once-cancel"/)
+    await clickAction('as-needed-date-cancel', 'once-cancel')
+    assert.equal(writes.length, writesBeforeCancel)
+    assert.doesNotMatch(node('asNeededCards').innerHTML, /id="as-needed-date-once-cancel"/)
+
+    await clickAction('as-needed-done', 'repeat-done')
+    assert.equal(writes.length, writesBeforeCancel)
+    assert.match(node('asNeededCards').innerHTML, /data-id="repeat-done" aria-pressed="true"[^>]*>Tap again to confirm</)
+    await clickAction('as-needed-done', 'repeat-done', { pressed: true })
+    assert.equal(records[2].readiness, 'waiting')
+    assert.equal(records[2].scheduledDate, '2026-08-27')
+    assert.equal(typeof records[2].lastCompletedDate, 'number')
+
+    const writesBeforeOneOffDone = writes.length
+    await clickAction('as-needed-done', 'once-done')
+    assert.equal(writes.length, writesBeforeOneOffDone)
+    await clickAction('as-needed-done', 'once-done', { pressed: true })
+    assert.equal(records[3].status, 'archived')
+    assert.equal(records[3].readiness, 'waiting')
+    assert.equal(typeof records[3].lastCompletedDate, 'number')
+    assert.equal(tasksView.getAsNeededTasks().some(task => task._id === 'once-done'), false)
+    assert.doesNotMatch(node('asNeededCards').innerHTML,
+      /class="as-needed-(?:ready|later|not-ready|done)"[^>]*\bdisabled\b/)
+  })
+})
+
 test('approval writes the reviewed schedule and clears AI suggestions', () => {
   assert.deepEqual(buildApprovedTaskFields({}, {
     categoryId: 'c1', category: 'Clean', locationIds: ['l1']
@@ -335,6 +535,136 @@ test('a completion write failure keeps the pending chore and skips refresh', asy
   assert.equal(refreshed, false)
   assert.deepEqual(sessionPicks.getPickedIds(), ['task-1', 'task-2'])
   sessionPicks.reset()
+})
+
+test('as-needed readiness updates cache and persistence before refreshing', async () => {
+  assert.equal(typeof tasksView.updateAsNeededTaskOptimistically, 'function')
+  const original = {
+    _id: 'dishwasher', name: 'Empty dishwasher', status: 'approved_recurring',
+    taskMode: 'as_needed', readiness: 'waiting', scheduledDate: '2026-08-22',
+    schedule: { type: 'periodic', every: 2, unit: 'day' }
+  }
+  let cache = [original]
+  const picks = new Set()
+  const renderedStates = []
+  const updateCalls = []
+  let refreshCalls = 0
+
+  const result = await tasksView.updateAsNeededTaskOptimistically(original, {
+    readiness: 'ready', scheduledDate: '2026-08-24'
+  }, {
+    replace: replacement => {
+      cache = cache.map(task => task._id === replacement._id ? replacement : task)
+    },
+    render: () => renderedStates.push(structuredClone(cache)),
+    update: async (...args) => updateCalls.push(structuredClone(args)),
+    refresh: async () => { refreshCalls++ },
+    picks: {
+      isPicked: id => picks.has(id),
+      toggle: id => picks.has(id) ? picks.delete(id) : picks.add(id)
+    },
+    showFailure: () => assert.fail('a successful update must not show a failure')
+  })
+
+  assert.deepEqual(renderedStates[0].find(task => task._id === 'dishwasher'), {
+    ...original, readiness: 'ready', scheduledDate: '2026-08-24'
+  })
+  assert.deepEqual(updateCalls, [[original._id, {
+    readiness: 'ready', scheduledDate: '2026-08-24'
+  }]])
+  assert.equal(refreshCalls, 1)
+  assert.deepEqual(cache, [{
+    ...original, readiness: 'ready', scheduledDate: '2026-08-24'
+  }])
+  assert.deepEqual(result, { ok: true, stage: null, message: '' })
+})
+
+test('as-needed write failure restores the previous cache and picked state', async () => {
+  assert.equal(typeof tasksView.updateAsNeededTaskOptimistically, 'function')
+  const original = {
+    _id: 'dishwasher', name: 'Empty dishwasher', status: 'approved_recurring',
+    taskMode: 'as_needed', readiness: 'ready', scheduledDate: '2026-08-24',
+    schedule: { type: 'periodic', every: 2, unit: 'day' }
+  }
+  let cache = [original]
+  const picks = new Set([original._id])
+  const renderedStates = []
+  let refreshCalls = 0
+  let failureMessage = ''
+
+  const result = await tasksView.updateAsNeededTaskOptimistically(original, {
+    readiness: 'waiting', scheduledDate: '2026-08-26'
+  }, {
+    replace: replacement => {
+      cache = cache.map(task => task._id === replacement._id ? replacement : task)
+    },
+    render: () => renderedStates.push(structuredClone(cache)),
+    update: async () => { throw new Error('write offline') },
+    refresh: async () => { refreshCalls++ },
+    picks: {
+      isPicked: id => picks.has(id),
+      toggle: id => picks.has(id) ? picks.delete(id) : picks.add(id)
+    },
+    showFailure: message => { failureMessage = message }
+  })
+
+  assert.deepEqual(renderedStates[0], [{
+    ...original, readiness: 'waiting', scheduledDate: '2026-08-26'
+  }])
+  assert.equal(picks.has(original._id), true)
+  assert.deepEqual(renderedStates.at(-1), [original])
+  assert.equal(refreshCalls, 0)
+  assert.equal(failureMessage, "Couldn't update that. The chore is unchanged.")
+  assert.deepEqual(result, {
+    ok: false, stage: 'write', message: "Couldn't update that. The chore is unchanged."
+  })
+})
+
+test('as-needed refresh failure keeps persisted optimistic cache and pick changes', async () => {
+  assert.equal(typeof tasksView.updateAsNeededTaskOptimistically, 'function')
+  const original = {
+    _id: 'dishwasher', name: 'Empty dishwasher', status: 'approved_recurring',
+    taskMode: 'as_needed', readiness: 'ready', scheduledDate: '2026-08-24',
+    schedule: { type: 'periodic', every: 2, unit: 'day' }
+  }
+  let cache = [original]
+  const persisted = [structuredClone(original)]
+  const picks = new Set([original._id])
+  const renderedStates = []
+  let failureMessage = ''
+
+  const result = await tasksView.updateAsNeededTaskOptimistically(original, {
+    readiness: 'waiting', scheduledDate: '2026-08-26'
+  }, {
+    replace: replacement => {
+      cache = cache.map(task => task._id === replacement._id ? replacement : task)
+    },
+    render: () => renderedStates.push(structuredClone(cache)),
+    update: async (id, fields) => {
+      Object.assign(persisted.find(task => task._id === id), structuredClone(fields))
+    },
+    refresh: async () => { throw new Error('refresh offline') },
+    picks: {
+      isPicked: id => picks.has(id),
+      toggle: id => picks.has(id) ? picks.delete(id) : picks.add(id)
+    },
+    showFailure: message => { failureMessage = message }
+  })
+
+  const optimistic = {
+    ...original, readiness: 'waiting', scheduledDate: '2026-08-26'
+  }
+  assert.deepEqual(cache, [optimistic])
+  assert.deepEqual(persisted, [optimistic])
+  assert.deepEqual(renderedStates, [[optimistic]])
+  assert.equal(picks.has(original._id), false)
+  assert.equal(failureMessage, 'Task saved, but could not refresh tasks: refresh offline')
+  assert.doesNotMatch(failureMessage, /unchanged/i)
+  assert.deepEqual(result, {
+    ok: false,
+    stage: 'refresh',
+    message: 'Task saved, but could not refresh tasks: refresh offline'
+  })
 })
 
 test('an unrelated task edit omits a legacy-only category while references are unavailable', () => {

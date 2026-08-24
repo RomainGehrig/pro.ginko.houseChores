@@ -39,6 +39,7 @@ import { sessionStore } from './sessionStore.js'
 import { sessionPicks } from './sessionPicks.js'
 import { bundleTotal, pickedBundle } from './pickingLogic.js'
 import { isAsNeededTask, isTaskEligible, taskModeFields } from './taskModeLogic.js'
+import { deferReadinessFields, markReadyFields } from './asNeededLogic.js'
 import { asNeededCategoryPillsHtml, asNeededScreenHtml } from './asNeededView.js'
 import {
   sessionAddActionLabel, sessionAddLanded, sessionAddNote, sessionAddRejected, sessionAddTarget,
@@ -161,6 +162,7 @@ export function refreshSessionMarks () {
 export async function refreshTasksView() {
   const fetched = await listAllTasks()
   tasksCache = overlayPendingTaskArchives(fetched, pendingTaskArchives)
+  reconcileAsNeededTransientState()
   // A pick is a chore you mean to do next, so one that has left the list is not
   // a pick any more — left behind, it would put the chore back in the session
   // the day it is restored. What the server holds is what counts here: an
@@ -168,6 +170,26 @@ export async function refreshTasksView() {
   // chore if the undo comes.
   sessionPicks.retain(fetched.filter(availableLiveTask).map(task => task._id))
   renderTasks()
+  // A task refresh changes the Quick pool even when no pick changed. Announce
+  // the same ids so every surface reads the same freshly replaced cache.
+  sessionPicks.set(sessionPicks.getPickedIds())
+}
+
+function reconcileAsNeededTransientState () {
+  const confirmingTask = tasksCache.find(task => task._id === asNeededState.confirmingDoneId)
+  if (!confirmingTask || !liveTask(confirmingTask) || !isAsNeededTask(confirmingTask) ||
+    confirmingTask.readiness !== 'ready') {
+    asNeededState.confirmingDoneId = null
+  }
+
+  const prompt = asNeededState.datePrompt
+  if (!prompt) return
+  const promptTask = tasksCache.find(task => task._id === prompt.taskId)
+  const applicableReadiness = prompt?.action === 'not-ready' ? 'ready' : 'waiting'
+  if (!promptTask || !liveTask(promptTask) || !isAsNeededTask(promptTask) ||
+    promptTask.schedule?.type !== 'one_off' || promptTask.readiness !== applicableReadiness) {
+    asNeededState.datePrompt = null
+  }
 }
 
 function renderTasks() {
@@ -260,6 +282,59 @@ export function getActiveTasks() {
 
 export function getAsNeededTasks () {
   return tasksCache.filter(task => liveTask(task) && isAsNeededTask(task))
+}
+
+function replaceCachedTask (replacement) {
+  tasksCache = tasksCache.map(task =>
+    task._id === replacement._id ? replacement : task)
+}
+
+function repaintPickConsumers (picks) {
+  if (typeof picks?.getPickedIds !== 'function' || typeof picks?.set !== 'function') return
+  picks.set(picks.getPickedIds())
+}
+
+export async function updateAsNeededTaskOptimistically (task, fields, {
+  replace = replaceCachedTask,
+  render = renderTasks,
+  update = updateTask,
+  refresh = refreshTasksView,
+  picks = sessionPicks,
+  showFailure = message => showEditorFailure(message, 'as-needed')
+} = {}) {
+  const original = task
+  const optimistic = { ...task, ...fields }
+  const wasPicked = picks.isPicked(task._id)
+
+  replace(optimistic)
+  let pickChanged = false
+  if (optimistic.readiness === 'waiting' && wasPicked) {
+    picks.toggle(task._id)
+    pickChanged = true
+  }
+  render()
+  if (!pickChanged) repaintPickConsumers(picks)
+
+  const result = await saveTaskWithRefresh(
+    () => update(task._id, fields),
+    refresh
+  )
+  if (result.stage === 'write') {
+    replace(original)
+    const nowPicked = picks.isPicked(task._id)
+    let restoredPick = false
+    if (nowPicked !== wasPicked) {
+      picks.toggle(task._id)
+      restoredPick = true
+    }
+    render()
+    if (!restoredPick) repaintPickConsumers(picks)
+    const message = "Couldn't update that. The chore is unchanged."
+    showFailure(message)
+    return { ...result, message }
+  }
+  if (result.stage === 'refresh') showFailure(result.message)
+  return result
 }
 
 function asNeededFilterCategoryName (snapshot) {
@@ -1071,11 +1146,90 @@ function handleLedgerClick (evt) {
   openChoreEditor(card.dataset.id, 'chores')
 }
 
-function handleAsNeededClick (evt) {
+function showAsNeededDateFailure (saveButton) {
+  const prompt = saveButton.closest('.as-needed-date-prompt')
+  if (!prompt) return
+  let status = prompt.querySelector('.as-needed-date-message')
+  if (!status) {
+    status = document.createElement('p')
+    status.className = 'as-needed-date-message'
+    status.setAttribute('role', 'status')
+    prompt.appendChild(status)
+  }
+  status.textContent = 'Choose a valid date.'
+}
+
+async function handleAsNeededClick (evt) {
   const edit = evt.target.closest('.as-needed-edit')
-  const card = edit?.closest('.as-needed-row')
-  if (!card) return
-  openChoreEditor(card.dataset.id, 'as-needed')
+  if (edit) {
+    const card = edit.closest('.as-needed-row')
+    if (card) return openChoreEditor(card.dataset.id, 'as-needed')
+    return
+  }
+
+  const ready = evt.target.closest('.as-needed-ready')
+  const later = evt.target.closest('.as-needed-later')
+  const notReady = evt.target.closest('.as-needed-not-ready')
+  const dateSave = evt.target.closest('.as-needed-date-save')
+  const dateCancel = evt.target.closest('.as-needed-date-cancel')
+  const done = evt.target.closest('.as-needed-done')
+  const action = ready || later || notReady || dateSave || dateCancel || done
+  if (!action) return
+
+  const card = action.closest('.as-needed-row')
+  const id = action.dataset.id || card?.dataset.id
+  const task = tasksCache.find(item => item._id === id)
+  if (!task) return
+
+  if (dateCancel) {
+    asNeededState.datePrompt = null
+    renderAsNeeded()
+    return
+  }
+
+  const today = localDateFromDate(new Date())
+  if (ready) {
+    return updateAsNeededTaskOptimistically(task, markReadyFields(today))
+  }
+
+  if (later || notReady) {
+    const promptAction = later ? 'later' : 'not-ready'
+    const fields = deferReadinessFields(task, today)
+    if (!fields) {
+      asNeededState.datePrompt = { taskId: task._id, action: promptAction }
+      renderAsNeeded()
+      return
+    }
+    return updateAsNeededTaskOptimistically(task, fields)
+  }
+
+  if (dateSave) {
+    const prompt = dateSave.closest('.as-needed-date-prompt')
+    const input = prompt?.querySelector('.as-needed-date') || card?.querySelector('.as-needed-date')
+    const fields = deferReadinessFields(task, today, input?.value)
+    if (!fields) {
+      showAsNeededDateFailure(dateSave)
+      return
+    }
+    const result = await updateAsNeededTaskOptimistically(task, fields)
+    if (result.ok && asNeededState.datePrompt?.taskId === task._id) {
+      asNeededState.datePrompt = null
+      renderAsNeeded()
+    }
+    return result
+  }
+
+  if (!armOrConfirmDone(done)) {
+    asNeededState.confirmingDoneId = task._id
+    renderAsNeeded()
+    return
+  }
+
+  const result = await markChoreRecentlyDone(task)
+  if (!result.ok) {
+    showEditorFailure(completionFailureMessage(result), 'as-needed')
+  }
+  return result
 }
 
 async function handleArchivedClick (evt) {
