@@ -46,7 +46,7 @@ const deferred = () => {
   return { promise, resolve, reject }
 }
 
-async function withAsNeededActionHarness (records, run) {
+async function withAsNeededActionHarness (records, run, options = {}) {
   const originalFreezr = globalThis.freezr
   const originalDocument = globalThis.document
   const nodes = new Map()
@@ -64,7 +64,9 @@ async function withAsNeededActionHarness (records, run) {
     createElement: () => domNode()
   }
   globalThis.freezr = {
-    query: async collection => collection === 'tasks' ? structuredClone(records) : [],
+    query: async (...args) => options.query
+      ? options.query(...args)
+      : (args[0] === 'tasks' ? structuredClone(records) : []),
     updateFields: async (collection, id, fields) => {
       assert.equal(collection, 'tasks')
       writes.push([id, structuredClone(fields)])
@@ -849,6 +851,117 @@ test('a deferred earlier refresh cannot publish after a later readiness action',
   }])
   assert.deepEqual(cache, persisted)
   assert.deepEqual(renderedStates.at(-1), persisted)
+})
+
+test("a late aggregate refresh cannot overwrite another task's successful refresh", async () => {
+  const records = [{
+    _id: 'filter', name: 'Check air filter', status: 'approved_recurring',
+    taskMode: 'as_needed', readiness: 'waiting', categoryId: null, locationIds: [],
+    estimatedDuration: 5, scheduledDate: '2029-12-20',
+    schedule: { type: 'periodic', every: 2, unit: 'day' }, lastCompletedDate: null
+  }, {
+    _id: 'pump', name: 'Inspect backup pump', status: 'approved_recurring',
+    taskMode: 'as_needed', readiness: 'waiting', categoryId: null, locationIds: [],
+    estimatedDuration: 10, scheduledDate: '2029-12-21',
+    schedule: { type: 'periodic', every: 3, unit: 'day' }, lastCompletedDate: null
+  }]
+  const firstRefreshStarted = deferred()
+  const releaseFirstRefresh = deferred()
+  let taskQueryCount = 0
+
+  await withAsNeededActionHarness(records, async ({ writes, node }) => {
+    const firstAction = tasksView.updateAsNeededTaskOptimistically(
+      tasksView.getAsNeededTasks().find(task => task._id === 'filter'),
+      { readiness: 'ready', scheduledDate: '2030-01-07' }
+    )
+    await firstRefreshStarted.promise
+
+    let secondSettled = false
+    const secondAction = tasksView.updateAsNeededTaskOptimistically(
+      tasksView.getAsNeededTasks().find(task => task._id === 'pump'),
+      { readiness: 'ready', scheduledDate: '2030-01-08' }
+    ).then(result => {
+      secondSettled = true
+      return result
+    })
+    await new Promise(resolve => setTimeout(resolve, 0))
+    sessionPicks.set(['pump'])
+
+    const beforeLateResponse = {
+      secondSettled,
+      persisted: structuredClone(records),
+      cache: tasksView.getAsNeededTasks().map(task => ({
+        id: task._id, readiness: task.readiness, scheduledDate: task.scheduledDate
+      })),
+      picks: sessionPicks.getPickedIds(),
+      asNeeded: node('asNeededCards').innerHTML,
+      chores: node('activeCards').innerHTML
+    }
+
+    releaseFirstRefresh.resolve()
+    const [firstResult, secondResult] = await Promise.all([firstAction, secondAction])
+    const readyGroup = node('asNeededCards').innerHTML.match(
+      /id="as-needed-ready"[\s\S]*?<\/section>/)?.[0] || ''
+
+    assert.equal(beforeLateResponse.secondSettled, true)
+    assert.deepEqual(beforeLateResponse.persisted.map(task => ({
+      id: task._id, readiness: task.readiness, scheduledDate: task.scheduledDate
+    })), [{
+      id: 'filter', readiness: 'ready', scheduledDate: '2030-01-07'
+    }, {
+      id: 'pump', readiness: 'ready', scheduledDate: '2030-01-08'
+    }])
+    assert.deepEqual(beforeLateResponse.cache, [
+      { id: 'filter', readiness: 'ready', scheduledDate: '2030-01-07' },
+      { id: 'pump', readiness: 'ready', scheduledDate: '2030-01-08' }
+    ])
+    assert.deepEqual(beforeLateResponse.picks, ['pump'])
+    assert.match(beforeLateResponse.asNeeded, /data-id="filter"/)
+    assert.match(beforeLateResponse.asNeeded, /data-id="pump"/)
+    assert.match(beforeLateResponse.chores, /data-id="filter"/)
+    assert.match(beforeLateResponse.chores, /data-id="pump"/)
+
+    assert.deepEqual(firstResult, { ok: true, stage: null, message: '' })
+    assert.deepEqual(secondResult, { ok: true, stage: null, message: '' })
+    assert.deepEqual(writes, [[
+      'filter', { readiness: 'ready', scheduledDate: '2030-01-07' }
+    ], [
+      'pump', { readiness: 'ready', scheduledDate: '2030-01-08' }
+    ]])
+    assert.deepEqual(records.map(task => ({
+      id: task._id, readiness: task.readiness, scheduledDate: task.scheduledDate
+    })), [{
+      id: 'filter', readiness: 'ready', scheduledDate: '2030-01-07'
+    }, {
+      id: 'pump', readiness: 'ready', scheduledDate: '2030-01-08'
+    }])
+    assert.deepEqual(tasksView.getAsNeededTasks().map(task => ({
+      id: task._id, readiness: task.readiness, scheduledDate: task.scheduledDate
+    })), [{
+      id: 'filter', readiness: 'ready', scheduledDate: '2030-01-07'
+    }, {
+      id: 'pump', readiness: 'ready', scheduledDate: '2030-01-08'
+    }])
+    assert.deepEqual(tasksView.getActiveTasks().map(task => task._id), ['filter', 'pump'])
+    assert.deepEqual(sessionPicks.getPickedIds(), ['pump'])
+    assert.match(readyGroup, /data-id="filter"/)
+    assert.match(readyGroup, /data-id="pump"/)
+    assert.match(node('activeCards').innerHTML, /data-id="filter"/)
+    assert.match(node('activeCards').innerHTML, /data-id="pump"/)
+  }, {
+    query: async collection => {
+      if (collection !== 'tasks') return []
+      taskQueryCount++
+      const snapshot = structuredClone(records)
+      if (taskQueryCount === 2) {
+        firstRefreshStarted.resolve()
+        await releaseFirstRefresh.promise
+      }
+      return snapshot
+    }
+  })
+
+  assert.equal(taskQueryCount, 3)
 })
 
 test('a successful readiness retry clears the previous factual failure', async () => {

@@ -50,6 +50,7 @@ import { setCurrentSessionAggregate, state } from './state.js'
 let tasksCache = []
 const pendingTaskArchives = new Map()
 const asNeededTaskUpdateQueues = new Map()
+let tasksRefreshGeneration = 0
 let tasksViewNow = Date.now
 
 // Suggestions are one optional permission, owned by Setup. Off is the default,
@@ -166,7 +167,11 @@ export function refreshSessionMarks () {
 }
 
 export async function refreshTasksView() {
+  const refreshGeneration = ++tasksRefreshGeneration
   const fetched = await listAllTasks()
+  // A task read is a snapshot of the entire cache. A later read or optimistic
+  // replacement owns publication, even when this older response arrives last.
+  if (refreshGeneration !== tasksRefreshGeneration) return
   tasksCache = overlayPendingTaskArchives(fetched, pendingTaskArchives)
   reconcileAsNeededTransientState()
   // A pick is a chore you mean to do next, so one that has left the list is not
@@ -291,6 +296,9 @@ export function getAsNeededTasks () {
 }
 
 function replaceCachedTask (replacement) {
+  // Do this before replacing so an already-fetched aggregate cannot overwrite
+  // the new optimistic task while its own write and refresh are still moving.
+  tasksRefreshGeneration++
   tasksCache = tasksCache.map(task =>
     task._id === replacement._id ? replacement : task)
 }
