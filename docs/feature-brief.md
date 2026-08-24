@@ -104,11 +104,12 @@ A focused mode with one clock, every task visible, and no deadline pressure.
   away. Cancelling changes nothing.
 - **Pause** stops the clock; **Resume** starts the same session clock again.
 - **Add to the session** stays available whether the clock is running or paused.
-  It offers chores that currently fit the remaining budget as tick-boxes, an
-  unrestricted **search** across every active chore (no budget test — what you
-  choose deliberately always fits), and a **quick-add by title** for something
-  you only just thought of. Adding work never stops the clock. The session
-  auto-pauses once everything is resolved.
+  While time remains, it offers chores that fit the remaining budget as
+  tick-boxes; once that time is used, it keeps the three shortest chores on
+  offer. An unrestricted **search** spans every active chore (no budget test —
+  what you choose deliberately always fits), and a **quick-add by title** takes
+  something you only just thought of. Adding work never stops the clock. The
+  session auto-pauses once everything is resolved.
 
 > **Interruption is normal.** Every write is staged and individually retryable,
 > refocusing the window re-reads the authoritative state, and an unfinished
