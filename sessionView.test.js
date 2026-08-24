@@ -54,7 +54,18 @@ test('missing and valid budgets update the inline session status without disabli
   assert.equal(custom.disabled, false)
 })
 
-test('Quick Session task details put outside completion beside the session action', () => {
+test('Fill feedback keeps the actual outcome when set-aside chores also exist', () => {
+  assert.equal(sessionView.bundleFillNotice(0, 5, true),
+    'Nothing was added for 5 min. Try a longer stretch, or pick something anyway. ' +
+    'Set-aside chores stay out unless you pick them.')
+  assert.equal(sessionView.bundleFillNotice(2, 30, true),
+    'Nothing else was added alongside what you picked. Add anything you like anyway. ' +
+    'Set-aside chores stay out unless you pick them.')
+  assert.equal(sessionView.bundleFillNotice(0, 5, false),
+    'Nothing here fits 5 min. Try a longer stretch, or pick something anyway.')
+})
+
+test('Quick Session task details put completion beside an explicit set-aside action', () => {
   const model = sessionView.quickDetailSheetModel({
     _id: 'task-1',
     name: 'Clean kitchen',
@@ -64,9 +75,36 @@ test('Quick Session task details put outside completion beside the session actio
   }, [], '2026-08-23', true)
 
   assert.match(model.headerActionHtml, /class="btn done-btn"[^>]*>Mark as done</)
-  assert.match(model.headerActionHtml, /class="btn btn-quiet session-btn"[^>]*>Take out</)
+  assert.match(model.headerActionHtml, /class="btn btn-quiet session-btn"[^>]*>Set aside</)
   assert.deepEqual(model.actions, [
     { label: 'Close', value: null, className: 'btn btn-ghost' }
+  ])
+})
+
+test('Quick Session task details offer an unpicked chore or return a set-aside one', () => {
+  const task = {
+    _id: 'task-1',
+    name: 'Clean kitchen',
+    estimatedDuration: 20,
+    scheduledDate: '2026-08-21',
+    schedule: { type: 'periodic', every: 1, unit: 'week' }
+  }
+
+  const offered = sessionView.quickDetailSheetModel(
+    task, [], '2026-08-23', false, null, false)
+  assert.match(offered.headerActionHtml, /class="btn done-btn"[^>]*>Mark as done</)
+  assert.match(offered.headerActionHtml, /class="btn btn-quiet session-btn"[^>]*>Add to session</)
+  assert.deepEqual(offered.actions, [
+    { label: 'Close', value: null, className: 'btn btn-ghost' },
+    { label: 'Set aside', value: 'exclude', className: 'btn btn-secondary' }
+  ])
+
+  const setAside = sessionView.quickDetailSheetModel(
+    task, [], '2026-08-23', false, null, true)
+  assert.match(setAside.headerActionHtml, /class="btn btn-quiet session-btn"[^>]*>Add to session</)
+  assert.deepEqual(setAside.actions, [
+    { label: 'Close', value: null, className: 'btn btn-ghost' },
+    { label: 'Offer again', value: 'include', className: 'btn btn-secondary' }
   ])
 })
 
@@ -88,6 +126,9 @@ test('Quick Session details respect the session already under way', () => {
     { ...task, _id: 'task-2' }, [], '2026-08-23', false, activeSession)
   assert.match(available.headerActionHtml, /class="btn done-btn"[^>]*>Mark as done</)
   assert.match(available.headerActionHtml, /class="btn btn-quiet session-btn"[^>]*>Add to session</)
+  assert.deepEqual(available.actions, [
+    { label: 'Close', value: null, className: 'btn btn-ghost' }
+  ])
 })
 
 test('Quick Session sends its session action to the session already under way', async () => {
@@ -163,16 +204,20 @@ test('a successful Quick Session completion clears any earlier failure', () => {
 // Once a session is under way the picks are no longer what you are putting
 // together — they are the session. Leaving them behind makes the ledger and the
 // floating readout describe a session that has already happened.
-test('starting a session empties the picks, and a restored one leaves them alone', async () => {
+test('starting a session empties the draft, and a restored one leaves it alone', async () => {
   const { sessionPicks } = await import('./sessionPicks.js')
 
   sessionPicks.set(['a', 'b'])
+  sessionPicks.exclude('c')
   sessionView.clearPicksForStart({ restored: false })
   assert.deepEqual(sessionPicks.getPickedIds(), [])
+  assert.deepEqual(sessionPicks.getExcludedIds(), [])
 
   sessionPicks.set(['a', 'b'])
+  sessionPicks.exclude('c')
   sessionView.clearPicksForStart({ restored: true })
   assert.deepEqual(sessionPicks.getPickedIds(), ['a', 'b'],
     'the new bundle was not started, so it is still the one being put together')
-  sessionPicks.set([])
+  assert.deepEqual(sessionPicks.getExcludedIds(), ['c'])
+  sessionPicks.clear()
 })

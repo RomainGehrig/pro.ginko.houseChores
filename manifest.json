@@ -159,7 +159,7 @@
     },
     {
       "path": "bundleLogic.js",
-      "Description": "Pure functions that prioritize eligible tasks by scheduled date and build category-ID-filtered time-boxed bundles and filler suggestions."
+      "Description": "Pure functions that prioritize eligible tasks and build category-filtered, time-boxed bundles around picks and set-aside chores."
     },
     {
       "path": "bundleLogic.test.js",
@@ -231,7 +231,7 @@
     },
     {
       "path": "sessionView.js",
-      "Description": "Renders time-budget and category choices, inline input feedback, bundle proposals, and durable session starts."
+      "Description": "Renders Quick-session choices, reversible set-aside chores, bundle proposals, feedback, and durable session starts."
     },
     {
       "path": "sessionView.test.js",
@@ -355,11 +355,11 @@
     },
     {
       "path": "sessionPicks.js",
-      "Description": "Shared store of the chores hand-picked for the next session."
+      "Description": "Shared transient store of chores picked or set aside for the next Quick session."
     },
     {
       "path": "sessionPicks.test.js",
-      "Description": "Unit tests for the shared picked-chore store and its subscribers."
+      "Description": "Unit tests for picked and set-aside Quick-session state and its subscribers."
     },
     {
       "path": "sessionAdd.js",

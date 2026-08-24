@@ -31,10 +31,11 @@ test('a vessel block is coloured on the ripeness ramp, not a fixed fill', () => 
   assert.match(markup, /background:color-mix\(in srgb, var\(--ripe-warm\) \d+%, var\(--ripe-cold\)\)/)
 })
 
-test('a vessel block is the control that takes a chore back out', () => {
+test('a vessel block says that taking a chore out sets it aside', () => {
   const markup = buildVesselFillHtml([chore()], TODAY)
   assert.match(markup, /data-remove-id="t1"/)
-  assert.match(markup, /aria-label="Take Empty the dishwasher out of the session"/)
+  assert.match(markup,
+    /aria-label="Set Empty the dishwasher aside for this Quick session"/)
 })
 
 test('vessel markup escapes a chore name that looks like markup', () => {
@@ -48,6 +49,8 @@ test('the vessel list names each chore with the fact behind it', () => {
   assert.match(markup, /Empty the dishwasher/)
   assert.match(markup, /last done/)
   assert.match(markup, /data-remove-id="t1"/)
+  assert.match(markup,
+    /aria-label="Set Empty the dishwasher aside for this Quick session"/)
 })
 
 test('an empty bundle draws no blocks and no entries', () => {
@@ -59,6 +62,15 @@ test('a pool chip reports whether it is already in the session', () => {
   const markup = buildPoolChipsHtml([chore(), chore({ _id: 't2' })], ['t2'], TODAY)
   assert.match(markup, /data-pick-id="t1" aria-pressed="false"/)
   assert.match(markup, /data-pick-id="t2" aria-pressed="true"/)
+})
+
+test('a set-aside pool chip stays available and says why it looks different', () => {
+  const markup = buildPoolChipsHtml([chore()], [], TODAY, ['t1'])
+
+  assert.match(markup, /pool-chip-wrap is-excluded/)
+  assert.match(markup, /Set aside/)
+  assert.match(markup, /data-pick-id="t1" aria-pressed="false"/)
+  assert.doesNotMatch(markup, /disabled/)
 })
 
 test('every pool chip carries a detail control reachable without a long press', () => {

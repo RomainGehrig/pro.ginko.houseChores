@@ -51,10 +51,22 @@ test('setting nothing empties the list', () => {
 
 test('subscribers hear about every change, wherever it came from', () => {
   const heard = []
-  sessionPicks.subscribe(ids => heard.push(ids))
+  sessionPicks.subscribe((...args) => heard.push({
+    args,
+    pickedIds: sessionPicks.getPickedIds(),
+    setAsideIds: sessionPicks.getExcludedIds()
+  }))
   sessionPicks.toggle('a')
-  sessionPicks.set(['b'])
-  assert.deepEqual(heard, [['a'], ['b']])
+  sessionPicks.exclude('b')
+  assert.deepEqual(heard, [{
+    args: [],
+    pickedIds: ['a'],
+    setAsideIds: []
+  }, {
+    args: [],
+    pickedIds: ['a'],
+    setAsideIds: ['b']
+  }])
 })
 
 test('a subscriber can stop listening', () => {
@@ -69,7 +81,7 @@ test('a subscriber can stop listening', () => {
 test('one subscriber throwing does not rob the others of the change', () => {
   const heard = []
   sessionPicks.subscribe(() => { throw new Error('no') })
-  sessionPicks.subscribe(ids => heard.push(ids))
+  sessionPicks.subscribe(() => heard.push(sessionPicks.getPickedIds()))
   sessionPicks.toggle('a')
   assert.deepEqual(heard, [['a']])
 })
@@ -94,7 +106,7 @@ test('keeping every pick changes nothing and tells nobody', () => {
 test('a pick dropped with its chore reaches both screens', () => {
   const heard = []
   sessionPicks.set(['a', 'b'])
-  sessionPicks.subscribe(ids => heard.push(ids))
+  sessionPicks.subscribe(() => heard.push(sessionPicks.getPickedIds()))
   sessionPicks.retain(['b'])
   assert.deepEqual(heard, [['b']])
 })
@@ -102,4 +114,51 @@ test('a pick dropped with its chore reaches both screens', () => {
 test('retaining against nothing empties the list', () => {
   sessionPicks.set(['a', 'b'])
   assert.deepEqual(sessionPicks.retain([]), [])
+})
+
+test('task-list retention does not shorten a set-aside choice', () => {
+  sessionPicks.set(['a', 'b'])
+  sessionPicks.exclude('a')
+
+  assert.deepEqual(sessionPicks.retain([]), [])
+  assert.deepEqual(sessionPicks.getExcludedIds(), ['a'],
+    'the exclusion lasts for the Quick-session draft, not for one task refresh')
+})
+
+test('setting a picked chore aside moves it out of the session draft', () => {
+  sessionPicks.set(['a', 'b'])
+
+  assert.equal(sessionPicks.exclude('a'), true)
+  assert.deepEqual(sessionPicks.getPickedIds(), ['b'])
+  assert.deepEqual(sessionPicks.getExcludedIds(), ['a'])
+})
+
+test('manually picking a set-aside chore brings it back', () => {
+  sessionPicks.exclude('a')
+
+  assert.equal(sessionPicks.toggle('a'), true)
+  assert.deepEqual(sessionPicks.getPickedIds(), ['a'])
+  assert.deepEqual(sessionPicks.getExcludedIds(), [])
+})
+
+test('restoring a set-aside chore makes it available without picking it', () => {
+  sessionPicks.exclude('a')
+
+  assert.equal(sessionPicks.include('a'), true)
+  assert.deepEqual(sessionPicks.getPickedIds(), [])
+  assert.deepEqual(sessionPicks.getExcludedIds(), [])
+})
+
+test('clearing the draft empties picks and exclusions without dropping subscribers', () => {
+  const heard = []
+  sessionPicks.set(['a'])
+  sessionPicks.exclude('b')
+  sessionPicks.subscribe(() => heard.push(sessionPicks.getPickedIds()))
+
+  sessionPicks.clear()
+  sessionPicks.toggle('c')
+
+  assert.deepEqual(sessionPicks.getPickedIds(), ['c'])
+  assert.deepEqual(sessionPicks.getExcludedIds(), [])
+  assert.deepEqual(heard, [[], ['c']])
 })
