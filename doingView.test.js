@@ -1528,7 +1528,7 @@ test('Quick add treats an attached staged task as successful after its response 
   })
 })
 
-test('Quick add Retry preserves a new title across ambiguous recovery of an older marker', async () => {
+test('Quick add keeps a new title until ambiguous recovery succeeds', async () => {
   const original = task('original-task')
   const session = {
     _id: 'quick-intent-session', status: 'paused', startTime: 10000,
@@ -1558,7 +1558,7 @@ test('Quick add Retry preserves a new title across ambiguous recovery of an olde
     await document.clickControl('continueQuickAddBtn')
 
     assert.ok(document.control('retrySessionMutationBtn'))
-    assert.equal(document.control('continueSearchInput').value, '')
+    assert.equal(document.control('continueSearchInput').value, 'Wipe the mirror')
     await document.clickControl('retrySessionMutationBtn')
 
     assert.deepEqual(
@@ -1579,6 +1579,7 @@ test('Quick add Retry preserves a new title across ambiguous recovery of an olde
     )
     assert.equal(persistence.session.pendingAddition, null)
     assert.equal(document.control('retrySessionMutationBtn'), null)
+    assert.equal(document.control('continueSearchInput').value, '')
   })
 })
 

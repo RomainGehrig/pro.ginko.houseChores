@@ -490,14 +490,10 @@ function attachSearchedTask (taskId) {
   )
 }
 
-function quickAddContinuation (retryIntent = null) {
+async function quickAddContinuation (retryIntent = null) {
   const search = document.getElementById('continueSearchInput')
   const title = retryIntent?.title || search?.value
-  if (!retryIntent && search) {
-    search.value = ''
-    renderContinuationQuery('')
-  }
-  return runContinuationMutation(
+  const result = await runContinuationMutation(
     () => sessionStore.quickAdd(state.currentSession._id, title, retryIntent),
     'Could not add the quick task',
     error => quickAddContinuation(error.quickAddIntent || retryIntent || { title }),
@@ -506,6 +502,14 @@ function quickAddContinuation (retryIntent = null) {
       (aggregate.session.taskBundle || []).includes(error.quickAddTaskId)
     )
   )
+  if (result === true) {
+    const currentSearch = document.getElementById('continueSearchInput')
+    if (currentSearch) {
+      currentSearch.value = ''
+      renderContinuationQuery('')
+    }
+  }
+  return result
 }
 
 function resumeSession () {
