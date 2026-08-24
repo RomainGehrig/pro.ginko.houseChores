@@ -49,6 +49,8 @@ import { setCurrentSessionAggregate, state } from './state.js'
 
 let tasksCache = []
 const pendingTaskArchives = new Map()
+const asNeededTaskUpdateQueues = new Map()
+let tasksViewNow = Date.now
 
 // Suggestions are one optional permission, owned by Setup. Off is the default,
 // and off means the control is not there at all — not there and refusing.
@@ -88,8 +90,12 @@ export function overlayPendingTaskArchives (tasks, pendingArchives) {
 // and Doing is not this module's to import — index wires its repaint in.
 let applySessionAggregate = null
 
-export async function initTasksView({ onSessionAggregateChange = null } = {}) {
+export async function initTasksView({
+  onSessionAggregateChange = null,
+  now = Date.now
+} = {}) {
   applySessionAggregate = onSessionAggregateChange
+  tasksViewNow = now
   document.getElementById('addTasksBtn').addEventListener('click', handleAddTasks)
   document.getElementById('enrichBtn').addEventListener('click', handleEnrich)
   document.getElementById('proposedCards').addEventListener('click', handleProposedClick)
@@ -294,16 +300,23 @@ function repaintPickConsumers (picks) {
   picks.set(picks.getPickedIds())
 }
 
-export async function updateAsNeededTaskOptimistically (task, fields, {
+async function runAsNeededTaskUpdate (task, fields, {
+  getCurrent = id => tasksCache.find(item => item._id === id),
   replace = replaceCachedTask,
   render = renderTasks,
   update = updateTask,
   refresh = refreshTasksView,
   picks = sessionPicks,
+  clearFeedback = () => {
+    if (typeof document !== 'undefined' && document.getElementById('asNeededStatus')) {
+      showEditorNote('', 'as-needed')
+    }
+  },
   showFailure = message => showEditorFailure(message, 'as-needed')
 } = {}) {
-  const original = task
-  const optimistic = { ...task, ...fields }
+  clearFeedback()
+  const original = getCurrent(task._id) || task
+  const optimistic = { ...original, ...fields }
   const wasPicked = picks.isPicked(task._id)
 
   replace(optimistic)
@@ -337,6 +350,20 @@ export async function updateAsNeededTaskOptimistically (task, fields, {
   return result
 }
 
+export function updateAsNeededTaskOptimistically (task, fields, dependencies = {}) {
+  const previous = asNeededTaskUpdateQueues.get(task._id)
+  const run = () => runAsNeededTaskUpdate(task, fields, dependencies)
+  const pending = previous ? previous.then(run, run) : run()
+  let tracked
+  tracked = pending.finally(() => {
+    if (asNeededTaskUpdateQueues.get(task._id) === tracked) {
+      asNeededTaskUpdateQueues.delete(task._id)
+    }
+  })
+  asNeededTaskUpdateQueues.set(task._id, tracked)
+  return tracked
+}
+
 function asNeededFilterCategoryName (snapshot) {
   return (snapshot.categories || [])
     .find(category => category._id === asNeededState.categoryId)?.name || 'All'
@@ -368,7 +395,7 @@ function renderAsNeeded (snapshot = categoryLocationStore.getSnapshot()) {
       selectableReferences(snapshot.categories), state)
   }
   container.innerHTML = asNeededScreenHtml(
-    tasks, snapshot, localDateFromDate(new Date()), state)
+    tasks, snapshot, localDateFromDate(new Date(tasksViewNow())), state)
 }
 
 export function archiveTaskOptimistically (task, {
@@ -677,7 +704,7 @@ function renderSessionFloat () {
 }
 
 function renderLedger (snapshot = categoryLocationStore.getSnapshot()) {
-  const today = localDateFromDate(new Date())
+  const today = localDateFromDate(new Date(tasksViewNow()))
   const active = getActiveTasks()
   const marks = sessionMarks(
     state.currentSession, sessionPicks.getPickedIds(), active.map(task => task._id))
@@ -1187,7 +1214,8 @@ async function handleAsNeededClick (evt) {
     return
   }
 
-  const today = localDateFromDate(new Date())
+  const actionTime = new Date(tasksViewNow())
+  const today = localDateFromDate(actionTime)
   if (ready) {
     return updateAsNeededTaskOptimistically(task, markReadyFields(today))
   }
@@ -1225,7 +1253,7 @@ async function handleAsNeededClick (evt) {
     return
   }
 
-  const result = await markChoreRecentlyDone(task)
+  const result = await markChoreRecentlyDone(task, { nowMs: actionTime.getTime() })
   if (!result.ok) {
     showEditorFailure(completionFailureMessage(result), 'as-needed')
   }

@@ -1341,7 +1341,7 @@ test('as-needed chore lifecycle stays aligned across As needed, Chores, and Quic
       const { initSessionView } = await import(applicationUrl + 'sessionView.js')
       const { sessionPicks } = await import(applicationUrl + 'sessionPicks.js')
       await categoryLocationStore.initialize()
-      await initTasksView()
+      await initTasksView({ now: () => new Date(2030, 0, 7, 12, 0, 0).getTime() })
       initSessionView()
 
       const waitFor = async (predicate, label) => {
@@ -1456,8 +1456,8 @@ test('as-needed chore lifecycle stays aligned across As needed, Chores, and Quic
   assert.equal(result.oneOff.scheduledDate, '2026-09-02')
   assert.equal(result.oneOffPromptGone, true)
   assert.deepEqual(result.readinessWrites.map(write => [write.id, write.fields]), [
-    ['task-1', { readiness: 'ready', scheduledDate: '2026-08-24' }],
-    ['task-1', { readiness: 'waiting', scheduledDate: '2026-08-26' }],
+    ['task-1', { readiness: 'ready', scheduledDate: '2030-01-07' }],
+    ['task-1', { readiness: 'waiting', scheduledDate: '2030-01-09' }],
     ['task-2', { readiness: 'waiting', scheduledDate: '2026-09-02' }]
   ])
 })
@@ -1476,7 +1476,7 @@ test('as-needed write failure restores the prior group, surfaces, and pick', asy
           _id: 'pump', name: 'Inspect backup pump', status: 'approved_recurring',
           taskMode: 'as_needed', readiness: 'ready', categoryId: null, locationIds: [],
           estimatedDuration: 15, scheduledDate: '2026-08-24',
-          schedule: { type: 'periodic', every: 1, unit: 'month' }, lastCompletedDate: null
+          schedule: { type: 'periodic', every: 2, unit: 'day' }, lastCompletedDate: null
         }]
       }
       let rejectReadiness = true
@@ -1502,23 +1502,28 @@ test('as-needed write failure restores the prior group, surfaces, and pick', asy
       const { initSessionView } = await import(applicationUrl + 'sessionView.js')
       const { sessionPicks } = await import(applicationUrl + 'sessionPicks.js')
       await categoryLocationStore.initialize()
-      await initTasksView()
+      await initTasksView({ now: () => new Date(2030, 0, 7, 12, 0, 0).getTime() })
       initSessionView()
+
+      const waitFor = async (predicate, label) => {
+        const started = Date.now()
+        while (!predicate() && Date.now() - started < 1800) {
+          await new Promise(resolve => setTimeout(resolve, 20))
+        }
+        if (!predicate()) throw new Error('Timed out waiting for ' + label)
+      }
 
       document.querySelector('#poolChips [data-pick-id="pump"]').click()
       await new Promise(resolve => setTimeout(resolve, 30))
       document.querySelector('#asNeededCards [data-id="pump"] .as-needed-not-ready').click()
-      const started = Date.now()
-      while (!document.getElementById('asNeededStatus').textContent && Date.now() - started < 1800) {
-        await new Promise(resolve => setTimeout(resolve, 20))
-      }
+      await waitFor(() => Boolean(document.getElementById('asNeededStatus').textContent),
+        'write failure feedback')
 
-      const row = document.querySelector('#asNeededCards [data-id="pump"]')
-      const result = {
-        consoleErrors,
-        updateAttempts,
+      const failedRow = document.querySelector('#asNeededCards [data-id="pump"]')
+      const afterFailure = {
         record: clone(records.tasks[0]),
-        group: row?.closest('.as-needed-group')?.querySelector('.ledger-eyebrow span')?.textContent,
+        group: failedRow?.closest('.as-needed-group')
+          ?.querySelector('.ledger-eyebrow span')?.textContent,
         chores: Boolean(document.querySelector('#activeCards [data-id="pump"]')),
         quick: Boolean(document.querySelector('#poolChips [data-pick-id="pump"]')),
         quickPressed: document.querySelector('#poolChips [data-pick-id="pump"]')
@@ -1527,20 +1532,48 @@ test('as-needed write failure restores the prior group, surfaces, and pick', asy
         message: document.getElementById('asNeededStatus').textContent,
         role: document.getElementById('asNeededStatus').getAttribute('role')
       }
+
+      document.querySelector('#asNeededCards [data-id="pump"] .as-needed-not-ready').click()
+      await waitFor(() => records.tasks[0].readiness === 'waiting' &&
+        document.getElementById('asNeededStatus').textContent === '', 'successful retry')
+      const retriedRow = document.querySelector('#asNeededCards [data-id="pump"]')
+      const result = {
+        consoleErrors,
+        updateAttempts,
+        afterFailure,
+        afterRetry: {
+          record: clone(records.tasks[0]),
+          group: retriedRow?.closest('.as-needed-group')
+            ?.querySelector('.ledger-eyebrow span')?.textContent,
+          chores: Boolean(document.querySelector('#activeCards [data-id="pump"]')),
+          quick: Boolean(document.querySelector('#poolChips [data-pick-id="pump"]')),
+          picked: sessionPicks.getPickedIds(),
+          message: document.getElementById('asNeededStatus').textContent,
+          role: document.getElementById('asNeededStatus').getAttribute('role')
+        }
+      }
     `
   })
 
   assert.deepEqual(result.consoleErrors, [])
-  assert.equal(result.updateAttempts, 1)
-  assert.equal(result.record.readiness, 'ready')
-  assert.equal(result.record.scheduledDate, '2026-08-24')
-  assert.equal(result.group, 'Ready')
-  assert.equal(result.chores, true)
-  assert.equal(result.quick, true)
-  assert.equal(result.quickPressed, 'true')
-  assert.deepEqual(result.picked, ['pump'])
-  assert.equal(result.message, "Couldn't update that. The chore is unchanged.")
-  assert.equal(result.role, 'alert')
+  assert.equal(result.updateAttempts, 2)
+  assert.equal(result.afterFailure.record.readiness, 'ready')
+  assert.equal(result.afterFailure.record.scheduledDate, '2026-08-24')
+  assert.equal(result.afterFailure.group, 'Ready')
+  assert.equal(result.afterFailure.chores, true)
+  assert.equal(result.afterFailure.quick, true)
+  assert.equal(result.afterFailure.quickPressed, 'true')
+  assert.deepEqual(result.afterFailure.picked, ['pump'])
+  assert.equal(result.afterFailure.message, "Couldn't update that. The chore is unchanged.")
+  assert.equal(result.afterFailure.role, 'alert')
+  assert.equal(result.afterRetry.record.readiness, 'waiting')
+  assert.equal(result.afterRetry.record.scheduledDate, '2030-01-09')
+  assert.equal(result.afterRetry.group, 'This week')
+  assert.equal(result.afterRetry.chores, false)
+  assert.equal(result.afterRetry.quick, false)
+  assert.deepEqual(result.afterRetry.picked, [])
+  assert.equal(result.afterRetry.message, '')
+  assert.equal(result.afterRetry.role, 'status')
 })
 
 test('Doing keeps as-needed snapshot when stored readiness changes to waiting', async () => {
@@ -1585,7 +1618,7 @@ test('Doing keeps as-needed snapshot when stored readiness changes to waiting', 
       const { initDoingView, refreshDoing } = await import(applicationUrl + 'doingView.js')
       const { state } = await import(applicationUrl + 'state.js')
       await categoryLocationStore.initialize()
-      await initTasksView()
+      await initTasksView({ now: () => new Date(2030, 0, 7, 12, 0, 0).getTime() })
       initSessionView()
       initDoingView()
 

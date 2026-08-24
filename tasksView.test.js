@@ -36,6 +36,16 @@ const domNode = () => {
   }
 }
 
+const deferred = () => {
+  let resolve
+  let reject
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
 async function withAsNeededActionHarness (records, run) {
   const originalFreezr = globalThis.freezr
   const originalDocument = globalThis.document
@@ -65,7 +75,9 @@ async function withAsNeededActionHarness (records, run) {
   sessionPicks.reset()
 
   try {
-    await tasksView.initTasksView()
+    await tasksView.initTasksView({
+      now: () => new Date(2030, 0, 7, 12, 0, 0).getTime()
+    })
     node('customMinutes').value = '1'
     const delegatedClick = node('asNeededCards').listeners.get('click')
     assert.equal(typeof delegatedClick, 'function')
@@ -301,7 +313,7 @@ test('As needed readiness actions repaint eligibility and remove an unavailable 
     await clickAction('as-needed-ready', 'periodic-ready')
 
     assert.deepEqual(writes[0], ['periodic-ready', {
-      readiness: 'ready', scheduledDate: '2026-08-24'
+      readiness: 'ready', scheduledDate: '2030-01-07'
     }])
     assert.equal(records[0].readiness, 'ready')
     assert.ok(tasksView.getActiveTasks().some(task => task._id === 'periodic-ready'))
@@ -312,14 +324,14 @@ test('As needed readiness actions repaint eligibility and remove an unavailable 
     await clickAction('as-needed-later', 'periodic-later')
 
     assert.deepEqual(writes[1], ['periodic-later', {
-      readiness: 'waiting', scheduledDate: '2026-08-26'
+      readiness: 'waiting', scheduledDate: '2030-01-09'
     }])
-    assert.equal(records[1].scheduledDate, '2026-08-26')
+    assert.equal(records[1].scheduledDate, '2030-01-09')
 
     await clickAction('as-needed-not-ready', 'fixed-not-ready')
 
     assert.deepEqual(writes[2], ['fixed-not-ready', {
-      readiness: 'waiting', scheduledDate: '2026-08-28'
+      readiness: 'waiting', scheduledDate: '2030-01-11'
     }])
     assert.equal(records[2].readiness, 'waiting')
     assert.deepEqual(sessionPicks.getPickedIds(), [])
@@ -384,8 +396,8 @@ test('As needed one-off dates and two-tap completion use their explicit boundari
     assert.match(node('asNeededCards').innerHTML, /data-id="repeat-done" aria-pressed="true"[^>]*>Tap again to confirm</)
     await clickAction('as-needed-done', 'repeat-done', { pressed: true })
     assert.equal(records[2].readiness, 'waiting')
-    assert.equal(records[2].scheduledDate, '2026-08-27')
-    assert.equal(typeof records[2].lastCompletedDate, 'number')
+    assert.equal(records[2].scheduledDate, '2030-01-10')
+    assert.equal(records[2].lastCompletedDate, new Date(2030, 0, 7, 12, 0, 0).getTime())
 
     const writesBeforeOneOffDone = writes.length
     await clickAction('as-needed-done', 'once-done')
@@ -393,7 +405,7 @@ test('As needed one-off dates and two-tap completion use their explicit boundari
     await clickAction('as-needed-done', 'once-done', { pressed: true })
     assert.equal(records[3].status, 'archived')
     assert.equal(records[3].readiness, 'waiting')
-    assert.equal(typeof records[3].lastCompletedDate, 'number')
+    assert.equal(records[3].lastCompletedDate, new Date(2030, 0, 7, 12, 0, 0).getTime())
     assert.equal(tasksView.getAsNeededTasks().some(task => task._id === 'once-done'), false)
     assert.doesNotMatch(node('asNeededCards').innerHTML,
       /class="as-needed-(?:ready|later|not-ready|done)"[^>]*\bdisabled\b/)
@@ -665,6 +677,231 @@ test('as-needed refresh failure keeps persisted optimistic cache and pick change
     stage: 'refresh',
     message: 'Task saved, but could not refresh tasks: refresh offline'
   })
+})
+
+test('a late readiness write failure cannot replace a later successful action', async () => {
+  const original = {
+    _id: 'late-dishwasher', name: 'Empty dishwasher', status: 'approved_recurring',
+    taskMode: 'as_needed', readiness: 'waiting', scheduledDate: '2026-08-22',
+    schedule: { type: 'periodic', every: 2, unit: 'day' }
+  }
+  let cache = [structuredClone(original)]
+  const persisted = [structuredClone(original)]
+  const picks = new Set()
+  const renderedStates = []
+  const updateFields = []
+  const firstWrite = deferred()
+  let feedback = ''
+  const dependencies = {
+    getCurrent: id => cache.find(task => task._id === id),
+    replace: replacement => {
+      cache = cache.map(task => task._id === replacement._id ? replacement : task)
+    },
+    render: () => renderedStates.push(structuredClone(cache)),
+    update: async (id, fields) => {
+      updateFields.push(structuredClone(fields))
+      if (fields.readiness === 'ready') return firstWrite.promise
+      Object.assign(persisted.find(task => task._id === id), structuredClone(fields))
+    },
+    refresh: async () => {
+      cache = structuredClone(persisted)
+      renderedStates.push(structuredClone(cache))
+    },
+    picks: {
+      isPicked: id => picks.has(id),
+      toggle: id => picks.has(id) ? picks.delete(id) : picks.add(id)
+    },
+    clearFeedback: () => { feedback = '' },
+    showFailure: message => { feedback = message }
+  }
+
+  const firstAction = tasksView.updateAsNeededTaskOptimistically(cache[0], {
+    readiness: 'ready', scheduledDate: '2026-08-24'
+  }, dependencies)
+  await Promise.resolve()
+  const secondAction = tasksView.updateAsNeededTaskOptimistically(cache[0], {
+    readiness: 'waiting', scheduledDate: '2026-10-01'
+  }, dependencies)
+  await Promise.resolve()
+  const updatesBeforeFirstSettled = structuredClone(updateFields)
+
+  firstWrite.reject(new Error('first write offline'))
+  const [firstResult, secondResult] = await Promise.all([firstAction, secondAction])
+
+  assert.deepEqual(updatesBeforeFirstSettled, [{
+    readiness: 'ready', scheduledDate: '2026-08-24'
+  }])
+  assert.deepEqual(firstResult, {
+    ok: false, stage: 'write', message: "Couldn't update that. The chore is unchanged."
+  })
+  assert.deepEqual(secondResult, { ok: true, stage: null, message: '' })
+  assert.deepEqual(persisted, [{
+    ...original, readiness: 'waiting', scheduledDate: '2026-10-01'
+  }])
+  assert.deepEqual(cache, persisted)
+  assert.deepEqual(renderedStates.at(-1), persisted)
+  assert.equal(picks.has(original._id), false)
+  assert.equal(feedback, '')
+})
+
+test('a queued readiness rollback snapshots the cache after the prior action settles', async () => {
+  const original = {
+    _id: 'rollback-dishwasher', name: 'Empty dishwasher', status: 'approved_recurring',
+    taskMode: 'as_needed', readiness: 'waiting', scheduledDate: '2026-08-22',
+    schedule: { type: 'periodic', every: 2, unit: 'day' }
+  }
+  let cache = [structuredClone(original)]
+  const picks = new Set()
+  const firstWrite = deferred()
+  const secondWrite = deferred()
+  let updateCount = 0
+  const dependencies = {
+    getCurrent: id => cache.find(task => task._id === id),
+    replace: replacement => {
+      cache = cache.map(task => task._id === replacement._id ? replacement : task)
+    },
+    render: () => {},
+    update: async () => (++updateCount === 1 ? firstWrite.promise : secondWrite.promise),
+    refresh: async () => assert.fail('failed writes must not refresh'),
+    picks: {
+      isPicked: id => picks.has(id),
+      toggle: id => picks.has(id) ? picks.delete(id) : picks.add(id)
+    },
+    clearFeedback: () => {},
+    showFailure: () => {}
+  }
+
+  const firstAction = tasksView.updateAsNeededTaskOptimistically(cache[0], {
+    readiness: 'ready', scheduledDate: '2026-08-24'
+  }, dependencies)
+  const secondAction = tasksView.updateAsNeededTaskOptimistically(cache[0], {
+    readiness: 'waiting', scheduledDate: '2026-10-01'
+  }, dependencies)
+
+  firstWrite.reject(new Error('first write offline'))
+  await firstAction
+  await new Promise(resolve => setTimeout(resolve, 0))
+  secondWrite.reject(new Error('second write offline'))
+  await secondAction
+
+  assert.equal(updateCount, 2)
+  assert.deepEqual(cache, [original])
+  assert.equal(picks.has(original._id), false)
+})
+
+test('a deferred earlier refresh cannot publish after a later readiness action', async () => {
+  const original = {
+    _id: 'refresh-dishwasher', name: 'Empty dishwasher', status: 'approved_recurring',
+    taskMode: 'as_needed', readiness: 'waiting', scheduledDate: '2026-08-22',
+    schedule: { type: 'periodic', every: 2, unit: 'day' }
+  }
+  let cache = [structuredClone(original)]
+  const persisted = [structuredClone(original)]
+  const picks = new Set()
+  const renderedStates = []
+  const firstRefresh = deferred()
+  let refreshCount = 0
+  const dependencies = {
+    getCurrent: id => cache.find(task => task._id === id),
+    replace: replacement => {
+      cache = cache.map(task => task._id === replacement._id ? replacement : task)
+    },
+    render: () => renderedStates.push(structuredClone(cache)),
+    update: async (id, fields) => {
+      Object.assign(persisted.find(task => task._id === id), structuredClone(fields))
+    },
+    refresh: async () => {
+      const snapshot = structuredClone(persisted)
+      refreshCount++
+      if (refreshCount === 1) await firstRefresh.promise
+      cache = snapshot
+      renderedStates.push(structuredClone(cache))
+    },
+    picks: {
+      isPicked: id => picks.has(id),
+      toggle: id => picks.has(id) ? picks.delete(id) : picks.add(id)
+    },
+    clearFeedback: () => {},
+    showFailure: message => assert.fail('successful writes must not fail: ' + message)
+  }
+
+  const firstAction = tasksView.updateAsNeededTaskOptimistically(cache[0], {
+    readiness: 'ready', scheduledDate: '2026-08-24'
+  }, dependencies)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  const secondAction = tasksView.updateAsNeededTaskOptimistically(cache[0], {
+    readiness: 'waiting', scheduledDate: '2026-10-01'
+  }, dependencies)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  const persistedBeforeFirstRefreshSettled = structuredClone(persisted)
+
+  firstRefresh.resolve()
+  const [firstResult, secondResult] = await Promise.all([firstAction, secondAction])
+
+  assert.deepEqual(persistedBeforeFirstRefreshSettled, [{
+    ...original, readiness: 'ready', scheduledDate: '2026-08-24'
+  }])
+  assert.deepEqual(firstResult, { ok: true, stage: null, message: '' })
+  assert.deepEqual(secondResult, { ok: true, stage: null, message: '' })
+  assert.equal(refreshCount, 2)
+  assert.deepEqual(persisted, [{
+    ...original, readiness: 'waiting', scheduledDate: '2026-10-01'
+  }])
+  assert.deepEqual(cache, persisted)
+  assert.deepEqual(renderedStates.at(-1), persisted)
+})
+
+test('a successful readiness retry clears the previous factual failure', async () => {
+  const original = {
+    _id: 'retry-dishwasher', name: 'Empty dishwasher', status: 'approved_recurring',
+    taskMode: 'as_needed', readiness: 'waiting', scheduledDate: '2026-08-22',
+    schedule: { type: 'periodic', every: 2, unit: 'day' }
+  }
+  let cache = [structuredClone(original)]
+  const persisted = [structuredClone(original)]
+  const picks = new Set()
+  let rejectNextWrite = true
+  let feedback = { message: '', role: 'status' }
+  const dependencies = {
+    getCurrent: id => cache.find(task => task._id === id),
+    replace: replacement => {
+      cache = cache.map(task => task._id === replacement._id ? replacement : task)
+    },
+    render: () => {},
+    update: async (id, fields) => {
+      if (rejectNextWrite) {
+        rejectNextWrite = false
+        throw new Error('write offline')
+      }
+      Object.assign(persisted.find(task => task._id === id), structuredClone(fields))
+    },
+    refresh: async () => { cache = structuredClone(persisted) },
+    picks: {
+      isPicked: id => picks.has(id),
+      toggle: id => picks.has(id) ? picks.delete(id) : picks.add(id)
+    },
+    clearFeedback: () => { feedback = { message: '', role: 'status' } },
+    showFailure: message => { feedback = { message, role: 'alert' } }
+  }
+
+  const failed = await tasksView.updateAsNeededTaskOptimistically(cache[0], {
+    readiness: 'ready', scheduledDate: '2026-08-24'
+  }, dependencies)
+  assert.equal(failed.stage, 'write')
+  assert.deepEqual(feedback, {
+    message: "Couldn't update that. The chore is unchanged.", role: 'alert'
+  })
+
+  const succeeded = await tasksView.updateAsNeededTaskOptimistically(cache[0], {
+    readiness: 'ready', scheduledDate: '2026-08-25'
+  }, dependencies)
+
+  assert.deepEqual(succeeded, { ok: true, stage: null, message: '' })
+  assert.deepEqual(cache, [{
+    ...original, readiness: 'ready', scheduledDate: '2026-08-25'
+  }])
+  assert.deepEqual(persisted, cache)
+  assert.deepEqual(feedback, { message: '', role: 'status' })
 })
 
 test('an unrelated task edit omits a legacy-only category while references are unavailable', () => {
