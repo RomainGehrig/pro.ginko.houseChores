@@ -110,6 +110,7 @@ function createDoingDocument ({ failFirstReviewDisplay = false } = {}) {
 
   const unregister = control => {
     for (const child of control._dynamicChildren || []) unregister(child)
+    if (document.activeElement === control) document.activeElement = null
     if (control.id && nodes.get(control.id) === control) {
       nodes.delete(control.id)
       dynamicIds.delete(control.id)
@@ -1176,6 +1177,93 @@ test('an active tick drops proposals that stop fitting without disturbing search
       document.control('continueRemaining').innerHTML,
       /About <span class="fig">1<\/span> min left/
     )
+  })
+})
+
+test('an active tick leaves proposal controls stable while an attachment is in flight', async () => {
+  const original = { ...task('original-task'), estimatedDuration: 1 }
+  const first = { ...task('suggested-2m'), estimatedDuration: 2 }
+  const second = { ...task('suggested-3m'), estimatedDuration: 3 }
+  const session = {
+    _id: 'in-flight-active-session', status: 'active', startTime: 10000,
+    taskBundle: ['original-task'], timeBudgetMinutes: 5,
+    accumulatedActiveMs: 0, activeStartedAt: 10000,
+    pausedAt: null, checkpointElapsedMs: 0, pendingAddition: null
+  }
+  const originalAttachTasks = sessionStore.attachTasks
+  let releaseAttachment
+  let markStarted
+  const attachmentGate = new Promise(resolve => { releaseAttachment = resolve })
+  const attachmentStarted = new Promise(resolve => { markStarted = resolve })
+  sessionStore.attachTasks = async (...args) => {
+    markStarted()
+    await attachmentGate
+    return originalAttachTasks(...args)
+  }
+
+  try {
+    await withDoingEnvironment({
+      session,
+      persistedTasks: [original, first, second],
+      bundle: [original]
+    }, async ({ document, persistence, clock }) => {
+      const firstCheckbox = document.suggestionControl('suggested-2m')
+      const secondCheckbox = document.suggestionControl('suggested-3m')
+      const attachment = document.checkSuggestion('suggested-2m')
+      await attachmentStarted
+
+      try {
+        clock.setNow(190000)
+        clock.fireIntervals()
+
+        assert.equal(document.suggestionControl('suggested-2m'), firstCheckbox)
+        assert.equal(firstCheckbox.checked, true)
+        assert.equal(firstCheckbox.disabled, true)
+        assert.equal(document.suggestionControl('suggested-3m'), secondCheckbox)
+        assert.equal(secondCheckbox.disabled, true)
+        await document.checkSuggestion('suggested-3m')
+        assert.deepEqual(persistence.session.taskBundle, ['original-task'])
+      } finally {
+        releaseAttachment()
+        await attachment
+      }
+
+      clock.fireIntervals()
+      assert.deepEqual(persistence.session.taskBundle, ['original-task', 'suggested-2m'])
+      assert.equal(document.suggestionControl('suggested-3m'), null)
+    })
+  } finally {
+    sessionStore.attachTasks = originalAttachTasks
+  }
+})
+
+test('a focused proposal stays in place until focus leaves it', async () => {
+  const original = { ...task('original-task'), estimatedDuration: 1 }
+  const first = { ...task('suggested-2m'), estimatedDuration: 2 }
+  const second = { ...task('suggested-3m'), estimatedDuration: 3 }
+  const session = {
+    _id: 'focused-proposal-session', status: 'active', startTime: 10000,
+    taskBundle: ['original-task'], timeBudgetMinutes: 5,
+    accumulatedActiveMs: 0, activeStartedAt: 10000,
+    pausedAt: null, checkpointElapsedMs: 0, pendingAddition: null
+  }
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [original, first, second],
+    bundle: [original]
+  }, async ({ document, clock }) => {
+    const focused = document.suggestionControl('suggested-3m')
+    focused.focus()
+    clock.setNow(160000)
+    clock.fireIntervals()
+
+    assert.equal(document.suggestionControl('suggested-3m'), focused)
+    assert.equal(document.activeElement, focused)
+
+    document.activeElement = null
+    clock.fireIntervals()
+    assert.equal(document.suggestionControl('suggested-3m'), null)
   })
 })
 

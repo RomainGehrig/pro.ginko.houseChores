@@ -221,8 +221,12 @@ function updateAddPanelTiming (elapsedMs, nowMs) {
   )
   const suggestionIds = suggestions.map(task => task._id).join('\n')
   if (suggestionsContainer.dataset.suggestionIds === suggestionIds) return
+  const listAlreadyRendered = suggestionsContainer.dataset.suggestionIds !== undefined
+  if (listAlreadyRendered && (sessionMutationInFlight ||
+    document.activeElement?.dataset?.continuationSuggestionId)) return
   suggestionsContainer.innerHTML = buildContinuationSuggestionsHtml(suggestions)
   suggestionsContainer.dataset.suggestionIds = suggestionIds
+  setSessionMutationControlsDisabled(sessionMutationInFlight)
 }
 
 function setSessionMutationControlsDisabled (disabled) {
