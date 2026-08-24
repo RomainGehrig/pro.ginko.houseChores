@@ -46,6 +46,52 @@ const deferred = () => {
   return { promise, resolve, reject }
 }
 
+function taskMutationRaceHarness (original, {
+  beforeWrite = async () => {},
+  beforeRefresh = async () => {}
+} = {}) {
+  let cache = [structuredClone(original)]
+  const persisted = [structuredClone(original)]
+  const clickedTask = structuredClone(original)
+  const writes = []
+  let refreshCount = 0
+  const feedback = []
+
+  const getCurrent = id => cache.find(task => task._id === id)
+  const replace = replacement => {
+    cache = cache.map(task => task._id === replacement._id ? replacement : task)
+  }
+  const update = async (id, fields) => {
+    const kind = Object.hasOwn(fields, 'lastCompletedDate') ? 'completion' : 'readiness'
+    writes.push({ kind, fields: structuredClone(fields) })
+    await beforeWrite({ kind, fields, writeCount: writes.length })
+    Object.assign(persisted.find(task => task._id === id), structuredClone(fields))
+  }
+  const refresh = async () => {
+    refreshCount++
+    await beforeRefresh({ refreshCount })
+    cache = structuredClone(persisted)
+  }
+  const shared = { getCurrent, replace, render: () => {}, update, refresh }
+
+  return {
+    completion: nowMs => tasksView.markChoreRecentlyDone(clickedTask, { nowMs, ...shared }),
+    readiness: fields => tasksView.updateAsNeededTaskOptimistically(
+      clickedTask, fields, {
+        ...shared,
+        picks: sessionPicks,
+        clearFeedback: () => { feedback.length = 0 },
+        showFailure: message => feedback.push(message)
+      }
+    ),
+    cache: () => structuredClone(cache),
+    persisted: () => structuredClone(persisted),
+    writes,
+    refreshCount: () => refreshCount,
+    feedback
+  }
+}
+
 async function withAsNeededActionHarness (records, run, options = {}) {
   const originalFreezr = globalThis.freezr
   const originalDocument = globalThis.document
@@ -1015,6 +1061,177 @@ test('a successful readiness retry clears the previous factual failure', async (
   }])
   assert.deepEqual(persisted, cache)
   assert.deepEqual(feedback, { message: '', role: 'status' })
+})
+
+test('completion followed by Not ready writes in click order and keeps the later date', async () => {
+  const completionStarted = deferred()
+  const releaseCompletion = deferred()
+  const completedAt = new Date(2030, 0, 7, 12, 0, 0).getTime()
+  const original = {
+    _id: 'completion-first', name: 'Empty dishwasher', status: 'approved_recurring',
+    taskMode: 'as_needed', readiness: 'ready', scheduledDate: '2030-01-07',
+    schedule: { type: 'periodic', every: 2, unit: 'day' }
+  }
+  const harness = taskMutationRaceHarness(original, {
+    beforeWrite: async ({ kind }) => {
+      if (kind !== 'completion') return
+      completionStarted.resolve()
+      await releaseCompletion.promise
+    }
+  })
+  sessionPicks.reset()
+
+  const completion = harness.completion(completedAt)
+  await completionStarted.promise
+  const notReady = harness.readiness({
+    readiness: 'waiting', scheduledDate: '2030-02-01'
+  })
+  await new Promise(resolve => setTimeout(resolve, 0))
+  const writesBeforeCompletionSettled = harness.writes.map(write => write.kind)
+
+  releaseCompletion.resolve()
+  const [completionResult, readinessResult] = await Promise.all([completion, notReady])
+
+  assert.deepEqual(writesBeforeCompletionSettled, ['completion'])
+  assert.deepEqual(harness.writes.map(write => write.kind), ['completion', 'readiness'])
+  assert.deepEqual(completionResult, { ok: true, stage: null, message: '' })
+  assert.deepEqual(readinessResult, { ok: true, stage: null, message: '' })
+  assert.deepEqual(harness.persisted(), [{
+    ...original,
+    readiness: 'waiting',
+    scheduledDate: '2030-02-01',
+    lastCompletedDate: completedAt
+  }])
+  assert.deepEqual(harness.cache(), harness.persisted())
+  sessionPicks.reset()
+})
+
+test('Not ready followed by completion writes in click order from the preceding state', async () => {
+  const readinessStarted = deferred()
+  const releaseReadiness = deferred()
+  const completedAt = new Date(2030, 0, 7, 12, 0, 0).getTime()
+  const original = {
+    _id: 'readiness-first', name: 'Empty dishwasher', status: 'approved_recurring',
+    taskMode: 'as_needed', readiness: 'ready', scheduledDate: '2030-01-07',
+    schedule: { type: 'fixed', pattern: { kind: 'month_day', day: 15 } }
+  }
+  const harness = taskMutationRaceHarness(original, {
+    beforeWrite: async ({ kind }) => {
+      if (kind !== 'readiness') return
+      readinessStarted.resolve()
+      await releaseReadiness.promise
+    }
+  })
+  sessionPicks.reset()
+
+  const notReady = harness.readiness({
+    readiness: 'waiting', scheduledDate: '2030-01-15'
+  })
+  await readinessStarted.promise
+  const completion = harness.completion(completedAt)
+  await new Promise(resolve => setTimeout(resolve, 0))
+  const writesBeforeReadinessSettled = harness.writes.map(write => write.kind)
+
+  releaseReadiness.resolve()
+  const [readinessResult, completionResult] = await Promise.all([notReady, completion])
+
+  assert.deepEqual(writesBeforeReadinessSettled, ['readiness'])
+  assert.deepEqual(harness.writes.map(write => write.kind), ['readiness', 'completion'])
+  assert.deepEqual(readinessResult, { ok: true, stage: null, message: '' })
+  assert.deepEqual(completionResult, { ok: true, stage: null, message: '' })
+  assert.deepEqual(harness.persisted(), [{
+    ...original,
+    readiness: 'waiting',
+    scheduledDate: '2030-02-15',
+    lastCompletedDate: completedAt
+  }])
+  assert.deepEqual(harness.cache(), harness.persisted())
+  sessionPicks.reset()
+})
+
+test('a completion write failure settles before the queued readiness click runs', async () => {
+  const completionStarted = deferred()
+  const rejectCompletion = deferred()
+  const original = {
+    _id: 'completion-write-failure', name: 'Empty dishwasher',
+    status: 'approved_recurring', taskMode: 'as_needed', readiness: 'ready',
+    scheduledDate: '2030-01-07',
+    schedule: { type: 'periodic', every: 2, unit: 'day' }
+  }
+  const harness = taskMutationRaceHarness(original, {
+    beforeWrite: async ({ kind }) => {
+      if (kind !== 'completion') return
+      completionStarted.resolve()
+      await rejectCompletion.promise
+    }
+  })
+  sessionPicks.reset()
+
+  const completion = harness.completion(new Date(2030, 0, 7, 12).getTime())
+  await completionStarted.promise
+  const notReady = harness.readiness({
+    readiness: 'waiting', scheduledDate: '2030-02-01'
+  })
+  await new Promise(resolve => setTimeout(resolve, 0))
+  const writesBeforeFailure = harness.writes.map(write => write.kind)
+
+  rejectCompletion.reject(new Error('write offline'))
+  const [completionResult, readinessResult] = await Promise.all([completion, notReady])
+
+  assert.deepEqual(writesBeforeFailure, ['completion'])
+  assert.equal(completionResult.stage, 'write')
+  assert.deepEqual(readinessResult, { ok: true, stage: null, message: '' })
+  assert.deepEqual(harness.writes.map(write => write.kind), ['completion', 'readiness'])
+  assert.deepEqual(harness.persisted(), [{
+    ...original, readiness: 'waiting', scheduledDate: '2030-02-01'
+  }])
+  assert.equal(harness.refreshCount(), 1)
+  sessionPicks.reset()
+})
+
+test('a completion refresh failure settles before the queued readiness click runs', async () => {
+  const completionRefreshStarted = deferred()
+  const rejectCompletionRefresh = deferred()
+  const completedAt = new Date(2030, 0, 7, 12, 0, 0).getTime()
+  const original = {
+    _id: 'completion-refresh-failure', name: 'Empty dishwasher',
+    status: 'approved_recurring', taskMode: 'as_needed', readiness: 'ready',
+    scheduledDate: '2030-01-07',
+    schedule: { type: 'periodic', every: 2, unit: 'day' }
+  }
+  const harness = taskMutationRaceHarness(original, {
+    beforeRefresh: async ({ refreshCount }) => {
+      if (refreshCount !== 1) return
+      completionRefreshStarted.resolve()
+      await rejectCompletionRefresh.promise
+    }
+  })
+  sessionPicks.reset()
+
+  const completion = harness.completion(completedAt)
+  await completionRefreshStarted.promise
+  const notReady = harness.readiness({
+    readiness: 'waiting', scheduledDate: '2030-02-01'
+  })
+  await new Promise(resolve => setTimeout(resolve, 0))
+  const writesBeforeRefreshFailure = harness.writes.map(write => write.kind)
+
+  rejectCompletionRefresh.reject(new Error('refresh offline'))
+  const [completionResult, readinessResult] = await Promise.all([completion, notReady])
+
+  assert.deepEqual(writesBeforeRefreshFailure, ['completion'])
+  assert.equal(completionResult.stage, 'refresh')
+  assert.deepEqual(readinessResult, { ok: true, stage: null, message: '' })
+  assert.deepEqual(harness.writes.map(write => write.kind), ['completion', 'readiness'])
+  assert.deepEqual(harness.persisted(), [{
+    ...original,
+    readiness: 'waiting',
+    scheduledDate: '2030-02-01',
+    lastCompletedDate: completedAt
+  }])
+  assert.deepEqual(harness.cache(), harness.persisted())
+  assert.equal(harness.refreshCount(), 2)
+  sessionPicks.reset()
 })
 
 test('an unrelated task edit omits a legacy-only category while references are unavailable', () => {

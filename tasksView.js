@@ -49,7 +49,7 @@ import { setCurrentSessionAggregate, state } from './state.js'
 
 let tasksCache = []
 const pendingTaskArchives = new Map()
-const asNeededTaskUpdateQueues = new Map()
+const taskOperationQueues = new Map()
 let tasksRefreshGeneration = 0
 let tasksViewNow = Date.now
 
@@ -308,7 +308,23 @@ function repaintPickConsumers (picks) {
   picks.set(picks.getPickedIds())
 }
 
-async function runAsNeededTaskUpdate (task, fields, {
+// Readiness and completion both rewrite the same task record. Every click gets
+// a turn in arrival order, even after the prior turn fails, and each turn reads
+// the cache left by the turn before it rather than the card that was clicked.
+function enqueueTaskOperation (taskId, operation) {
+  const previous = taskOperationQueues.get(taskId)
+  const pending = previous ? previous.then(operation, operation) : operation()
+  let tracked
+  tracked = pending.finally(() => {
+    if (taskOperationQueues.get(taskId) === tracked) {
+      taskOperationQueues.delete(taskId)
+    }
+  })
+  taskOperationQueues.set(taskId, tracked)
+  return tracked
+}
+
+async function runAsNeededTaskUpdate (task, fieldsForTurn, {
   getCurrent = id => tasksCache.find(item => item._id === id),
   replace = replaceCachedTask,
   render = renderTasks,
@@ -324,6 +340,9 @@ async function runAsNeededTaskUpdate (task, fields, {
 } = {}) {
   clearFeedback()
   const original = getCurrent(task._id) || task
+  const fields = typeof fieldsForTurn === 'function'
+    ? fieldsForTurn(original)
+    : fieldsForTurn
   const optimistic = { ...original, ...fields }
   const wasPicked = picks.isPicked(task._id)
 
@@ -358,18 +377,9 @@ async function runAsNeededTaskUpdate (task, fields, {
   return result
 }
 
-export function updateAsNeededTaskOptimistically (task, fields, dependencies = {}) {
-  const previous = asNeededTaskUpdateQueues.get(task._id)
-  const run = () => runAsNeededTaskUpdate(task, fields, dependencies)
-  const pending = previous ? previous.then(run, run) : run()
-  let tracked
-  tracked = pending.finally(() => {
-    if (asNeededTaskUpdateQueues.get(task._id) === tracked) {
-      asNeededTaskUpdateQueues.delete(task._id)
-    }
-  })
-  asNeededTaskUpdateQueues.set(task._id, tracked)
-  return tracked
+export function updateAsNeededTaskOptimistically (task, fieldsForTurn, dependencies = {}) {
+  return enqueueTaskOperation(task._id, () =>
+    runAsNeededTaskUpdate(task, fieldsForTurn, dependencies))
 }
 
 function asNeededFilterCategoryName (snapshot) {
@@ -989,25 +999,49 @@ function handleEstimateClick (evt, card) {
 // This is the Chores-screen meaning of "Mark as done": move the chore's rhythm
 // from now without inventing a session or a timed execution. Quick Session
 // details deliberately use the same boundary.
-export async function markChoreRecentlyDone (task, {
+async function runChoreCompletion (task, {
   nowMs = Date.now(),
+  getCurrent = id => tasksCache.find(item => item._id === id),
+  replace = replaceCachedTask,
+  render = () => {
+    if (typeof document !== 'undefined' && document.getElementById('activeCards')) {
+      renderTasks()
+    }
+  },
   update = updateTask,
-  refresh = refreshTasksView
+  refresh = refreshTasksView,
+  picks = sessionPicks
 } = {}) {
-  const fields = taskUpdateForOutcome(task, 'completed', {
+  const current = getCurrent(task._id) || task
+  const fields = taskUpdateForOutcome(current, 'completed', {
     completedAt: nowMs,
     completionDate: localDateFromDate(new Date(nowMs))
   })
   const result = await saveTaskWithRefresh(
-    () => update(task._id, fields),
+    async () => {
+      await update(task._id, fields)
+      // If the aggregate refresh fails, storage still owns this completion.
+      // Keep the cache on that persisted state for the next queued turn.
+      replace({ ...current, ...fields })
+    },
     refresh
   )
   // Once the write has landed, this chore is no longer part of the work the
   // user plans to do next. A failed repaint must not put persisted work back.
-  if (result.stage !== 'write' && sessionPicks.isPicked(task._id)) {
-    sessionPicks.toggle(task._id)
+  let pickChanged = false
+  if (result.stage !== 'write' && picks.isPicked(task._id)) {
+    picks.toggle(task._id)
+    pickChanged = true
+  }
+  if (result.stage === 'refresh') {
+    render()
+    if (!pickChanged) repaintPickConsumers(picks)
   }
   return result
+}
+
+export function markChoreRecentlyDone (task, dependencies = {}) {
+  return enqueueTaskOperation(task._id, () => runChoreCompletion(task, dependencies))
 }
 
 // Putting a chore in a session is not an edit of the chore, so it leaves the
@@ -1225,7 +1259,7 @@ async function handleAsNeededClick (evt) {
   const actionTime = new Date(tasksViewNow())
   const today = localDateFromDate(actionTime)
   if (ready) {
-    return updateAsNeededTaskOptimistically(task, markReadyFields(today))
+    return updateAsNeededTaskOptimistically(task, () => markReadyFields(today))
   }
 
   if (later || notReady) {
@@ -1236,18 +1270,21 @@ async function handleAsNeededClick (evt) {
       renderAsNeeded()
       return
     }
-    return updateAsNeededTaskOptimistically(task, fields)
+    return updateAsNeededTaskOptimistically(task, current =>
+      deferReadinessFields(current, today))
   }
 
   if (dateSave) {
     const prompt = dateSave.closest('.as-needed-date-prompt')
     const input = prompt?.querySelector('.as-needed-date') || card?.querySelector('.as-needed-date')
-    const fields = deferReadinessFields(task, today, input?.value)
+    const selectedDate = input?.value
+    const fields = deferReadinessFields(task, today, selectedDate)
     if (!fields) {
       showAsNeededDateFailure(dateSave)
       return
     }
-    const result = await updateAsNeededTaskOptimistically(task, fields)
+    const result = await updateAsNeededTaskOptimistically(task, current =>
+      deferReadinessFields(current, today, selectedDate))
     if (result.ok && asNeededState.datePrompt?.taskId === task._id) {
       asNeededState.datePrompt = null
       renderAsNeeded()
