@@ -90,6 +90,19 @@ export function overlayPendingTaskArchives (tasks, pendingArchives) {
 // A chore added to a session already under way changes what Doing is showing,
 // and Doing is not this module's to import — index wires its repaint in.
 let applySessionAggregate = null
+const taskRefreshSubscribers = new Set()
+
+export function subscribeTaskRefresh (subscriber) {
+  if (typeof subscriber !== 'function') return () => {}
+  taskRefreshSubscribers.add(subscriber)
+  return () => taskRefreshSubscribers.delete(subscriber)
+}
+
+function announceTaskRefresh () {
+  for (const subscriber of [...taskRefreshSubscribers]) {
+    try { subscriber() } catch { /* one screen must not block another */ }
+  }
+}
 
 export async function initTasksView({
   onSessionAggregateChange = null,
@@ -181,9 +194,7 @@ export async function refreshTasksView() {
   // chore if the undo comes.
   sessionPicks.retain(fetched.filter(availableLiveTask).map(task => task._id))
   renderTasks()
-  // A task refresh changes the Quick pool even when no pick changed. Announce
-  // the same ids so every surface reads the same freshly replaced cache.
-  sessionPicks.set(sessionPicks.getPickedIds())
+  announceTaskRefresh()
 }
 
 function reconcileAsNeededTransientState () {
@@ -303,11 +314,6 @@ function replaceCachedTask (replacement) {
     task._id === replacement._id ? replacement : task)
 }
 
-function repaintPickConsumers (picks) {
-  if (typeof picks?.getPickedIds !== 'function' || typeof picks?.set !== 'function') return
-  picks.set(picks.getPickedIds())
-}
-
 export async function saveChoreEditorFields (task, fields, {
   getCurrent = id => tasksCache.find(item => item._id === id),
   replace = replaceCachedTask,
@@ -335,7 +341,7 @@ export async function saveChoreEditorFields (task, fields, {
   const pickChanged = before.length !== after.length ||
     before.some((id, index) => id !== after[index])
   render()
-  if (!pickChanged) repaintPickConsumers(picks)
+  if (!pickChanged) announceTaskRefresh()
   return { ok: true, stage: null, message: '' }
 }
 
@@ -384,7 +390,7 @@ async function runAsNeededTaskUpdate (task, fieldsForTurn, {
     pickChanged = true
   }
   render()
-  if (!pickChanged) repaintPickConsumers(picks)
+  if (!pickChanged) announceTaskRefresh()
 
   const result = await saveTaskWithRefresh(
     () => update(task._id, fields),
@@ -399,7 +405,7 @@ async function runAsNeededTaskUpdate (task, fieldsForTurn, {
       restoredPick = true
     }
     render()
-    if (!restoredPick) repaintPickConsumers(picks)
+    if (!restoredPick) announceTaskRefresh()
     const message = "Couldn't update that. The chore is unchanged."
     showFailure(message)
     return { ...result, message }
@@ -1066,7 +1072,7 @@ async function runChoreCompletion (task, {
   }
   if (result.stage === 'refresh') {
     render()
-    if (!pickChanged) repaintPickConsumers(picks)
+    if (!pickChanged) announceTaskRefresh()
   }
   return result
 }

@@ -223,6 +223,61 @@ test('active-task cache and retained session picks exclude waiting as-needed cho
   }
 })
 
+test('only the current task aggregate read announces a task refresh', async () => {
+  const records = [{
+    _id: 'current-publication', name: 'Initial name', status: 'active',
+    taskMode: 'scheduled', readiness: null, categoryId: null, locationIds: [],
+    estimatedDuration: 5, scheduledDate: '2030-01-07', schedule: { type: 'one_off' }
+  }]
+  const staleReadStarted = deferred()
+  const releaseStaleRead = deferred()
+  let taskQueryCount = 0
+
+  await withAsNeededActionHarness(records, async () => {
+    let taskPublications = 0
+    let pickPublications = 0
+    const stopTaskPublications = tasksView.subscribeTaskRefresh(() => { taskPublications++ })
+    const stopPickPublications = sessionPicks.subscribe(() => { pickPublications++ })
+
+    try {
+      const staleRefresh = refreshTasksView()
+      await staleReadStarted.promise
+      records[0].name = 'Current name'
+      await refreshTasksView()
+
+      assert.equal(tasksView.getActiveTasks()[0].name, 'Current name')
+      assert.equal(taskPublications, 1)
+      assert.equal(pickPublications, 0,
+        'a cache publication is not a synthetic pick change')
+
+      releaseStaleRead.resolve()
+      await staleRefresh
+
+      assert.equal(tasksView.getActiveTasks()[0].name, 'Current name')
+      assert.equal(taskPublications, 1,
+        'a stale discarded read announces nothing')
+      assert.equal(pickPublications, 0)
+    } finally {
+      stopTaskPublications()
+      stopPickPublications()
+      releaseStaleRead.resolve()
+    }
+  }, {
+    query: async collection => {
+      if (collection !== 'tasks') return []
+      taskQueryCount++
+      const snapshot = structuredClone(records)
+      if (taskQueryCount === 2) {
+        staleReadStarted.resolve()
+        await releaseStaleRead.promise
+      }
+      return snapshot
+    }
+  })
+
+  assert.equal(taskQueryCount, 3)
+})
+
 test('As needed uses the shared editor without offering waiting work or losing origin feedback', async () => {
   const originalFreezr = globalThis.freezr
   const originalDocument = globalThis.document
@@ -1076,6 +1131,50 @@ test('editor publication invalidates an older task read and reconciles pick elig
   })
 
   assert.equal(taskQueryCount, 2)
+})
+
+test('editor conversion announces task publication without manufacturing a pick change', async () => {
+  const original = {
+    _id: 'unpicked-editor-conversion', name: 'Inspect the cistern', status: 'active',
+    taskMode: 'scheduled', readiness: null, estimatedDuration: 10,
+    scheduledDate: '2030-01-07', schedule: { type: 'one_off' }
+  }
+  let cached = structuredClone(original)
+  const writes = []
+  let renders = 0
+  let taskPublications = 0
+  let pickPublications = 0
+  sessionPicks.reset()
+  const stopTaskPublications = tasksView.subscribeTaskRefresh(() => { taskPublications++ })
+  const stopPickPublications = sessionPicks.subscribe(() => { pickPublications++ })
+
+  try {
+    const result = await tasksView.saveChoreEditorFields(original, {
+      taskMode: 'as_needed',
+      readiness: 'waiting'
+    }, {
+      getCurrent: () => cached,
+      replace: replacement => { cached = structuredClone(replacement) },
+      render: () => { renders++ },
+      update: async (...args) => { writes.push(structuredClone(args)) },
+      eligibleIds: () => []
+    })
+
+    assert.deepEqual(result, { ok: true, stage: null, message: '' })
+    assert.deepEqual(writes, [[
+      'unpicked-editor-conversion',
+      { taskMode: 'as_needed', readiness: 'waiting' }
+    ]])
+    assert.equal(cached.taskMode, 'as_needed')
+    assert.equal(cached.readiness, 'waiting')
+    assert.equal(renders, 1)
+    assert.equal(taskPublications, 1)
+    assert.equal(pickPublications, 0)
+  } finally {
+    stopTaskPublications()
+    stopPickPublications()
+    sessionPicks.reset()
+  }
 })
 
 test('a successful readiness retry clears the previous factual failure', async () => {

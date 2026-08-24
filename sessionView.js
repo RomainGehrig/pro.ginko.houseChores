@@ -1,7 +1,9 @@
 // ABOUTME: Today — the budget drawn as a vessel you fill, and the pool you fill it from.
 // ABOUTME: Proposals stay inside the budget; anything picked by hand is never measured against it.
 
-import { getActiveTasks, markChoreRecentlyDone } from './tasksView.js'
+import {
+  getActiveTasks, markChoreRecentlyDone, subscribeTaskRefresh
+} from './tasksView.js'
 import { buildBundleProposal } from './bundleLogic.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
 import { selectableReferences } from './categoryLocationLogic.js'
@@ -63,7 +65,7 @@ export function showSessionStartNotice (startResult, status) {
 // leaves them exactly where they were.
 export function clearPicksForStart (startResult) {
   if (startResult?.restored) return false
-  sessionPicks.set([])
+  sessionPicks.clear()
   return true
 }
 
@@ -119,6 +121,7 @@ export function initSessionView () {
   element('poolChips').addEventListener('pointercancel', cancelHold)
   element('poolChips').addEventListener('contextmenu', handleContextDetail)
   categoryLocationStore.subscribe(renderToday)
+  subscribeTaskRefresh(refreshToday)
   // The ledger picks into the same list, so the pool repaints on its changes
   // too rather than only on its own.
   sessionPicks.subscribe(refreshToday)
@@ -136,7 +139,7 @@ function handleTodayClick (event) {
   if (detailButton) return openChoreDetail(detailButton.dataset.detailId)
 
   const removeButton = event.target.closest('[data-remove-id]')
-  if (removeButton) return pickChore(removeButton.dataset.removeId)
+  if (removeButton) return setAsideChore(removeButton.dataset.removeId)
 
   const pickButton = event.target.closest('[data-pick-id]')
   if (pickButton) {
@@ -170,7 +173,27 @@ function pickCategory (categoryId) {
 }
 
 function pickChore (id) {
+  if (sessionPicks.isPicked(id)) return setAsideChore(id)
   sessionPicks.toggle(id)
+}
+
+function setAsideChore (id) {
+  sessionPicks.exclude(id)
+}
+
+export function bundleFillNotice (pickedCount, minutes, hasSetAside = false) {
+  const notice = hasSetAside
+    ? pickedCount
+      ? 'Nothing else was added alongside what you picked. Add anything you like anyway.'
+      : 'Nothing was added for ' + formatDuration(minutes) +
+        '. Try a longer stretch, or pick something anyway.'
+    : pickedCount
+      ? 'Nothing else fits alongside what you picked. Add anything you like anyway.'
+      : 'Nothing here fits ' + formatDuration(minutes) +
+        '. Try a longer stretch, or pick something anyway.'
+  return notice + (hasSetAside
+    ? ' Set-aside chores stay out unless you pick them.'
+    : '')
 }
 
 // The app's own proposal is the one thing that stays inside the budget. It
@@ -178,12 +201,14 @@ function pickChore (id) {
 // help with the rest of the session, not a verdict on the part you chose.
 function fillBundle () {
   const before = sessionPicks.getPickedIds()
+  const excludedIds = sessionPicks.getExcludedIds()
   const proposal = buildBundleProposal(
     eligibleTasks(),
     selectedMinutes,
     selectedCategoryId || null,
     selectableReferences(categoryLocationStore.getSnapshot().categories),
-    before
+    before,
+    excludedIds
   )
   const after = sessionPicks.set(proposal.tasks.map(task => task._id))
 
@@ -198,10 +223,8 @@ function fillBundle () {
 
   // Nothing was added. Which fact that is depends on whether the user had
   // already put something in — and neither of them is a complaint.
-  status.textContent = before.length
-    ? 'Nothing else fits alongside what you picked. Add anything you like anyway.'
-    : 'Nothing here fits ' + formatDuration(selectedMinutes) +
-      '. Try a longer stretch, or pick something anyway.'
+  status.textContent = bundleFillNotice(
+    before.length, selectedMinutes, excludedIds.length > 0)
   status.setAttribute('data-state', 'info')
 }
 
@@ -228,16 +251,27 @@ function handleContextDetail (event) {
   openChoreDetail(chip.dataset.pickId)
 }
 
-export function quickDetailSheetModel (task, categories, day, isPicked, currentSession = null) {
+export function quickDetailSheetModel (
+  task, categories, day, isPicked, currentSession = null, isExcluded = false
+) {
   const target = sessionAddTarget(currentSession, task._id)
+  const actions = [{ label: 'Close', value: null, className: 'btn btn-ghost' }]
+  if (target === 'next' && !isPicked) {
+    actions.push({
+      label: isExcluded ? 'Offer again' : 'Set aside',
+      value: isExcluded ? 'include' : 'exclude',
+      className: 'btn btn-secondary'
+    })
+  }
+  const sessionActionLabel = target === 'next' && isPicked
+    ? 'Set aside'
+    : sessionAddActionLabel(target, isPicked)
   return {
     title: String(task.name ?? ''),
     bodyHtml: buildChoreDetailHtml(task, categories, day),
     headerActionHtml: (target === 'in-running' ? '' : choreDoneButtonHtml()) +
-      choreSessionButtonHtml(sessionAddActionLabel(target, isPicked)),
-    actions: [
-      { label: 'Close', value: null, className: 'btn btn-ghost' }
-    ]
+      choreSessionButtonHtml(sessionActionLabel),
+    actions
   }
 }
 
@@ -287,11 +321,13 @@ async function openChoreDetail (id) {
   const task = taskById(id)
   if (!task) return
   const isPicked = sessionPicks.isPicked(id)
+  const isExcluded = sessionPicks.isExcluded(id)
   const target = sessionAddTarget(state.currentSession, id)
   const categories = selectableReferences(categoryLocationStore.getSnapshot().categories)
 
   const pendingChoice = openSheet(
-    quickDetailSheetModel(task, categories, today(), isPicked, state.currentSession))
+    quickDetailSheetModel(
+      task, categories, today(), isPicked, state.currentSession, isExcluded))
   const head = sheetHeadAction()
   const done = head?.querySelector('.done-btn')
   done?.addEventListener('click', () => {
@@ -299,7 +335,9 @@ async function openChoreDetail (id) {
     closeSheetWith('done')
   })
   sheetBody()?.addEventListener('click', () => disarmDone(done))
-  head?.querySelector('.session-btn')?.addEventListener('click', () => closeSheetWith('session'))
+  head?.querySelector('.session-btn')?.addEventListener('click', () => {
+    closeSheetWith(target === 'next' && isPicked ? 'exclude' : 'session')
+  })
 
   const choice = await pendingChoice
 
@@ -322,6 +360,8 @@ async function openChoreDetail (id) {
     if (result.ok && !isPicked) renderToday()
     showQuickCompletionResult(element('sessionStatus'), result)
   }
+  if (choice === 'exclude') setAsideChore(id)
+  if (choice === 'include') sessionPicks.include(id)
 }
 
 // Re-rendering the pool replaces the very control that was just pressed, so
@@ -333,13 +373,17 @@ function rememberFocus () {
   if (!key) return null
   const attribute = active.dataset.pickId ? 'data-pick-id'
     : active.dataset.detailId ? 'data-detail-id'
-      : active.dataset.removeId ? 'data-remove-id' : 'data-category-id'
+      : active.dataset.removeId
+        ? (sessionPicks.isPicked(active.dataset.removeId) ? 'data-remove-id' : 'data-pick-id')
+        : 'data-category-id'
   return attribute + '="' + key + '"'
 }
 
 function restoreFocus (selector) {
   if (!selector) return
-  document.querySelector('#view-today [' + selector + ']')?.focus()
+  const matchingControl = document.querySelector('#view-today [' + selector + ']')
+  if (matchingControl) return matchingControl.focus()
+  if (selector.startsWith('data-pick-id=')) element('poolHeading')?.focus()
 }
 
 function renderToday () {
@@ -351,6 +395,7 @@ function renderToday () {
   const day = today()
   const pool = poolTasks()
   const pickedIds = sessionPicks.getPickedIds()
+  const excludedIds = sessionPicks.getExcludedIds()
   const bundle = pickedTasks()
   const total = bundleTotal(bundle)
   const geometry = vesselGeometry(total, selectedMinutes)
@@ -387,7 +432,7 @@ function renderToday () {
   element('categoryFilter').innerHTML = buildCategoryTabsHtml(categories, selectedCategoryId)
   const categoryName = categories.find(item => item._id === selectedCategoryId)?.name || ''
   element('poolChips').innerHTML = pool.length
-    ? buildPoolChipsHtml(pool, pickedIds, day)
+    ? buildPoolChipsHtml(pool, pickedIds, day, excludedIds)
     : buildPoolEmptyHtml(categoryName)
 
   restoreFocus(focusKey)

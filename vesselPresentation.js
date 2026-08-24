@@ -7,6 +7,8 @@ import { buildChoreNoteHtml, resolveTaskCategoryName } from './taskPresentationL
 import { scheduleSummary } from './scheduleLogic.js'
 
 const minutesOf = task => Number(task?.estimatedDuration) || 0
+const setAsideLabel = task =>
+  'Set ' + escapeHtml(String(task?.name ?? '')) + ' aside for this Quick session'
 
 // A chore can be picked before anyone has estimated it, and it is in the session
 // all the same. It gets the smallest share the column can draw rather than none,
@@ -20,7 +22,7 @@ export function buildVesselFillHtml (bundle, today) {
     const shade = ripenessColor(ripeness(task, today))
     return '<button type="button" class="vessel-block" data-remove-id="' +
       escapeHtml(task._id) + '" style="flex:' + blockShare(task) + ';background:' + shade + '"' +
-      ' aria-label="Take ' + escapeHtml(String(task?.name ?? '')) + ' out of the session">' +
+      ' aria-label="' + setAsideLabel(task) + '">' +
       '<span class="vessel-block-minutes">' +
       formatFactHtml(formatDuration(task?.estimatedDuration)) + '</span>' +
       '<span class="vessel-block-name">' + escapeHtml(String(task?.name ?? '')) + '</span>' +
@@ -31,7 +33,8 @@ export function buildVesselFillHtml (bundle, today) {
 export function buildVesselListHtml (bundle, today) {
   return (bundle || []).map(task =>
     '<li class="vessel-entry rise">' +
-    '<button type="button" class="vessel-entry-btn" data-remove-id="' + escapeHtml(task._id) + '">' +
+    '<button type="button" class="vessel-entry-btn" data-remove-id="' + escapeHtml(task._id) +
+    '" aria-label="' + setAsideLabel(task) + '">' +
     '<span class="vessel-entry-name display">' + escapeHtml(String(task?.name ?? '')) + '</span>' +
     '<span class="vessel-entry-note muted">' + buildChoreNoteHtml(task, today) + '</span>' +
     '</button></li>'
@@ -41,12 +44,15 @@ export function buildVesselListHtml (bundle, today) {
 // Two controls in one pill: the body picks the chore, the trailing button opens
 // its detail. The design reaches detail by holding the chip, which pointer users
 // still can — this keeps the same detail one Tab away for everyone else.
-export function buildPoolChipsHtml (tasks, pickedIds, today) {
+export function buildPoolChipsHtml (tasks, pickedIds, today, excludedIds = []) {
   const picked = new Set(pickedIds || [])
+  const excluded = new Set(excludedIds || [])
   return (tasks || []).map(task => {
     const isPicked = picked.has(task._id)
+    const isExcluded = excluded.has(task._id)
     const name = escapeHtml(String(task?.name ?? ''))
-    return '<span class="pool-chip-wrap' + (isPicked ? ' is-on' : '') + '">' +
+    return '<span class="pool-chip-wrap' + (isPicked ? ' is-on' : '') +
+      (isExcluded ? ' is-excluded' : '') + '">' +
       '<button type="button" class="pool-chip" data-pick-id="' + escapeHtml(task._id) +
       '" aria-pressed="' + (isPicked ? 'true' : 'false') + '">' +
       '<span class="pool-chip-dot" style="background:' +
@@ -54,6 +60,7 @@ export function buildPoolChipsHtml (tasks, pickedIds, today) {
       '<span class="pool-chip-name">' + name + '</span>' +
       '<span class="pool-chip-minutes">' +
       formatFactHtml(formatDuration(task?.estimatedDuration)) + '</span>' +
+      (isExcluded ? '<span class="pool-chip-state">Set aside</span>' : '') +
       '</button>' +
       '<button type="button" class="pool-chip-info" data-detail-id="' + escapeHtml(task._id) +
       '" aria-label="Details for ' + name + '">&hellip;</button>' +

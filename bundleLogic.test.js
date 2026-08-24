@@ -79,6 +79,51 @@ test('the proposal carries the picks through with everything else', () => {
   assert.deepEqual(proposal.tasks.map(task => task._id), ['c', 'a', 'b'])
 })
 
+test('readiness and set-aside choices compose without overriding explicit eligible picks', () => {
+  const crossProduct = [
+    { _id: 'waiting-picked', taskMode: 'as_needed', readiness: 'waiting', categoryId: 'wanted', estimatedDuration: 5, scheduledDate: '2030-01-01' },
+    { _id: 'ready-picked', taskMode: 'as_needed', readiness: 'ready', categoryId: 'wanted', estimatedDuration: 5, scheduledDate: '2030-01-02' },
+    { _id: 'scheduled-picked', taskMode: 'scheduled', categoryId: 'other', estimatedDuration: 20, scheduledDate: '2030-01-03' },
+    { _id: 'waiting-auto', taskMode: 'as_needed', readiness: 'waiting', categoryId: 'wanted', estimatedDuration: 5, scheduledDate: '2030-01-04' },
+    { _id: 'ready-set-aside', taskMode: 'as_needed', readiness: 'ready', categoryId: 'wanted', estimatedDuration: 5, scheduledDate: '2030-01-05' },
+    { _id: 'scheduled-set-aside', taskMode: 'scheduled', categoryId: 'wanted', estimatedDuration: 5, scheduledDate: '2030-01-06' },
+    { _id: 'ready-auto', taskMode: 'as_needed', readiness: 'ready', categoryId: 'wanted', estimatedDuration: 5, scheduledDate: '2030-01-07' },
+    { _id: 'scheduled-auto', taskMode: 'scheduled', categoryId: 'wanted', estimatedDuration: 5, scheduledDate: '2030-01-08' }
+  ]
+  const keptIds = ['waiting-picked', 'ready-picked', 'scheduled-picked']
+  const setAsideIds = [
+    'ready-picked', 'scheduled-picked', 'ready-set-aside', 'scheduled-set-aside'
+  ]
+  const expected = ['ready-picked', 'scheduled-picked', 'ready-auto', 'scheduled-auto']
+
+  assert.deepEqual(
+    buildBundle(crossProduct, 50, 'wanted', keptIds, setAsideIds).map(task => task._id),
+    expected
+  )
+  assert.deepEqual(
+    buildBundleProposal(crossProduct, 50, 'wanted', [], keptIds, setAsideIds)
+      .tasks.map(task => task._id),
+    expected
+  )
+})
+
+test('the proposal leaves out chores set aside for this draft', () => {
+  const proposal = buildBundleProposal(fillTasks, 10, null, [], [], ['a'])
+  assert.deepEqual(proposal.tasks.map(task => task._id), ['b'])
+})
+
+// Setting a chore aside is advice to the machine, not a veto over the user's
+// own choice. Fill must skip it, while an already-kept pick still leads.
+test('a bundle skips set-aside chores but keeps one the user picked anyway', () => {
+  assert.deepEqual(
+    buildBundle(fillTasks, 10, null, [], ['a']).map(task => task._id),
+    ['b'])
+
+  assert.deepEqual(
+    buildBundle(fillTasks, 10, null, ['a'], ['a', 'b']).map(task => task._id),
+    ['a'])
+})
+
 test('session draft keeps the parameters captured with its proposed bundle', () => {
   let selectedCategoryId = 'c1'
   const proposal = buildBundleProposal(tasks, 5, selectedCategoryId, [
