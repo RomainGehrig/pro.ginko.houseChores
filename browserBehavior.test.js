@@ -1462,6 +1462,115 @@ test('as-needed chore lifecycle stays aligned across As needed, Chores, and Quic
   ])
 })
 
+test('waiting publications remove existing Quick picks after readiness and editor conversion', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 800 },
+    mediaFeatures: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+    body: applicationMarkup,
+    script: `
+      const consoleErrors = []
+      console.error = (...values) => consoleErrors.push(values.map(String).join(' '))
+      const records = {
+        categories: [], locations: [],
+        tasks: [{
+          _id: 'ready-task', name: 'Empty dishwasher', status: 'approved_recurring',
+          taskMode: 'as_needed', readiness: 'ready', categoryId: null, locationIds: [],
+          estimatedDuration: 5, scheduledDate: '2030-01-07',
+          schedule: { type: 'periodic', every: 2, unit: 'day' }, lastCompletedDate: null
+        }, {
+          _id: 'scheduled-task', name: 'Inspect water filter', status: 'approved_recurring',
+          taskMode: 'scheduled', readiness: null, categoryId: null, locationIds: [],
+          estimatedDuration: 10, scheduledDate: '2030-01-08',
+          schedule: { type: 'periodic', every: 1, unit: 'month' }, lastCompletedDate: null
+        }]
+      }
+      const clone = value => structuredClone(value)
+      globalThis.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async () => ({}),
+        updateFields: async (collection, id, fields) => {
+          const record = records[collection].find(item => item._id === id)
+          Object.assign(record, clone(fields))
+          return clone(record)
+        }
+      }
+
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView } = await import(applicationUrl + 'tasksView.js')
+      const { initSessionView } = await import(applicationUrl + 'sessionView.js')
+      const { sessionPicks } = await import(applicationUrl + 'sessionPicks.js')
+      await categoryLocationStore.initialize()
+      await initTasksView({ now: () => new Date(2030, 0, 7, 12, 0, 0).getTime() })
+      initSessionView()
+
+      const waitFor = async (predicate, label) => {
+        const started = Date.now()
+        while (!predicate() && Date.now() - started < 1800) {
+          await new Promise(resolve => setTimeout(resolve, 20))
+        }
+        if (!predicate()) throw new Error('Timed out waiting for ' + label)
+      }
+      const surface = id => ({
+        asNeeded: Boolean(document.querySelector('#asNeededCards [data-id="' + id + '"]')),
+        chores: Boolean(document.querySelector('#activeCards [data-id="' + id + '"]')),
+        quick: Boolean(document.querySelector('#poolChips [data-pick-id="' + id + '"]')),
+        picked: sessionPicks.isPicked(id)
+      })
+
+      document.querySelector('#poolChips [data-pick-id="ready-task"]').click()
+      await waitFor(() => sessionPicks.isPicked('ready-task'), 'ready task pick')
+      const notReadyButton = document.querySelector(
+        '#asNeededCards [data-id="ready-task"] .as-needed-not-ready')
+      const notReadyEnabled = !notReadyButton.disabled
+      notReadyButton.click()
+      await waitFor(() => records.tasks[0].readiness === 'waiting', 'ready to waiting write')
+      const readyToWaiting = surface('ready-task')
+
+      document.querySelector('#poolChips [data-pick-id="scheduled-task"]').click()
+      await waitFor(() => sessionPicks.isPicked('scheduled-task'), 'scheduled task pick')
+      document.querySelector(
+        '#activeCards [data-id="scheduled-task"] .ledger-row-summary').click()
+      await Promise.resolve()
+      const modal = document.querySelector('.edit-modal')
+      const modeButton = modal.querySelector(
+        '[data-schedule-set="task-mode"][data-schedule-value="as_needed"]')
+      const saveButton = [...document.querySelectorAll('#bottomSheetActions button')]
+        .find(button => button.textContent === 'Save')
+      const editorControlsEnabled = !modeButton.disabled && !saveButton.disabled
+      modeButton.click()
+      saveButton.click()
+      await waitFor(() => records.tasks[1].taskMode === 'as_needed' &&
+        records.tasks[1].readiness === 'waiting', 'editor conversion write')
+      await new Promise(resolve => setTimeout(resolve, 80))
+
+      const result = {
+        consoleErrors,
+        notReadyEnabled,
+        editorControlsEnabled,
+        readyToWaiting,
+        conversion: {
+          record: clone(records.tasks[1]),
+          surface: surface('scheduled-task'),
+          pickedIds: sessionPicks.getPickedIds()
+        }
+      }
+    `
+  })
+
+  assert.deepEqual(result.consoleErrors, [])
+  assert.equal(result.notReadyEnabled, true)
+  assert.equal(result.editorControlsEnabled, true)
+  assert.deepEqual(result.readyToWaiting, {
+    asNeeded: true, chores: false, quick: false, picked: false
+  })
+  assert.equal(result.conversion.record.taskMode, 'as_needed')
+  assert.equal(result.conversion.record.readiness, 'waiting')
+  assert.deepEqual(result.conversion.surface, {
+    asNeeded: true, chores: false, quick: false, picked: false
+  })
+  assert.deepEqual(result.conversion.pickedIds, [])
+})
+
 test('as-needed write failure restores the prior group, surfaces, and pick', async () => {
   const result = await runBrowserScenario({
     viewport: { width: 390, height: 800 },

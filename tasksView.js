@@ -308,6 +308,37 @@ function repaintPickConsumers (picks) {
   picks.set(picks.getPickedIds())
 }
 
+export async function saveChoreEditorFields (task, fields, {
+  getCurrent = id => tasksCache.find(item => item._id === id),
+  replace = replaceCachedTask,
+  render = renderTasks,
+  update = updateTask,
+  picks = sessionPicks,
+  eligibleIds = () => tasksCache.filter(availableLiveTask).map(item => item._id),
+  showFailure = message => showEditorFailure(message)
+} = {}) {
+  try {
+    await update(task._id, fields)
+  } catch {
+    const message = "Couldn't save that. The chore is unchanged."
+    showFailure(message)
+    return { ok: false, stage: 'write', message }
+  }
+
+  // Publication starts only after the write is durable. replaceCachedTask also
+  // invalidates any aggregate read that captured the older task beforehand.
+  const current = getCurrent(task._id) || task
+  replace({ ...current, ...fields })
+  reconcileAsNeededTransientState()
+  const before = picks.getPickedIds()
+  const after = picks.retain(eligibleIds())
+  const pickChanged = before.length !== after.length ||
+    before.some((id, index) => id !== after[index])
+  render()
+  if (!pickChanged) repaintPickConsumers(picks)
+  return { ok: true, stage: null, message: '' }
+}
+
 // Readiness and completion both rewrite the same task record. Every click gets
 // a turn in arrival order, even after the prior turn fails, and each turn reads
 // the cache left by the turn before it rather than the card that was clicked.
@@ -1149,15 +1180,9 @@ async function openChoreEditor (id, origin = 'chores') {
     estimatedDuration: edit.estimatedDuration
   }
 
-  try {
-    await updateTask(task._id, fields)
-    tasksCache = tasksCache.map(item =>
-      item._id === task._id ? { ...item, ...fields } : item)
-    renderLedger()
-    renderAsNeeded()
-  } catch {
-    showEditorFailure("Couldn't save that. The chore is unchanged.", origin)
-  }
+  return saveChoreEditorFields(task, fields, {
+    showFailure: message => showEditorFailure(message, origin)
+  })
 }
 
 // The chore actions live inside the editor, so they close it: pressing them is

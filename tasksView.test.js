@@ -1010,6 +1010,74 @@ test("a late aggregate refresh cannot overwrite another task's successful refres
   assert.equal(taskQueryCount, 3)
 })
 
+test('editor publication invalidates an older task read and reconciles pick eligibility', async () => {
+  assert.equal(typeof tasksView.saveChoreEditorFields, 'function')
+  const records = [{
+    _id: 'editor-conversion', name: 'Inspect water filter', status: 'approved_recurring',
+    taskMode: 'as_needed', readiness: 'ready', categoryId: null, locationIds: [],
+    estimatedDuration: 10, scheduledDate: '2030-01-07',
+    schedule: { type: 'periodic', every: 1, unit: 'month' }, lastCompletedDate: null
+  }]
+  const staleReadStarted = deferred()
+  const releaseStaleRead = deferred()
+  let taskQueryCount = 0
+
+  await withAsNeededActionHarness(records, async ({ node }) => {
+    sessionPicks.set(['editor-conversion'])
+    let publications = 0
+    const unsubscribe = sessionPicks.subscribe(() => { publications++ })
+    const staleRefresh = refreshTasksView()
+    await staleReadStarted.promise
+
+    const result = await tasksView.saveChoreEditorFields(
+      tasksView.getAsNeededTasks()[0],
+      {
+        taskMode: 'as_needed',
+        readiness: 'waiting',
+        scheduledDate: '2030-02-01'
+      }
+    )
+    const afterSave = {
+      record: structuredClone(records[0]),
+      cache: structuredClone(tasksView.getAsNeededTasks()[0]),
+      activeIds: tasksView.getActiveTasks().map(task => task._id),
+      picks: sessionPicks.getPickedIds(),
+      publications,
+      asNeeded: node('asNeededCards').innerHTML,
+      chores: node('activeCards').innerHTML
+    }
+
+    releaseStaleRead.resolve()
+    await staleRefresh
+    unsubscribe()
+
+    assert.deepEqual(result, { ok: true, stage: null, message: '' })
+    assert.equal(afterSave.record.readiness, 'waiting')
+    assert.equal(afterSave.cache.readiness, 'waiting')
+    assert.deepEqual(afterSave.activeIds, [])
+    assert.deepEqual(afterSave.picks, [])
+    assert.equal(afterSave.publications, 1)
+    assert.match(afterSave.asNeeded, /data-id="editor-conversion"/)
+    assert.doesNotMatch(afterSave.chores, /data-id="editor-conversion"/)
+    assert.equal(tasksView.getAsNeededTasks()[0].readiness, 'waiting')
+    assert.deepEqual(tasksView.getActiveTasks(), [])
+    assert.deepEqual(sessionPicks.getPickedIds(), [])
+  }, {
+    query: async collection => {
+      if (collection !== 'tasks') return []
+      taskQueryCount++
+      const snapshot = structuredClone(records)
+      if (taskQueryCount === 2) {
+        staleReadStarted.resolve()
+        await releaseStaleRead.promise
+      }
+      return snapshot
+    }
+  })
+
+  assert.equal(taskQueryCount, 2)
+})
+
 test('a successful readiness retry clears the previous factual failure', async () => {
   const original = {
     _id: 'retry-dishwasher', name: 'Empty dishwasher', status: 'approved_recurring',
