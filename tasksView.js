@@ -40,7 +40,7 @@ import { sessionPicks } from './sessionPicks.js'
 import { bundleTotal, pickedBundle } from './pickingLogic.js'
 import { isTaskEligible } from './taskModeLogic.js'
 import {
-  sessionAddActionLabel, sessionAddLanded, sessionAddNote, sessionAddTarget,
+  sessionAddActionLabel, sessionAddLanded, sessionAddNote, sessionAddRejected, sessionAddTarget,
   sessionFloatModel, sessionMarks, sessionUnderWay
 } from './sessionAdd.js'
 import { setCurrentSessionAggregate, state } from './state.js'
@@ -853,7 +853,14 @@ async function addChoreToRunningSession (task) {
     // comes back untouched rather than throwing. Handing that one on to Doing
     // would carry the user off to a receipt they never asked for, on the
     // strength of an add that never happened.
-    if (!sessionAddLanded(aggregate.session, task._id)) return addChoreToFinishedSession(task)
+    if (!sessionAddLanded(aggregate.session, task._id)) {
+      if (sessionAddRejected(aggregate, task._id)) {
+        renderLedger()
+        showChoresNote(sessionAddNote({ name: task.name, target: 'unavailable', added: false }))
+        return
+      }
+      return addChoreToFinishedSession(task)
+    }
     await applySessionAggregate?.(aggregate)
     // The picks store did not move, so nothing else will repaint the list.
     renderLedger()

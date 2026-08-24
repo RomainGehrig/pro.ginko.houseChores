@@ -1399,6 +1399,56 @@ test('a hand-picked chore with no estimate joins a running session all the same'
   assert.deepEqual(aggregate.session.taskBundle, ['t1', 't3'])
 })
 
+test('a stale live waiting attachment reports rejection without ending the running session', async () => {
+  const session = {
+    _id: 's1', status: 'active', startTime: 1000, taskBundle: ['t1'],
+    accumulatedActiveMs: 0, activeStartedAt: 1000, checkpointElapsedMs: 0
+  }
+  const store = createSessionStore({
+    now: () => 301000,
+    getSession: async () => structuredClone(session),
+    listExecutions: async () => [],
+    listTasks: async ids => ids.map(id => ({
+      t1: { _id: 't1', name: 'Sink', status: 'active' },
+      waiting: {
+        _id: 'waiting', name: 'Check rain barrel', status: 'active',
+        taskMode: 'as_needed', readiness: 'waiting'
+      }
+    })[id]).filter(Boolean),
+    updateSessionRecord: async () => assert.fail('waiting task must not be attached')
+  })
+
+  const aggregate = await store.attachTasks('s1', ['waiting'], { whileRunning: true })
+
+  assert.equal(aggregate.session.status, 'active')
+  assert.deepEqual(aggregate.session.taskBundle, ['t1'])
+  assert.deepEqual(aggregate.rejectedTaskIds, ['waiting'])
+})
+
+test('an archived waiting as-needed task still rejects attachment', async () => {
+  const session = {
+    _id: 's1', status: 'paused', startTime: 1000, taskBundle: ['t1'],
+    accumulatedActiveMs: 0, activeStartedAt: null, checkpointElapsedMs: 0, pausedAt: 1000
+  }
+  const store = createSessionStore({
+    getSession: async () => structuredClone(session),
+    listExecutions: async () => [],
+    listTasks: async ids => ids.map(id => ({
+      t1: { _id: 't1', name: 'Sink', status: 'active' },
+      archived: {
+        _id: 'archived', name: 'Old rain barrel', status: 'archived',
+        taskMode: 'as_needed', readiness: 'waiting'
+      }
+    })[id]).filter(Boolean),
+    updateSessionRecord: async () => assert.fail('archived task must not be attached')
+  })
+
+  await assert.rejects(
+    store.attachTasks('s1', ['archived']),
+    { message: 'That task is no longer available.' }
+  )
+})
+
 // Attaching cannot refuse — it answers with the session as it really is. A
 // session that finished while the sheet was open therefore comes back untouched
 // and unthrown, and the caller has to read what happened off the session.

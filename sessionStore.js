@@ -20,9 +20,8 @@ import {
 
 const unavailableTask = id => ({ _id: id, name: 'Unavailable task', unavailable: true })
 const terminal = session => session.status === 'completed' || session.status === 'interrupted'
-const attachableTask = task =>
-  (task?.status === 'active' || task?.status === 'approved_recurring') &&
-  isTaskEligible(task)
+const liveTask = task => task?.status === 'active' || task?.status === 'approved_recurring'
+const attachableTask = task => liveTask(task) && isTaskEligible(task)
 const usableBundledTask = task => attachableTask(task) ||
   task?.status === 'proposed' || task?.status === 'draft'
 
@@ -233,14 +232,15 @@ export function createSessionStore ({
     const requestedTasks = await listTasks(requestedIds)
     const requestedById = new Map(requestedTasks.map(task => [task._id, task]))
     if (requestedTasks.length !== requestedIds.length ||
-      requestedTasks.some(task => !attachableTask(task) && isTaskEligible(task))) {
+      requestedTasks.some(task => !liveTask(task))) {
       throw new Error(suggestionTaskIds
         ? 'That task is no longer available as a suggestion.'
         : 'That task is no longer available.')
     }
     const attachableIds = requestedIds.filter(id => attachableTask(requestedById.get(id)))
     const attachableTasks = attachableIds.map(id => requestedById.get(id))
-    if (!attachableIds.length) return aggregate
+    const rejectedTaskIds = requestedIds.filter(id => !isTaskEligible(requestedById.get(id)))
+    if (!attachableIds.length) return { ...aggregate, rejectedTaskIds }
     const taskBundle = [...new Set([
       ...(aggregate.session.taskBundle || []),
       ...attachableIds
@@ -270,7 +270,7 @@ export function createSessionStore ({
     } else {
       await updateSessionRecord(sessionId, { taskBundle })
     }
-    return refresh(sessionId, atMs)
+    return { ...(await refresh(sessionId, atMs)), rejectedTaskIds }
   }
 
   async function resume (sessionId, atMs = now()) {

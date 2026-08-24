@@ -19,7 +19,7 @@ import {
   completionFailureMessage, disarmDone
 } from './chores/choreActions.js'
 import {
-  sessionAddActionLabel, sessionAddLanded, sessionAddNote, sessionAddTarget
+  sessionAddActionLabel, sessionAddLanded, sessionAddNote, sessionAddRejected, sessionAddTarget
 } from './sessionAdd.js'
 import {
   pickedBundle, bundleTotal, bundleTotalLine, bundleFitLine, vesselGeometry,
@@ -252,6 +252,9 @@ export async function addQuickChoreToSession (task, target, {
   setAggregate(aggregate)
 
   if (!sessionAddLanded(aggregate.session, task._id)) {
+    if (sessionAddRejected(aggregate, task._id)) {
+      return { target: 'unavailable', added: false, aggregate }
+    }
     const added = isPicked(task._id) || togglePick(task._id)
     return { target: 'ended', added, aggregate }
   }

@@ -122,6 +122,38 @@ test('Quick Session sends its session action to the session already under way', 
   ])
 })
 
+test('a stale waiting chore stays unavailable when its running-session attachment is rejected', async () => {
+  const calls = []
+  const aggregate = {
+    session: { _id: 'session-1', status: 'active', taskBundle: ['task-1'] },
+    bundle: [],
+    executions: [],
+    rejectedTaskIds: ['task-2']
+  }
+
+  const placement = await sessionView.addQuickChoreToSession(
+    { _id: 'task-2', name: 'Check rain barrel' },
+    'running',
+    {
+      currentSession: { _id: 'session-1', status: 'active', taskBundle: ['task-1'] },
+      attachTasks: async (...args) => {
+        calls.push(['attach', ...args])
+        return aggregate
+      },
+      setAggregate: value => calls.push(['state', value]),
+      renderRunning: async value => calls.push(['render', value]),
+      isPicked: () => false,
+      togglePick: id => calls.push(['toggle', id])
+    }
+  )
+
+  assert.deepEqual(placement, { target: 'unavailable', added: false, aggregate })
+  assert.deepEqual(calls, [
+    ['attach', 'session-1', ['task-2'], { whileRunning: true }],
+    ['state', aggregate]
+  ])
+})
+
 test('a failed Quick Session completion is stated inline without changing the chore', () => {
   const status = statusElement()
 
