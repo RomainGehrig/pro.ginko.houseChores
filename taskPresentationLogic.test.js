@@ -194,6 +194,12 @@ test('picker markup escapes every stored suggestion and search-result title', ()
   assert.match(markup, /<span class="continue-row-est fig">30 min<\/span>/)
 })
 
+test('an empty suggestion rail states only that no suggestions are waiting', () => {
+  const markup = buildContinuationSuggestionsHtml([])
+  assert.match(markup, /No suggested chores are waiting/)
+  assert.doesNotMatch(markup, /Nothing short enough/)
+})
+
 test('continuation budget copy isolates its measurement and states the rule after it', () => {
   assert.equal(
     buildContinuationRemainingHtml({ timeBudgetMinutes: 30 }, 18 * 60000),

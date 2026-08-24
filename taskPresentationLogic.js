@@ -186,7 +186,7 @@ const continueRow = (task, control) =>
 // un-tick itself — but the row is what you see and press.
 export function buildContinuationSuggestionsHtml (tasks) {
   if (!tasks.length) {
-    return '<p class="muted continue-empty">Nothing short enough is waiting. ' +
+    return '<p class="muted continue-empty">No suggested chores are waiting. ' +
       'Search below for anything at all.</p>'
   }
   return tasks.map(task => continueRow(task,

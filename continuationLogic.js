@@ -21,10 +21,13 @@ export function normalizeContinuationSuggestionEntries (value) {
 
 export function suggestContinuationTasks (tasks, excludedIds, remainingMs) {
   const excluded = new Set(excludedIds)
-  return prioritizeTasks(tasks.filter(task =>
-    active(task) && !excluded.has(task._id) &&
-    estimateMs(task) > 0 && estimateMs(task) <= remainingMs
+  const eligible = prioritizeTasks(tasks.filter(task =>
+    active(task) && !excluded.has(task._id) && estimateMs(task) > 0
   ))
+  if ((Number(remainingMs) || 0) > 0) {
+    return eligible.filter(task => estimateMs(task) <= remainingMs)
+  }
+  return eligible.sort((left, right) => estimateMs(left) - estimateMs(right)).slice(0, 3)
 }
 
 export function searchContinuationTasks (tasks, query, excludedIds) {

@@ -1267,6 +1267,31 @@ test('a focused proposal stays in place until focus leaves it', async () => {
   })
 })
 
+test('past the session budget the active panel keeps its shortest proposals available', async () => {
+  const original = { ...task('original-task'), estimatedDuration: 1 }
+  const shortest = { ...task('shortest-1m'), estimatedDuration: 1 }
+  const longer = { ...task('longer-4m'), estimatedDuration: 4 }
+  const session = {
+    _id: 'past-budget-session', status: 'active', startTime: 10000,
+    taskBundle: ['original-task'], timeBudgetMinutes: 5,
+    accumulatedActiveMs: 6 * 60000, activeStartedAt: 10000,
+    pausedAt: null, checkpointElapsedMs: 0, pendingAddition: null
+  }
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [original, shortest, longer],
+    bundle: [original]
+  }, async ({ document }) => {
+    assert.ok(document.suggestionControl('shortest-1m'))
+    assert.ok(document.suggestionControl('longer-4m'))
+    assert.equal(
+      document.control('continueFits').textContent,
+      'Shortest ones, if you want to keep going'
+    )
+  })
+})
+
 test('paused picker attaches suggestions and search, quick-adds a proposed task, and resumes', async () => {
   const elapsedBeforePicker = 10 * 60000
   const resumeClickedAt = 1200000
