@@ -181,7 +181,21 @@ export function createSessionStore ({
   async function start (proposal, nowMs = Date.now()) {
     const existing = await restoreCurrent(nowMs)
     if (existing) return { aggregate: existing, restored: true }
-    const created = await createSessionRecord(buildSessionDraft(proposal, nowMs))
+    // Recovery can take long enough for a picked chore to change underneath the
+    // proposal. The user's captured order still owns the session, but current
+    // storage owns whether each chore can enter new work at all.
+    const requestedIds = [...new Set((proposal?.tasks || [])
+      .map(task => task?._id).filter(Boolean))]
+    const currentTasks = await listTasks(requestedIds)
+    const currentById = new Map(currentTasks.map(task => [task._id, task]))
+    const eligibleTasks = requestedIds
+      .map(id => currentById.get(id))
+      .filter(attachableTask)
+    if (!eligibleTasks.length) {
+      return { aggregate: null, restored: false, reason: 'no_eligible_tasks' }
+    }
+    const revalidatedProposal = { ...proposal, tasks: eligibleTasks }
+    const created = await createSessionRecord(buildSessionDraft(revalidatedProposal, nowMs))
     const persisted = created?._id ? await getSession(created._id) : null
     if (!persisted) throw new Error('The new session could not be read after creation.')
     return { aggregate: await hydrate(persisted, nowMs), restored: false }

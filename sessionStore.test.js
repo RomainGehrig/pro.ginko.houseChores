@@ -10,6 +10,16 @@ const activeSession = ({ taskBundle }) => ({
   accumulatedActiveMs: 0, activeStartedAt: 1723111140000, checkpointElapsedMs: 0
 })
 
+const deferred = () => {
+  let resolve
+  let reject
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
 test('fresh store repairs the exact task update persisted with an execution', async () => {
   const tasks = new Map([['weekly', {
     _id: 'weekly', status: 'active', scheduledDate: '2026-08-08',
@@ -375,7 +385,7 @@ test('start creates one compact snapshot when none is unfinished', async () => {
     listSessions: async () => [],
     getSession: async id => created?._id === id ? created : null,
     listExecutions: async () => [],
-    listTasks: async ids => ids.map(_id => ({ _id, name: _id })),
+    listTasks: async ids => ids.map(_id => ({ _id, name: _id, status: 'active' })),
     createSessionRecord: async draft => (created = { _id: 'new', ...draft }),
     updateSessionRecord: async () => {}
   })
@@ -388,13 +398,120 @@ test('start creates one compact snapshot when none is unfinished', async () => {
   assert.deepEqual(result.aggregate.session.taskBundle, ['t1'])
 })
 
+test('start revalidates proposal tasks after recovery without reapplying fit or category rules', async () => {
+  const recoveryStarted = deferred()
+  const releaseRecovery = deferred()
+  const tasks = new Map([
+    ['scheduled-outside-filter', {
+      _id: 'scheduled-outside-filter', status: 'active', categoryId: 'other',
+      estimatedDuration: 90, taskMode: 'scheduled', readiness: null
+    }],
+    ['condition-changed', {
+      _id: 'condition-changed', status: 'approved_recurring', categoryId: 'chosen',
+      estimatedDuration: 5, taskMode: 'as_needed', readiness: 'ready'
+    }],
+    ['ready-over-budget', {
+      _id: 'ready-over-budget', status: 'approved_recurring', categoryId: 'chosen',
+      estimatedDuration: 120, taskMode: 'as_needed', readiness: 'ready'
+    }]
+  ])
+  let persisted
+  const store = createSessionStore({
+    listSessions: async () => {
+      recoveryStarted.resolve()
+      await releaseRecovery.promise
+      return []
+    },
+    getSession: async id => persisted?._id === id ? structuredClone(persisted) : null,
+    listExecutions: async () => [],
+    // Deliberately return datastore order rather than proposal order. Start owns
+    // the user's captured order and must rebuild from the requested ids.
+    listTasks: async ids => [...tasks.values()].reverse()
+      .filter(task => ids.includes(task._id)).map(task => structuredClone(task)),
+    createSessionRecord: async draft => {
+      persisted = { _id: 'new', ...structuredClone(draft) }
+      return { _id: 'new' }
+    },
+    updateSessionRecord: async () => {}
+  })
+
+  const starting = store.start({
+    tasks: [
+      tasks.get('scheduled-outside-filter'),
+      tasks.get('condition-changed'),
+      tasks.get('ready-over-budget')
+    ],
+    timeBudgetMinutes: 1,
+    categoryFilterId: 'chosen',
+    categoryFilter: 'Chosen'
+  }, 9000)
+  await recoveryStarted.promise
+  tasks.set('condition-changed', {
+    ...tasks.get('condition-changed'), readiness: 'waiting'
+  })
+  releaseRecovery.resolve()
+
+  const result = await starting
+
+  assert.equal(result.restored, false)
+  assert.deepEqual(persisted.taskBundle, [
+    'scheduled-outside-filter',
+    'ready-over-budget'
+  ])
+  assert.deepEqual(result.aggregate.session.taskBundle, persisted.taskBundle)
+})
+
+test('start does not create an empty session when delayed recovery leaves no eligible task', async () => {
+  const recoveryStarted = deferred()
+  const releaseRecovery = deferred()
+  let task = {
+    _id: 'dishwasher', status: 'approved_recurring',
+    taskMode: 'as_needed', readiness: 'ready'
+  }
+  let creates = 0
+  let persisted
+  const store = createSessionStore({
+    listSessions: async () => {
+      recoveryStarted.resolve()
+      await releaseRecovery.promise
+      return []
+    },
+    listTasks: async ids => ids.includes(task._id) ? [structuredClone(task)] : [],
+    getSession: async id => persisted?._id === id ? structuredClone(persisted) : null,
+    listExecutions: async () => [],
+    createSessionRecord: async draft => {
+      creates++
+      persisted = { _id: 'must-not-exist', ...structuredClone(draft) }
+      return { _id: persisted._id }
+    },
+    updateSessionRecord: async () => {}
+  })
+
+  const starting = store.start({
+    tasks: [structuredClone(task)],
+    timeBudgetMinutes: 30,
+    categoryFilterId: null,
+    categoryFilter: null
+  }, 9000)
+  await recoveryStarted.promise
+  task = { ...task, readiness: 'waiting' }
+  releaseRecovery.resolve()
+
+  const result = await starting
+
+  assert.equal(creates, 0)
+  assert.equal(result.aggregate, null)
+  assert.equal(result.restored, false)
+  assert.equal(result.reason, 'no_eligible_tasks')
+})
+
 test('start re-reads the persisted snapshot after Freezr returns only create metadata', async () => {
   let persisted
   const store = createSessionStore({
     listSessions: async () => [],
     getSession: async id => persisted?._id === id ? structuredClone(persisted) : null,
     listExecutions: async () => [],
-    listTasks: async ids => ids.map(_id => ({ _id, name: _id })),
+    listTasks: async ids => ids.map(_id => ({ _id, name: _id, status: 'active' })),
     createSessionRecord: async draft => {
       persisted = { ...structuredClone(draft), _id: 'new' }
       return { _id: 'new', _date_modified: 12345 }

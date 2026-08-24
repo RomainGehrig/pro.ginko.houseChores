@@ -37,6 +37,22 @@ test('new session start does not add a restore notice', () => {
   assert.equal(status.textContent, '')
 })
 
+test('an empty revalidated start stays factual and leaves the Quick session available', () => {
+  const status = statusElement()
+
+  assert.equal(sessionView.showSessionStartNotice({
+    aggregate: null,
+    restored: false,
+    reason: 'no_eligible_tasks'
+  }, status), true)
+  assert.equal(
+    status.textContent,
+    'None of the picked chores is available to start. Pick what you want to do now.'
+  )
+  assert.equal(status.getAttribute('role'), 'status')
+  assert.equal(status.getAttribute('data-state'), 'info')
+})
+
 test('missing and valid budgets update the inline session status without disabling controls', () => {
   const status = statusElement()
   const propose = { disabled: false }

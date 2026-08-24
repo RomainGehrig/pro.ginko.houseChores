@@ -43,7 +43,15 @@ const element = id => document.getElementById(id)
 const today = () => localDateFromDate(new Date())
 
 export function showSessionStartNotice (startResult, status) {
-  if (!startResult?.restored || !status) return false
+  if (!status) return false
+  if (startResult?.reason === 'no_eligible_tasks') {
+    status.textContent = 'None of the picked chores is available to start. ' +
+      'Pick what you want to do now.'
+    status.setAttribute('role', 'status')
+    status.setAttribute('data-state', 'info')
+    return true
+  }
+  if (!startResult?.restored) return false
   status.textContent = 'Resuming your unfinished session — the new bundle was not started.'
   status.setAttribute('role', 'status')
   status.setAttribute('data-state', 'info')
@@ -408,6 +416,10 @@ async function startSession () {
 
   try {
     const startResult = await sessionStore.start(proposal, Date.now())
+    if (!startResult.aggregate) {
+      showSessionStartNotice(startResult, status)
+      return
+    }
     const { aggregate } = startResult
     setCurrentSessionAggregate(aggregate)
     clearPicksForStart(startResult)
