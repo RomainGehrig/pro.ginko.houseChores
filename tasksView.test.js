@@ -166,6 +166,24 @@ test('active archive is optimistic and its queued commit writes only status', as
   assert.equal(await result.queued, queued[0].action)
 })
 
+test('an overlay-aware cache refresh keeps a pending archive out of active chores', async () => {
+  const active = {
+    _id: 'pending-archive', name: 'Clean loft', status: 'active',
+    schedule: { type: 'one_off' }
+  }
+  const pending = new Map([['task:pending-archive', {
+    archived: { ...active, status: 'archived' }
+  }]])
+
+  assert.equal(typeof tasksView.refreshTaskCache, 'function')
+  const refreshed = await tasksView.refreshTaskCache({
+    readTasks: async () => [{ ...active, serverVersion: 'still-active' }],
+    pendingArchives: pending
+  })
+
+  assert.deepEqual(refreshed, [])
+})
+
 test('failed archive commit restores the exact cached record and reports factual status', async () => {
   const original = {
     _id: 'task-failure', name: 'Sweep cellar', status: 'approved_recurring',

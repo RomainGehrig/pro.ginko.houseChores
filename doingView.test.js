@@ -8,6 +8,7 @@ import { startReview } from './reviewView.js'
 import { sessionStore } from './sessionStore.js'
 import { state, setCurrentSessionAggregate } from './state.js'
 import { initDoingView, refreshDoing, startDoing } from './doingView.js'
+import * as tasksView from './tasksView.js'
 
 const clone = value => structuredClone(value)
 
@@ -1145,6 +1146,31 @@ test('an unavailable candidate list leaves the session usable and retries inside
     await document.clickControl('retryContinueTasksBtn')
     await document.inputControl('continueSearchInput', 'garage')
     await document.clickSearchResult('searched-task')
+  })
+})
+
+test('a same-tab task archive removes that chore from the active add panel', async () => {
+  const original = { ...task('original-task'), name: 'Original task' }
+  const waiting = { ...task('waiting-task'), name: 'Waiting task' }
+  const session = {
+    _id: 'same-tab-task-refresh-session', status: 'active', startTime: 10000,
+    taskBundle: ['original-task'], timeBudgetMinutes: 15,
+    accumulatedActiveMs: 0, activeStartedAt: 10000,
+    pausedAt: null, checkpointElapsedMs: 0, pendingAddition: null
+  }
+
+  await withDoingEnvironment({
+    session,
+    persistedTasks: [original, waiting],
+    bundle: [original]
+  }, async ({ document }) => {
+    assert.ok(document.suggestionControl('waiting-task'))
+    assert.equal(typeof tasksView.replaceCachedTask, 'function')
+
+    tasksView.replaceCachedTask({ ...waiting, status: 'archived' })
+    await Promise.resolve()
+
+    assert.equal(document.suggestionControl('waiting-task'), null)
   })
 })
 

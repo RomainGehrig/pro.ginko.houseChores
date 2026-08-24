@@ -156,15 +156,23 @@ export function refreshSessionMarks () {
   if (typeof document !== 'undefined' && document.getElementById('activeCards')) renderLedger()
 }
 
-export async function refreshTasksView() {
-  const fetched = await listAllTasks()
-  tasksCache = overlayPendingTaskArchives(fetched, pendingTaskArchives)
+export async function refreshTaskCache ({
+  readTasks = listAllTasks,
+  pendingArchives = pendingTaskArchives
+} = {}) {
+  const fetched = await readTasks()
+  tasksCache = overlayPendingTaskArchives(fetched, pendingArchives)
   // A pick is a chore you mean to do next, so one that has left the list is not
   // a pick any more — left behind, it would put the chore back in the session
   // the day it is restored. What the server holds is what counts here: an
   // archive still waiting on its undo keeps its pick, to give back with the
   // chore if the undo comes.
   sessionPicks.retain(fetched.filter(stillOnTheList).map(task => task._id))
+  return getActiveTasks()
+}
+
+export async function refreshTasksView() {
+  await refreshTaskCache()
   renderTasks()
   announceTaskRefresh()
 }
@@ -252,6 +260,15 @@ const stillOnTheList = task =>
 
 export function getActiveTasks() {
   return tasksCache.filter(stillOnTheList)
+}
+
+export function replaceCachedTask (replacement) {
+  const index = tasksCache.findIndex(task => task._id === replacement?._id)
+  if (index < 0) return false
+  tasksCache = tasksCache.map((task, taskIndex) =>
+    taskIndex === index ? replacement : task)
+  announceTaskRefresh()
+  return true
 }
 
 export function archiveTaskOptimistically (task, {
@@ -920,9 +937,7 @@ async function openChoreEditor (id) {
   }
   if (choice === 'archive') {
     return archiveTaskOptimistically(task, {
-      replace: replacement => {
-        tasksCache = tasksCache.map(item => item._id === id ? replacement : item)
-      },
+      replace: replaceCachedTask,
       clearEditing: () => {},
       render: renderTasks,
       showFailure: showChoresFailure,
@@ -942,8 +957,7 @@ async function openChoreEditor (id) {
 
   try {
     await updateTask(task._id, fields)
-    tasksCache = tasksCache.map(item =>
-      item._id === task._id ? { ...item, ...fields } : item)
+    replaceCachedTask({ ...task, ...fields })
     renderLedger()
   } catch {
     showChoresFailure("Couldn't save that. The chore is unchanged.")

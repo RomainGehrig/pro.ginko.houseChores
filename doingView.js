@@ -4,7 +4,7 @@
 import { state, setCurrentSessionAggregate } from './state.js'
 import { completionAttemptIdFor, createExecution } from './executionData.js'
 import { taskFieldsBeforeUpdate } from './reopenLogic.js'
-import { listAllTasks, listTasksByIds, updateTask } from './taskData.js'
+import { listTasksByIds, updateTask } from './taskData.js'
 import { updateSession } from './sessionData.js'
 import { formatFactHtml, formatTimer } from './helpers.js'
 import { fitsLabel, remainingLine } from './doingLines.js'
@@ -20,6 +20,11 @@ import { createCompletionCoordinator } from './completionSaveLogic.js'
 import { prepareCompletionAttempt, retryCompletionForStage } from './doingCompletionLogic.js'
 import { localDateFromDate } from './scheduleLogic.js'
 import { categoryLocationStore } from './categoryLocationStore.js'
+import {
+  getActiveTasks,
+  refreshTaskCache,
+  subscribeTaskRefresh
+} from './tasksView.js'
 import { showView, setNavVisible } from './router.js'
 import { renderReviewLoadError, startReview } from './reviewView.js'
 import { sessionStore } from './sessionStore.js'
@@ -43,6 +48,7 @@ let pendingCompletionStage = null
 let pendingSessionRetry = null
 let boundDoingContent = null
 let boundWindow = null
+let taskRefreshSubscribed = false
 let continuationTasks = []
 let continuationTasksLoaded = false
 let continuationSessionId = null
@@ -62,11 +68,12 @@ const coordinatorHasPendingStage = () =>
 const sessionAcceptsAdditions = session =>
   ['active', 'paused'].includes(session?.status)
 
-const activeContinuationTask = task =>
-  task?.status === 'active' || task?.status === 'approved_recurring'
-
 export function initDoingView () {
   bindDoingContent()
+  if (!taskRefreshSubscribed) {
+    taskRefreshSubscribed = true
+    subscribeTaskRefresh(refreshContinuationTasksFromCache)
+  }
   if (typeof window !== 'undefined' && boundWindow !== window) {
     boundWindow = window
     window.addEventListener('focus', () => refreshDoing({
@@ -92,7 +99,7 @@ export function startDoing (aggregate) {
     session: state.currentSession,
     bundle: state.currentBundle,
     executions: state.currentExecutions
-  }, { reloadContinuationTasks: true })
+  }, { reloadCandidates: true })
 }
 
 export async function refreshDoing ({ allowNavigation = true } = {}) {
@@ -102,7 +109,7 @@ export async function refreshDoing ({ allowNavigation = true } = {}) {
   try {
     const aggregate = await sessionStore.refresh(state.currentSession._id, Date.now())
     pendingSessionRetry = null
-    await applyAggregate(aggregate, { allowNavigation, reloadContinuationTasks: true })
+    await applyAggregate(aggregate, { allowNavigation, reloadCandidates: true })
     return aggregate
   } catch (error) {
     renderSessionMutationFailure(
@@ -115,7 +122,7 @@ export async function refreshDoing ({ allowNavigation = true } = {}) {
 
 async function applyAggregate (aggregate, {
   allowNavigation = true,
-  reloadContinuationTasks = false
+  reloadCandidates = false
 } = {}) {
   const addPanelDraft = captureAddPanelDraft()
   if (continuationSessionId !== aggregate.session._id) {
@@ -150,7 +157,7 @@ async function applyAggregate (aggregate, {
   // belongs to the whole unfinished session rather than only its paused state.
   await openContinuePicker({
     draft: addPanelDraft,
-    reloadTasks: reloadContinuationTasks || !continuationTasksLoaded
+    reloadTasks: reloadCandidates || !continuationTasksLoaded
   })
 }
 
@@ -342,9 +349,16 @@ function renderContinuationTasksFailure (error) {
 }
 
 async function reloadContinuationTasks () {
-  const tasks = await listAllTasks()
-  continuationTasks = tasks.filter(activeContinuationTask)
+  continuationTasks = await refreshTaskCache()
   continuationTasksLoaded = true
+}
+
+function refreshContinuationTasksFromCache () {
+  continuationTasks = getActiveTasks()
+  continuationTasksLoaded = true
+  if (!sessionAcceptsAdditions(state.currentSession)) return
+  const draft = captureAddPanelDraft()
+  return openContinuePicker({ draft })
 }
 
 async function handleDoingClick (event) {
