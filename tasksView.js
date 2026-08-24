@@ -87,7 +87,9 @@ export function subscribeTaskRefresh (subscriber) {
 
 function announceTaskRefresh () {
   for (const subscriber of [...taskRefreshSubscribers]) {
-    try { subscriber() } catch { /* one screen must not block another */ }
+    try {
+      Promise.resolve(subscriber()).catch(() => {})
+    } catch { /* one screen must not block another */ }
   }
 }
 

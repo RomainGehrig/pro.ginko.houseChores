@@ -222,6 +222,29 @@ test('an overlay-aware cache refresh keeps a pending archive out of active chore
   assert.deepEqual(refreshed, [])
 })
 
+test('task refresh contains a subscriber rejected async result', async () => {
+  const active = {
+    _id: 'async-subscriber', name: 'Clean landing', status: 'active',
+    schedule: { type: 'one_off' }
+  }
+  await tasksView.refreshTaskCache({ readTasks: async () => [active] })
+  let asyncResultObserved = false
+  const unsubscribe = tasksView.subscribeTaskRefresh(() => ({
+    then (_resolve, reject) {
+      asyncResultObserved = true
+      reject(new Error('contained subscriber failure'))
+    }
+  }))
+
+  try {
+    tasksView.replaceCachedTask({ ...active, name: 'Clean the landing' })
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(asyncResultObserved, true)
+  } finally {
+    unsubscribe()
+  }
+})
+
 test('failed archive commit restores the exact cached record and reports factual status', async () => {
   const original = {
     _id: 'task-failure', name: 'Sweep cellar', status: 'approved_recurring',
