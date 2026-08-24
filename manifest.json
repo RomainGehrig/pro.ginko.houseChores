@@ -70,6 +70,14 @@
       "Description": "Node tests covering as-needed confirmation, deferral dates, and inspection-language summaries."
     },
     {
+      "path": "asNeededView.js",
+      "Description": "Pure markup for grouped condition-gated chores and their direct readiness actions."
+    },
+    {
+      "path": "asNeededView.test.js",
+      "Description": "Node tests covering grouped As needed markup, direct actions, and neutral inspection language."
+    },
+    {
       "path": "slip.js",
       "Description": "Pure due-group assignment and saturating ripeness ordering for chores."
     },
