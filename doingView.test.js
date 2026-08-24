@@ -1263,33 +1263,40 @@ test('an active tick leaves proposal controls stable while an attachment is in f
   }
 })
 
-test('a focused proposal stays in place until focus leaves it', async () => {
+test('a focused proposal keeps its matching label until focus leaves it', async () => {
   const original = { ...task('original-task'), estimatedDuration: 1 }
   const first = { ...task('suggested-2m'), estimatedDuration: 2 }
   const second = { ...task('suggested-3m'), estimatedDuration: 3 }
+  const third = { ...task('suggested-4m'), estimatedDuration: 4 }
+  const longest = { ...task('suggested-20m'), estimatedDuration: 20 }
   const session = {
     _id: 'focused-proposal-session', status: 'active', startTime: 10000,
-    taskBundle: ['original-task'], timeBudgetMinutes: 5,
+    taskBundle: ['original-task'], timeBudgetMinutes: 30,
     accumulatedActiveMs: 0, activeStartedAt: 10000,
     pausedAt: null, checkpointElapsedMs: 0, pendingAddition: null
   }
 
   await withDoingEnvironment({
     session,
-    persistedTasks: [original, first, second],
+    persistedTasks: [original, first, second, third, longest],
     bundle: [original]
   }, async ({ document, clock }) => {
-    const focused = document.suggestionControl('suggested-3m')
+    const focused = document.suggestionControl('suggested-20m')
     focused.focus()
-    clock.setNow(160000)
+    clock.setNow(31 * 60000 + 10000)
     clock.fireIntervals()
 
-    assert.equal(document.suggestionControl('suggested-3m'), focused)
+    assert.equal(document.suggestionControl('suggested-20m'), focused)
     assert.equal(document.activeElement, focused)
+    assert.equal(document.control('continueFits').textContent, "Fits what's left")
 
     document.activeElement = null
     clock.fireIntervals()
-    assert.equal(document.suggestionControl('suggested-3m'), null)
+    assert.equal(document.suggestionControl('suggested-20m'), null)
+    assert.equal(
+      document.control('continueFits').textContent,
+      'Shortest ones, if you want to keep going'
+    )
   })
 })
 

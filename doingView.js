@@ -217,20 +217,26 @@ function updateAddPanelTiming (elapsedMs, nowMs) {
     remaining.innerHTML = buildContinuationRemainingHtml(state.currentSession, elapsedMs)
   }
   const fits = document.getElementById('continueFits')
-  if (fits) fits.textContent = fitsLabel(remainingMs)
 
   const suggestionsContainer = document.getElementById('continueSuggestions')
-  if (!suggestionsContainer) return
+  if (!suggestionsContainer) {
+    if (fits) fits.textContent = fitsLabel(remainingMs)
+    return
+  }
   const suggestions = suggestContinuationTasks(
     continuationTasks,
     state.currentSession.taskBundle || [],
     remainingMs
   )
   const suggestionIds = suggestions.map(task => task._id).join('\n')
-  if (suggestionsContainer.dataset.suggestionIds === suggestionIds) return
+  if (suggestionsContainer.dataset.suggestionIds === suggestionIds) {
+    if (fits) fits.textContent = fitsLabel(remainingMs)
+    return
+  }
   const listAlreadyRendered = suggestionsContainer.dataset.suggestionIds !== undefined
   if (listAlreadyRendered && (sessionMutationInFlight ||
     document.activeElement?.dataset?.continuationSuggestionId)) return
+  if (fits) fits.textContent = fitsLabel(remainingMs)
   suggestionsContainer.innerHTML = buildContinuationSuggestionsHtml(suggestions)
   suggestionsContainer.dataset.suggestionIds = suggestionIds
   setSessionMutationControlsDisabled(sessionMutationInFlight)
