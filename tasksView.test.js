@@ -5,10 +5,65 @@ import {
   archiveTaskOptimistically,
   buildActiveTaskScheduleFields,
   buildApprovedTaskFields,
-  buildTaskReferenceFields
+  buildTaskReferenceFields,
+  getActiveTasks,
+  refreshTasksView
 } from './tasksView.js'
 import { LEGACY_CATEGORY_SELECTION } from './categoryLocationLogic.js'
 import { sessionPicks } from './sessionPicks.js'
+
+test('active-task cache and retained session picks exclude waiting as-needed chores', async () => {
+  const originalFreezr = globalThis.freezr
+  const originalDocument = globalThis.document
+  const retained = []
+  const originalRetain = sessionPicks.retain
+  const nodes = new Map()
+  const node = () => ({
+    hidden: false,
+    textContent: '',
+    innerHTML: '',
+    disabled: false,
+    setAttribute: () => {},
+    querySelector: () => null
+  })
+  globalThis.document = {
+    documentElement: { dataset: {} },
+    getElementById: id => {
+      if (id === 'sessionFloat') return null
+      if (!nodes.has(id)) nodes.set(id, node())
+      return nodes.get(id)
+    }
+  }
+  globalThis.freezr = {
+    query: async () => [
+      { _id: 'scheduled', status: 'active', taskMode: 'scheduled', readiness: null },
+      { _id: 'ready', status: 'approved_recurring', taskMode: 'as_needed', readiness: 'ready' },
+      { _id: 'waiting', status: 'active', taskMode: 'as_needed', readiness: 'waiting' },
+      { _id: 'archived', status: 'archived', taskMode: 'scheduled', readiness: null }
+    ]
+  }
+  sessionPicks.reset()
+  sessionPicks.set(['scheduled', 'ready', 'waiting', 'archived'])
+  sessionPicks.retain = ids => {
+    retained.push([...ids])
+    return originalRetain(ids)
+  }
+
+  try {
+    await refreshTasksView()
+
+    assert.deepEqual(getActiveTasks().map(task => task._id), ['scheduled', 'ready'])
+    assert.deepEqual(retained, [['scheduled', 'ready']])
+    assert.deepEqual(sessionPicks.getPickedIds(), ['scheduled', 'ready'])
+  } finally {
+    sessionPicks.retain = originalRetain
+    sessionPicks.reset()
+    if (originalFreezr === undefined) delete globalThis.freezr
+    else globalThis.freezr = originalFreezr
+    if (originalDocument === undefined) delete globalThis.document
+    else globalThis.document = originalDocument
+  }
+})
 
 test('approval writes the reviewed schedule and clears AI suggestions', () => {
   assert.deepEqual(buildApprovedTaskFields({}, {

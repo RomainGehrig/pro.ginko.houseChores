@@ -38,6 +38,7 @@ import { runArchiveAction } from './archiveView.js'
 import { sessionStore } from './sessionStore.js'
 import { sessionPicks } from './sessionPicks.js'
 import { bundleTotal, pickedBundle } from './pickingLogic.js'
+import { isTaskEligible } from './taskModeLogic.js'
 import {
   sessionAddActionLabel, sessionAddLanded, sessionAddNote, sessionAddTarget,
   sessionFloatModel, sessionMarks, sessionUnderWay
@@ -151,7 +152,7 @@ export async function refreshTasksView() {
   // the day it is restored. What the server holds is what counts here: an
   // archive still waiting on its undo keeps its pick, to give back with the
   // chore if the undo comes.
-  sessionPicks.retain(fetched.filter(stillOnTheList).map(task => task._id))
+  sessionPicks.retain(fetched.filter(availableLiveTask).map(task => task._id))
   renderTasks()
 }
 
@@ -233,11 +234,13 @@ function restoreTaskEditorDrafts (drafts) {
   }
 }
 
-const stillOnTheList = task =>
+const liveTask = task =>
   task.status === 'active' || task.status === 'approved_recurring'
 
+const availableLiveTask = task => liveTask(task) && isTaskEligible(task)
+
 export function getActiveTasks() {
-  return tasksCache.filter(stillOnTheList)
+  return tasksCache.filter(availableLiveTask)
 }
 
 export function archiveTaskOptimistically (task, {

@@ -267,6 +267,33 @@ test('hydrate makes archived bundle tasks unavailable but keeps proposed Quick-a
   assert.equal(aggregate.bundle[1].unavailable, undefined)
 })
 
+test('refresh keeps a newly waiting persisted bundle task in place as unavailable', async () => {
+  const session = {
+    _id: 's1', status: 'active', startTime: 1000,
+    taskBundle: ['scheduled', 'waiting'], accumulatedActiveMs: 0,
+    activeStartedAt: 1000, checkpointElapsedMs: 0
+  }
+  const store = createSessionStore({
+    getSession: async () => structuredClone(session),
+    listExecutions: async () => [],
+    listTasks: async () => [{
+      _id: 'scheduled', name: 'Sweep porch', status: 'active'
+    }, {
+      _id: 'waiting', name: 'Check rain barrel', status: 'active',
+      taskMode: 'as_needed', readiness: 'waiting'
+    }],
+    updateSessionRecord: async () => {}
+  })
+
+  const aggregate = await store.refresh('s1', 5000)
+
+  assert.deepEqual(aggregate.bundle.map(task => task._id), ['scheduled', 'waiting'])
+  assert.deepEqual(aggregate.bundle[1], {
+    _id: 'waiting', name: 'Check rain barrel', status: 'active',
+    taskMode: 'as_needed', readiness: 'waiting', unavailable: true
+  })
+})
+
 test('restore repairs a final execution into paused state', async () => {
   const updates = []
   const session = {
@@ -503,6 +530,28 @@ test('attaching a searched task ignores the exhausted budget and deduplicates ID
   assert.deepEqual(aggregate.session.taskBundle, ['t1', 'searched-30m'])
   assert.equal(aggregate.bundle[1].estimatedDuration, 30)
   assert.equal(aggregate.session.status, 'paused')
+})
+
+test('attaching tasks excludes waiting as-needed chores while keeping eligible requests', async () => {
+  let session = {
+    _id: 's1', status: 'paused', startTime: 1000, taskBundle: [],
+    accumulatedActiveMs: 0, activeStartedAt: null, checkpointElapsedMs: 0, pausedAt: 1000
+  }
+  const tasks = new Map([
+    ['scheduled', { _id: 'scheduled', name: 'Sweep porch', status: 'active' }],
+    ['ready', { _id: 'ready', name: 'Check rain barrel', status: 'active', taskMode: 'as_needed', readiness: 'ready' }],
+    ['waiting', { _id: 'waiting', name: 'Close shutters', status: 'active', taskMode: 'as_needed', readiness: 'waiting' }]
+  ])
+  const store = createSessionStore({
+    getSession: async () => structuredClone(session),
+    listExecutions: async () => [],
+    listTasks: async ids => ids.map(id => tasks.get(id)).filter(Boolean),
+    updateSessionRecord: async (id, fields) => { session = { ...session, ...fields } }
+  })
+
+  const aggregate = await store.attachTasks('s1', ['scheduled', 'ready', 'waiting'])
+
+  assert.deepEqual(aggregate.session.taskBundle, ['scheduled', 'ready'])
 })
 
 test('attaching a searched task revalidates that it is still active before writing', async () => {

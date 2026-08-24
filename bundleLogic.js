@@ -1,3 +1,5 @@
+import { isTaskEligible } from './taskModeLogic.js'
+
 export function prioritizeTasks(tasks) {
   return [...tasks].sort((a, b) => {
     if (!a.scheduledDate && !b.scheduledDate) return 0
@@ -13,11 +15,12 @@ export function prioritizeTasks(tasks) {
 // around it. Once the budget is spent nothing more is added, but nothing that
 // was there is ever taken away.
 export function buildBundle(tasks, budgetMinutes, categoryFilterId, keptIds = []) {
-  const byId = new Map(tasks.map(task => [task._id, task]))
+  const available = (tasks || []).filter(isTaskEligible)
+  const byId = new Map(available.map(task => [task._id, task]))
   const kept = (keptIds || []).map(id => byId.get(id)).filter(Boolean)
   const keptIdSet = new Set(kept.map(task => task._id))
 
-  const eligible = tasks.filter(t => {
+  const eligible = available.filter(t => {
     if (keptIdSet.has(t._id)) return false
     if (categoryFilterId && t.categoryId !== categoryFilterId) return false
     return t.estimatedDuration && t.estimatedDuration > 0
@@ -66,7 +69,8 @@ export function buildSessionDraft (proposal, startTime) {
 }
 
 export function findFillerTask(tasks, excludeIds, remainingMinutes, categoryFilterId) {
-  const eligible = tasks.filter(t =>
+  const available = (tasks || []).filter(isTaskEligible)
+  const eligible = available.filter(t =>
     !excludeIds.includes(t._id) &&
     (!categoryFilterId || t.categoryId === categoryFilterId) &&
     t.estimatedDuration && t.estimatedDuration <= remainingMinutes

@@ -2,8 +2,11 @@
 // ABOUTME: Limits suggestions while leaving deliberate search unrestricted.
 
 import { prioritizeTasks } from './bundleLogic.js'
+import { isTaskEligible } from './taskModeLogic.js'
 
-const active = task => task.status === 'active' || task.status === 'approved_recurring'
+const active = task =>
+  (task.status === 'active' || task.status === 'approved_recurring') &&
+  isTaskEligible(task)
 const estimateMs = task => Math.max(0, Number(task?.estimatedDuration || 0)) * 60000
 
 export function normalizeContinuationSuggestionEntries (value) {

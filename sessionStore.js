@@ -7,6 +7,7 @@ import { createTaskWithId, listTasksByIds, updateTask } from './taskData.js'
 import { buildSessionDraft } from './bundleLogic.js'
 import { normalizeContinuationSuggestionEntries } from './continuationLogic.js'
 import { reopenPlan } from './reopenLogic.js'
+import { isTaskEligible } from './taskModeLogic.js'
 import {
   chooseCurrentSession,
   conclusionFields,
@@ -19,7 +20,9 @@ import {
 
 const unavailableTask = id => ({ _id: id, name: 'Unavailable task', unavailable: true })
 const terminal = session => session.status === 'completed' || session.status === 'interrupted'
-const attachableTask = task => task?.status === 'active' || task?.status === 'approved_recurring'
+const attachableTask = task =>
+  (task?.status === 'active' || task?.status === 'approved_recurring') &&
+  isTaskEligible(task)
 const usableBundledTask = task => attachableTask(task) ||
   task?.status === 'proposed' || task?.status === 'draft'
 
@@ -228,24 +231,28 @@ export function createSessionStore ({
     if (!openToAdditions) return aggregate
     const requestedIds = [...new Set(taskIds || [])]
     const requestedTasks = await listTasks(requestedIds)
+    const requestedById = new Map(requestedTasks.map(task => [task._id, task]))
     if (requestedTasks.length !== requestedIds.length ||
-      requestedTasks.some(task => !attachableTask(task))) {
+      requestedTasks.some(task => !attachableTask(task) && isTaskEligible(task))) {
       throw new Error(suggestionTaskIds
         ? 'That task is no longer available as a suggestion.'
         : 'That task is no longer available.')
     }
+    const attachableIds = requestedIds.filter(id => attachableTask(requestedById.get(id)))
+    const attachableTasks = attachableIds.map(id => requestedById.get(id))
+    if (!attachableIds.length) return aggregate
     const taskBundle = [...new Set([
       ...(aggregate.session.taskBundle || []),
-      ...requestedIds
+      ...attachableIds
     ])]
     if (suggestionTaskIds !== null) {
       const existingEntries = normalizeContinuationSuggestionEntries(
         aggregate.session.continuationSuggestionEntries
       )
       const entryIds = new Set(existingEntries.map(entry => entry.taskId))
-      const candidateTasks = requestedTasks.filter(task => !entryIds.has(task._id))
+      const candidateTasks = attachableTasks.filter(task => !entryIds.has(task._id))
       const requestedSuggestionIds = new Set(suggestionTaskIds || [])
-      if (requestedIds.some(id => !requestedSuggestionIds.has(id)) ||
+      if (attachableIds.some(id => !requestedSuggestionIds.has(id)) ||
         candidateTasks.some(task => !(Number(task.estimatedDuration) > 0))) {
         throw new Error('That task is no longer available as a suggestion.')
       }
