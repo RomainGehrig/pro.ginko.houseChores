@@ -1462,6 +1462,58 @@ test('as-needed chore lifecycle stays aligned across As needed, Chores, and Quic
   ])
 })
 
+test('as-needed one-off date draft and focus survive a task refresh repaint', async () => {
+  const result = await runBrowserScenario({
+    viewport: { width: 390, height: 800 },
+    mediaFeatures: [{ name: 'prefers-reduced-motion', value: 'reduce' }],
+    body: applicationMarkup,
+    script: `
+      const consoleErrors = []
+      console.error = (...values) => consoleErrors.push(values.map(String).join(' '))
+      const task = {
+        _id: 'filter', name: 'Order replacement filter', status: 'active',
+        taskMode: 'as_needed', readiness: 'waiting', categoryId: null, locationIds: [],
+        estimatedDuration: 10, scheduledDate: null, schedule: { type: 'one_off' },
+        lastCompletedDate: null
+      }
+      globalThis.freezr = {
+        query: async collection => collection === 'tasks' ? [structuredClone(task)] : [],
+        create: async () => ({}),
+        updateFields: async () => ({})
+      }
+
+      const { categoryLocationStore } = await import(applicationUrl + 'categoryLocationStore.js')
+      const { initTasksView, refreshTasksView } = await import(applicationUrl + 'tasksView.js')
+      await categoryLocationStore.initialize()
+      await initTasksView({ now: () => new Date(2030, 0, 7, 12, 0, 0).getTime() })
+      document.getElementById('view-today').style.display = 'none'
+      document.getElementById('view-as-needed').style.display = 'block'
+
+      document.querySelector(
+        '#asNeededCards [data-id="filter"] .as-needed-later').click()
+      let date = document.querySelector(
+        '#asNeededCards [data-id="filter"] .as-needed-date')
+      date.value = '2030-02-03'
+      date.dispatchEvent(new Event('input', { bubbles: true }))
+      date.focus()
+
+      await refreshTasksView()
+      date = document.querySelector('#asNeededCards [data-id="filter"] .as-needed-date')
+      const result = {
+        consoleErrors,
+        value: date?.value,
+        focusedClass: document.activeElement?.className,
+        focusedTaskId: document.activeElement?.dataset?.id
+      }
+    `
+  })
+
+  assert.deepEqual(result.consoleErrors, [])
+  assert.equal(result.value, '2030-02-03')
+  assert.match(result.focusedClass, /as-needed-date/, JSON.stringify(result))
+  assert.equal(result.focusedTaskId, 'filter')
+})
+
 test('waiting publications remove existing Quick picks after readiness and editor conversion', async () => {
   const result = await runBrowserScenario({
     viewport: { width: 390, height: 800 },

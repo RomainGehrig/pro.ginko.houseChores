@@ -132,6 +132,7 @@ export async function initTasksView({
     renderLedger()
   })
   document.getElementById('asNeededCards')?.addEventListener('click', handleAsNeededClick)
+  document.getElementById('asNeededCards')?.addEventListener('input', handleAsNeededInput)
   document.getElementById('asNeededCategoryFilter')?.addEventListener('click', handleAsNeededCategoryClick)
   document.getElementById('asNeededSearch')?.addEventListener('input', event => {
     asNeededState.query = event.target.value
@@ -434,9 +435,33 @@ function currentAsNeededState (snapshot) {
   }
 }
 
+function rememberAsNeededFocus (container) {
+  const active = document.activeElement
+  if (!active || typeof container.contains !== 'function' || !container.contains(active)) return null
+  const row = active.closest?.('.as-needed-row')
+  const taskId = active.dataset?.id || row?.dataset?.id
+  if (!taskId) return null
+  const controlClass = [...(active.classList || [])]
+    .find(name => name.startsWith('as-needed-')) || null
+  return { taskId, controlClass }
+}
+
+function restoreAsNeededFocus (container, focusKey) {
+  if (!focusKey || typeof container.querySelectorAll !== 'function') return
+  const row = [...container.querySelectorAll('.as-needed-row')]
+    .find(item => item.dataset?.id === focusKey.taskId)
+  const preferred = focusKey.controlClass
+    ? row?.querySelector?.('.' + focusKey.controlClass)
+    : null
+  const target = preferred || row?.querySelector?.('.as-needed-edit') ||
+    document.querySelector?.('#view-as-needed .route-heading')
+  target?.focus?.()
+}
+
 function renderAsNeeded (snapshot = categoryLocationStore.getSnapshot()) {
   const container = document.getElementById('asNeededCards')
   if (!container) return
+  const focusKey = rememberAsNeededFocus(container)
 
   const tasks = getAsNeededTasks()
   const state = currentAsNeededState(snapshot)
@@ -451,6 +476,7 @@ function renderAsNeeded (snapshot = categoryLocationStore.getSnapshot()) {
   }
   container.innerHTML = asNeededScreenHtml(
     tasks, snapshot, localDateFromDate(new Date(tasksViewNow())), state)
+  restoreAsNeededFocus(container, focusKey)
 }
 
 export function archiveTaskOptimistically (task, {
@@ -1257,6 +1283,13 @@ function showAsNeededDateFailure (saveButton) {
     prompt.appendChild(status)
   }
   status.textContent = 'Choose a valid date.'
+}
+
+function handleAsNeededInput (evt) {
+  const input = evt.target.closest?.('.as-needed-date')
+  if (!input || asNeededState.datePrompt?.taskId !== input.dataset.id ||
+    asNeededState.datePrompt?.action !== input.dataset.action) return
+  asNeededState.datePrompt = { ...asNeededState.datePrompt, value: input.value }
 }
 
 async function handleAsNeededClick (evt) {

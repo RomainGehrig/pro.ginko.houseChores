@@ -64,3 +64,24 @@ test('one-off date continuation identifies its action and names the chore', () =
   assert.match(markup, /class="as-needed-date-save" data-id="once" data-action="later"[^>]*>Save date</)
   assert.match(markup, /class="as-needed-date-cancel" data-id="once"[^>]*>Cancel</)
 })
+
+test('one-off date continuation re-emits the date being entered across repaints', () => {
+  const markup = asNeededScreenHtml([
+    task({ _id: 'once', name: 'Order filter', schedule: { type: 'one_off' } })
+  ], SNAPSHOT, TODAY, {
+    datePrompt: { taskId: 'once', action: 'later', value: '2026-09-02' }
+  })
+
+  assert.match(markup, /class="as-needed-date"[^>]*value="2026-09-02"/)
+})
+
+test('as-needed empty state distinguishes no chores from no filter matches', () => {
+  const none = asNeededScreenHtml([], SNAPSHOT, TODAY, {})
+  const filtered = asNeededScreenHtml([task()], SNAPSHOT, TODAY, {
+    filter: { query: 'does not match' }
+  })
+
+  assert.match(none, /No as-needed chores yet\./)
+  assert.doesNotMatch(none, /matches this filter/)
+  assert.match(filtered, /No as-needed chore matches this filter\./)
+})

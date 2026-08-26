@@ -13,7 +13,7 @@ export function asNeededCategoryPillsHtml (categories, state = {}) {
   return ledgerCategoryPillsHtml(categories, selectedCategoryId(categories, state.filter))
 }
 
-function dateContinuationHtml (task, action) {
+function dateContinuationHtml (task, action, value = '') {
   const id = String(task?._id || '')
   const inputId = 'as-needed-date-' + id
 
@@ -21,7 +21,8 @@ function dateContinuationHtml (task, action) {
     '<label for="' + escapeAttribute(inputId) + '">Choose a new check date for ' +
       escapeHtml(String(task?.name ?? '')) +
       '<input id="' + escapeAttribute(inputId) + '" type="date" class="as-needed-date" data-id="' +
-      escapeAttribute(id) + '" data-action="' + escapeAttribute(action) + '"></label>' +
+      escapeAttribute(id) + '" data-action="' + escapeAttribute(action) + '" value="' +
+      escapeAttribute(value) + '"></label>' +
     '<button type="button" class="as-needed-date-save" data-id="' +
       escapeAttribute(id) + '" data-action="' + escapeAttribute(action) + '">Save date</button>' +
     '<button type="button" class="as-needed-date-cancel" data-id="' +
@@ -35,7 +36,7 @@ function actionHtml (task, state) {
     const confirming = state.confirmingDoneId === task._id
     const prompt = state.datePrompt?.taskId === task._id &&
       state.datePrompt?.action === 'not-ready' && task?.schedule?.type === 'one_off'
-      ? dateContinuationHtml(task, 'not-ready')
+      ? dateContinuationHtml(task, 'not-ready', state.datePrompt?.value)
       : ''
     return '<div class="as-needed-actions">' +
       '<button type="button" class="as-needed-not-ready" data-id="' +
@@ -49,7 +50,7 @@ function actionHtml (task, state) {
 
   const prompt = state.datePrompt?.taskId === task._id &&
     state.datePrompt?.action === 'later' && task?.schedule?.type === 'one_off'
-    ? dateContinuationHtml(task, 'later')
+    ? dateContinuationHtml(task, 'later', state.datePrompt?.value)
     : ''
   return '<div class="as-needed-actions">' +
     '<button type="button" class="as-needed-ready" data-id="' +
@@ -76,7 +77,9 @@ export function asNeededScreenHtml (tasks, snapshot, today, state = {}) {
   )
   if (!groups.length) {
     return '<div class="card ledger-empty"><p class="display ledger-empty-title">Nothing to check</p>' +
-      '<p class="muted">No as-needed chore matches this filter.</p></div>'
+      '<p class="muted">' + ((tasks || []).length
+        ? 'No as-needed chore matches this filter.'
+        : 'No as-needed chores yet.') + '</p></div>'
   }
 
   return groups.map(group =>
