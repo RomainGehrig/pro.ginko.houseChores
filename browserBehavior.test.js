@@ -1201,7 +1201,7 @@ test('As needed route renders its ledger shell and the Chores Setup link opens S
   })
 })
 
-test('As needed editor omits waiting session promises and returns feedback to its origin', async () => {
+test('As needed editor offers readiness instead of a waiting session promise', async () => {
   const result = await runBrowserScenario({
     viewport: { width: 390, height: 800 },
     mediaFeatures: [
@@ -1237,11 +1237,13 @@ test('As needed editor omits waiting session promises and returns feedback to it
       globalThis.freezr = {
         query: async collection => clone(records[collection] || []),
         create: async () => ({}),
-        updateFields: async (_collection, _id, fields) => {
+        updateFields: async (collection, id, fields) => {
           if (rejectCompletion && Object.hasOwn(fields, 'lastCompletedDate')) {
             throw new Error('write offline')
           }
-          return {}
+          const record = records[collection].find(item => item._id === id)
+          Object.assign(record, clone(fields))
+          return clone(record)
         }
       }
 
@@ -1266,7 +1268,14 @@ test('As needed editor omits waiting session promises and returns feedback to it
       }
 
       const waitingLabels = await open('waiting')
-      await closeWith('#bottomSheetActions button')
+      await closeWith('#bottomSheetHeadAction .ready-btn')
+      const waitingAfterReady = {
+        readiness: records.tasks[0].readiness,
+        plannedDate: records.tasks[0].scheduledDate,
+        group: document.querySelector('#asNeededCards [data-id="waiting"]')
+          ?.closest('.as-needed-group')?.querySelector('.ledger-eyebrow span')?.textContent,
+        chores: Boolean(document.querySelector('#activeCards [data-id="waiting"]'))
+      }
 
       const readyLabels = await open('ready')
       await closeWith('#bottomSheetHeadAction .session-btn')
@@ -1285,7 +1294,10 @@ test('As needed editor omits waiting session promises and returns feedback to it
         chores: document.getElementById('choresStatus').textContent
       }
 
-      const result = { consoleErrors, waitingLabels, readyLabels, sessionFeedback, failureFeedback }
+      const result = {
+        consoleErrors, waitingLabels, waitingAfterReady, readyLabels,
+        sessionFeedback, failureFeedback
+      }
     `
   })
 
@@ -1298,7 +1310,13 @@ test('As needed editor omits waiting session promises and returns feedback to it
     /Couldn't record that\. The chore is unchanged\. Reason: write offline\./)
   assert.equal(result.failureFeedback.asNeededRole, 'alert')
   assert.equal(result.failureFeedback.chores, '')
-  assert.deepEqual(result.waitingLabels, ['Mark as done'])
+  assert.deepEqual(result.waitingLabels, ['Mark as done', 'Mark ready'])
+  assert.deepEqual(result.waitingAfterReady, {
+    readiness: 'ready',
+    plannedDate: '2026-08-20',
+    group: 'Ready',
+    chores: true
+  })
   assert.deepEqual(result.readyLabels, ['Mark as done', 'Add to session'])
 })
 

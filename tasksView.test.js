@@ -380,6 +380,7 @@ test('As needed uses the shared editor without offering waiting work or losing o
     assert.equal(node('asNeededStatus').dataset.state, 'error')
     assert.equal(node('choresStatus').textContent, '')
     assert.doesNotMatch(waitingHeaderActions, /session-btn|Add to session/)
+    assert.match(waitingHeaderActions, /class="btn btn-quiet ready-btn"[^>]*>Mark ready</)
   } finally {
     sessionPicks.reset()
     if (originalFreezr === undefined) delete globalThis.freezr
@@ -1638,9 +1639,9 @@ test('the inbox and chores eyebrows count without judging', () => {
   assert.equal(tasksView.buildInboxCountLine(1), 'Capture · 1 waiting')
   assert.equal(tasksView.buildInboxCountLine(4), 'Capture · 4 waiting')
 
-  assert.equal(tasksView.buildChoresCountLine(0), 'Chores · none yet')
-  assert.equal(tasksView.buildChoresCountLine(1), 'Chores · 1 active')
-  assert.equal(tasksView.buildChoresCountLine(9), 'Chores · 9 active')
+  assert.equal(tasksView.buildChoresCountLine(0), 'Chores · none available')
+  assert.equal(tasksView.buildChoresCountLine(1), 'Chores · 1 available')
+  assert.equal(tasksView.buildChoresCountLine(9), 'Chores · 9 available')
 })
 
 test('the suggestion control is absent, not refusing, when suggestions are off', () => {

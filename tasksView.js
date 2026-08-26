@@ -594,8 +594,8 @@ export function buildInboxCountLine (proposedCount) {
 }
 
 export function buildChoresCountLine (activeCount) {
-  if (activeCount === 0) return 'Chores · none yet'
-  return 'Chores · ' + activeCount + ' active'
+  if (activeCount === 0) return 'Chores · none available'
+  return 'Chores · ' + activeCount + ' available'
 }
 
 export function renderInboxNavigation (
@@ -1181,9 +1181,12 @@ async function openChoreEditor (id, origin = 'chores') {
   const sessionAction = isTaskEligible(task)
     ? choreSessionButtonHtml(sessionAddActionLabel(target, sessionPicks.isPicked(id)))
     : ''
+  const readinessAction = !isTaskEligible(task) && isAsNeededTask(task)
+    ? '<button type="button" class="btn btn-quiet ready-btn">Mark ready</button>'
+    : ''
   const choice = await openSheet({
     title: 'Edit chore',
-    headerActionHtml: choreDoneButtonHtml() + sessionAction,
+    headerActionHtml: choreDoneButtonHtml() + sessionAction + readinessAction,
     bodyHtml: editModalHtml(task, snapshot),
     actions: [
       { label: 'Cancel', value: null, className: 'btn btn-ghost' },
@@ -1194,6 +1197,9 @@ async function openChoreEditor (id, origin = 'chores') {
   ledger.openTaskId = null
   const body = sheetBody()
   if (choice === 'session') return addChoreToSession(task, target, origin)
+  if (choice === 'ready') {
+    return updateAsNeededTaskOptimistically(task, () => markReadyFields())
+  }
   if (choice === 'done') {
     const result = await markChoreRecentlyDone(task)
     if (!result.ok) {
@@ -1247,6 +1253,7 @@ function handleEditorClick (evt) {
     if (!armOrConfirmDone(done)) return
     return closeSheetWith('done')
   }
+  if (evt.target.closest('.ready-btn')) return closeSheetWith('ready')
   if (evt.target.closest('.session-btn')) return closeSheetWith('session')
   if (evt.target.closest('.archive-btn')) return closeSheetWith('archive')
 

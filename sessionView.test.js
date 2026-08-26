@@ -230,6 +230,16 @@ test('a stale waiting chore stays unavailable when its running-session attachmen
   ])
 })
 
+test('a stale Quick rejection offers the As needed screen as its recovery control', () => {
+  assert.deepEqual(sessionView.quickSessionPlacementModel(
+    { name: 'Check rain barrel' },
+    { target: 'unavailable', added: false }
+  ), {
+    message: 'Check rain barrel is waiting for its condition.',
+    recovery: { href: '#/as-needed', label: 'Open As needed' }
+  })
+})
+
 test('a failed Quick Session completion is stated inline without changing the chore', () => {
   const status = statusElement()
 

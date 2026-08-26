@@ -322,13 +322,30 @@ export async function addQuickChoreToSession (task, target, {
   return { target: 'running', added: true, aggregate }
 }
 
+export function quickSessionPlacementModel (task, placement) {
+  return {
+    message: sessionAddNote({
+      name: task.name,
+      target: placement.target,
+      added: placement.added
+    }),
+    ...(placement.target === 'unavailable'
+      ? { recovery: { href: '#/as-needed', label: 'Open As needed' } }
+      : {})
+  }
+}
+
 function showQuickSessionPlacement (task, placement) {
   const status = element('sessionStatus')
-  status.textContent = sessionAddNote({
-    name: task.name,
-    target: placement.target,
-    added: placement.added
-  })
+  const model = quickSessionPlacementModel(task, placement)
+  status.textContent = model.message
+  if (model.recovery) {
+    const link = document.createElement('a')
+    link.className = 'ledger-setup-link'
+    link.href = model.recovery.href
+    link.textContent = model.recovery.label
+    status.append(' ', link)
+  }
   status.setAttribute('role', 'status')
   status.setAttribute('data-state', 'info')
 }
