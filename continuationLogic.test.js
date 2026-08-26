@@ -25,6 +25,21 @@ test('suggestions are active, unused, prioritized, and fit remaining time', () =
   )
 })
 
+test('past the session budget suggestions become the three shortest eligible chores', () => {
+  const waiting = [
+    { _id: 'long', status: 'active', estimatedDuration: 9, scheduledDate: '2026-07-01' },
+    { _id: 'two-later', status: 'active', estimatedDuration: 2, scheduledDate: '2026-08-03' },
+    { _id: 'one', status: 'active', estimatedDuration: 1, scheduledDate: '2026-08-04' },
+    { _id: 'two-earlier', status: 'active', estimatedDuration: 2, scheduledDate: '2026-08-01' },
+    { _id: 'used', status: 'active', estimatedDuration: 1, scheduledDate: '2026-06-01' }
+  ]
+
+  assert.deepEqual(
+    suggestContinuationTasks(waiting, ['used'], 0).map(task => task._id),
+    ['one', 'two-earlier', 'two-later']
+  )
+})
+
 test('search ignores budget but excludes drafts and attached tasks', () => {
   assert.deepEqual(
     searchContinuationTasks(tasks, 'garage', ['used']).map(task => task._id),

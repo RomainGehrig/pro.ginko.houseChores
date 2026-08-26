@@ -95,7 +95,7 @@ export function createSessionStore ({
 
   async function hydrate (session, nowMs) {
     let repaired = { ...session }
-    if (repaired.status === 'paused' && repaired.pendingAddition) {
+    if (!terminal(repaired) && repaired.pendingAddition) {
       repaired = await recoverPendingAddition(repaired)
     }
 
@@ -237,17 +237,13 @@ export function createSessionStore ({
     return { ...aggregate, session: { ...aggregate.session, ...fields } }
   }
 
-  // whileRunning is for a chore handed over from outside the session — from the
-  // ledger — where the user's intent is the whole of the request and the session
-  // under way is plainly what they meant. The continuation panel does not pass
-  // it: that panel only exists at a pause, so an active session there means the
-  // client's view is stale and the add must not be written.
-  async function attachTasks (
-    sessionId, taskIds, { suggestionTaskIds = null, whileRunning = false } = {}
-  ) {
+  // A searched or hand-picked chore is the user's intent, so it can join any
+  // unfinished session without changing the session clock. The suggestion
+  // ledger remains a per-pause proposal and keeps its narrower authority.
+  async function attachTasks (sessionId, taskIds, { suggestionTaskIds = null } = {}) {
     const atMs = now()
     const aggregate = await refresh(sessionId, atMs)
-    const openToAdditions = whileRunning && suggestionTaskIds === null
+    const openToAdditions = suggestionTaskIds === null
       ? !terminal(aggregate.session)
       : aggregate.session.status === 'paused'
     if (!openToAdditions) return aggregate
@@ -312,7 +308,7 @@ export function createSessionStore ({
     if (!name) throw new Error('Enter a task title.')
     const session = await getSession(sessionId)
     if (!session) throw new Error('The current session is no longer available.')
-    const recoveringPendingAddition = session.status === 'paused'
+    const recoveringPendingAddition = !terminal(session)
       ? session.pendingAddition
       : null
     const suppliedIntent = retryIntent?.taskId &&
@@ -347,8 +343,7 @@ export function createSessionStore ({
       }
       throw failure
     }
-    if (aggregate.session.status !== 'paused') return aggregate
-    if (recoveringRetry) return aggregate
+    if (terminal(aggregate.session) || recoveringRetry) return aggregate
 
     const pending = requestedIntent
     try {

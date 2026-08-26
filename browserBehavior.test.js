@@ -4447,6 +4447,137 @@ test('a chore added to a session that has just finished goes to the next one ins
   assert.equal(result.sheetClosed, true)
 })
 
+test('an active session accepts every add path across a focus refresh without stopping its clock', async () => {
+  const result = await runBrowserScenario({
+    body: applicationMarkup,
+    script: `
+      const startedAt = Date.now() - 60000
+      const records = {
+        categories: [],
+        locations: [],
+        taskExecutions: [],
+        sessions: [{
+          _id: 'active-add-session', status: 'active', startTime: startedAt,
+          taskBundle: ['task-original'], timeBudgetMinutes: 15,
+          accumulatedActiveMs: 0, activeStartedAt: startedAt,
+          pausedAt: null, checkpointElapsedMs: 0, pendingAddition: null
+        }],
+        tasks: [{
+          _id: 'task-original', name: 'Original task', status: 'active',
+          categoryId: null, locationIds: [], estimatedDuration: 1,
+          scheduledDate: '2026-08-01', schedule: { type: 'one_off' }
+        }, {
+          _id: 'task-suggested', name: 'Clean sink', status: 'active',
+          categoryId: null, locationIds: [], estimatedDuration: 2,
+          scheduledDate: '2026-08-02', schedule: { type: 'one_off' }
+        }, {
+          _id: 'task-searched', name: 'Clean garage', status: 'active',
+          categoryId: null, locationIds: [], estimatedDuration: 30,
+          scheduledDate: '2026-08-03', schedule: { type: 'one_off' }
+        }]
+      }
+      const clone = value => structuredClone(value)
+      const collectionRecord = (collection, id) =>
+        records[collection].find(record => record._id === id)
+      window.freezr = {
+        query: async collection => clone(records[collection] || []),
+        create: async (collection, data, options = {}) => {
+          const record = {
+            _id: options.data_object_id || collection + '-' + (records[collection].length + 1),
+            ...clone(data)
+          }
+          records[collection].push(record)
+          return clone(record)
+        },
+        update: async (collection, id, fields) => {
+          Object.assign(collectionRecord(collection, id), clone(fields))
+          return { _id: id, ...clone(fields) }
+        },
+        updateFields: async (collection, id, fields) => {
+          Object.assign(collectionRecord(collection, id), clone(fields))
+          return { _id: id, ...clone(fields) }
+        }
+      }
+      const waitFor = async predicate => {
+        for (let attempt = 0; attempt < 100; attempt++) {
+          if (predicate()) return
+          await new Promise(resolve => setTimeout(resolve, 10))
+        }
+        throw new Error('Timed out waiting for the active-session add path')
+      }
+
+      const { refreshDoing, startDoing } = await import(applicationUrl + 'doingView.js')
+      const session = clone(records.sessions[0])
+      await startDoing({
+        session,
+        bundle: [clone(records.tasks[0])],
+        executions: []
+      })
+      document.getElementById('view-doing').style.display = 'block'
+
+      const firstSearch = document.getElementById('continueSearchInput')
+      firstSearch.value = 'garage'
+      firstSearch.dispatchEvent(new Event('input', { bubbles: true }))
+      firstSearch.focus()
+      firstSearch.setSelectionRange(2, 5)
+      await refreshDoing()
+
+      const restoredSearch = document.getElementById('continueSearchInput')
+      const preserved = {
+        value: restoredSearch.value,
+        focused: document.activeElement === restoredSearch,
+        selectionStart: restoredSearch.selectionStart,
+        selectionEnd: restoredSearch.selectionEnd
+      }
+
+      const suggestion = document.querySelector(
+        '[data-continuation-suggestion-id="task-suggested"]')
+      suggestion.checked = true
+      suggestion.dispatchEvent(new Event('change', { bubbles: true }))
+      await waitFor(() => records.sessions[0].taskBundle.includes('task-suggested'))
+
+      const searchAfterSuggestion = document.getElementById('continueSearchInput')
+      searchAfterSuggestion.value = 'garage'
+      searchAfterSuggestion.dispatchEvent(new Event('input', { bubbles: true }))
+      document.querySelector('[data-continuation-search-id="task-searched"]').click()
+      await waitFor(() => records.sessions[0].taskBundle.includes('task-searched'))
+
+      const quickSearch = document.getElementById('continueSearchInput')
+      quickSearch.value = 'Replace hallway bulb'
+      quickSearch.dispatchEvent(new Event('input', { bubbles: true }))
+      document.getElementById('continueQuickAddBtn').click()
+      await waitFor(() => records.sessions[0].taskBundle.length === 4)
+
+      const quickTaskId = records.sessions[0].taskBundle.find(id =>
+        !['task-original', 'task-suggested', 'task-searched'].includes(id))
+      const result = {
+        preserved,
+        bundle: records.sessions[0].taskBundle,
+        quickTaskName: collectionRecord('tasks', quickTaskId).name,
+        status: records.sessions[0].status,
+        accumulatedActiveMs: records.sessions[0].accumulatedActiveMs,
+        activeStartedAt: records.sessions[0].activeStartedAt,
+        startedAt
+      }
+    `
+  })
+
+  assert.deepEqual(result.preserved, {
+    value: 'garage',
+    focused: true,
+    selectionStart: 2,
+    selectionEnd: 5
+  })
+  assert.deepEqual(result.bundle.slice(0, 3), [
+    'task-original', 'task-suggested', 'task-searched'
+  ])
+  assert.equal(result.bundle.length, 4)
+  assert.equal(result.quickTaskName, 'Replace hallway bulb')
+  assert.equal(result.status, 'active')
+  assert.equal(result.accumulatedActiveMs, 0)
+  assert.equal(result.activeStartedAt, result.startedAt)
+})
+
 // A chore can be put in a session before anyone has estimated it. The vessel
 // draws time, and those chores contribute none — but they are in the session,
 // and a session you cannot see the contents of is a session that lost them.

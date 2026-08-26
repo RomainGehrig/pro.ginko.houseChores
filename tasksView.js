@@ -100,7 +100,9 @@ export function subscribeTaskRefresh (subscriber) {
 
 function announceTaskRefresh () {
   for (const subscriber of [...taskRefreshSubscribers]) {
-    try { subscriber() } catch { /* one screen must not block another */ }
+    try {
+      Promise.resolve(subscriber()).catch(() => {})
+    } catch { /* one screen must not block another */ }
   }
 }
 
@@ -180,13 +182,18 @@ export function refreshSessionMarks () {
   if (typeof document !== 'undefined' && document.getElementById('activeCards')) renderLedger()
 }
 
-export async function refreshTasksView() {
+async function refreshTaskCachePublication ({
+  readTasks = listAllTasks,
+  pendingArchives = pendingTaskArchives
+} = {}) {
   const refreshGeneration = ++tasksRefreshGeneration
-  const fetched = await listAllTasks()
+  const fetched = await readTasks()
   // A task read is a snapshot of the entire cache. A later read or optimistic
   // replacement owns publication, even when this older response arrives last.
-  if (refreshGeneration !== tasksRefreshGeneration) return
-  tasksCache = overlayPendingTaskArchives(fetched, pendingTaskArchives)
+  if (refreshGeneration !== tasksRefreshGeneration) {
+    return { published: false, tasks: getActiveTasks() }
+  }
+  tasksCache = overlayPendingTaskArchives(fetched, pendingArchives)
   reconcileAsNeededTransientState()
   // A pick is a chore you mean to do next, so one that has left the list is not
   // a pick any more — left behind, it would put the chore back in the session
@@ -194,6 +201,16 @@ export async function refreshTasksView() {
   // archive still waiting on its undo keeps its pick, to give back with the
   // chore if the undo comes.
   sessionPicks.retain(fetched.filter(availableLiveTask).map(task => task._id))
+  return { published: true, tasks: getActiveTasks() }
+}
+
+export async function refreshTaskCache (options = {}) {
+  return (await refreshTaskCachePublication(options)).tasks
+}
+
+export async function refreshTasksView() {
+  const publication = await refreshTaskCachePublication()
+  if (!publication.published) return
   renderTasks()
   announceTaskRefresh()
 }
@@ -307,17 +324,24 @@ export function getAsNeededTasks () {
   return tasksCache.filter(task => liveTask(task) && isAsNeededTask(task))
 }
 
-function replaceCachedTask (replacement) {
+export function replaceCachedTask (replacement, { notify = true } = {}) {
+  const index = tasksCache.findIndex(task => task._id === replacement?._id)
+  if (index < 0) return false
   // Do this before replacing so an already-fetched aggregate cannot overwrite
   // the new optimistic task while its own write and refresh are still moving.
   tasksRefreshGeneration++
-  tasksCache = tasksCache.map(task =>
-    task._id === replacement._id ? replacement : task)
+  tasksCache = tasksCache.map((task, taskIndex) =>
+    taskIndex === index ? replacement : task)
+  if (notify) announceTaskRefresh()
+  return true
 }
+
+const replaceCachedTaskSilently = replacement =>
+  replaceCachedTask(replacement, { notify: false })
 
 export async function saveChoreEditorFields (task, fields, {
   getCurrent = id => tasksCache.find(item => item._id === id),
-  replace = replaceCachedTask,
+  replace = replaceCachedTaskSilently,
   render = renderTasks,
   update = updateTask,
   picks = sessionPicks,
@@ -337,12 +361,9 @@ export async function saveChoreEditorFields (task, fields, {
   const current = getCurrent(task._id) || task
   replace({ ...current, ...fields })
   reconcileAsNeededTransientState()
-  const before = picks.getPickedIds()
-  const after = picks.retain(eligibleIds())
-  const pickChanged = before.length !== after.length ||
-    before.some((id, index) => id !== after[index])
+  picks.retain(eligibleIds())
   render()
-  if (!pickChanged) announceTaskRefresh()
+  announceTaskRefresh()
   return { ok: true, stage: null, message: '' }
 }
 
@@ -364,7 +385,7 @@ function enqueueTaskOperation (taskId, operation) {
 
 async function runAsNeededTaskUpdate (task, fieldsForTurn, {
   getCurrent = id => tasksCache.find(item => item._id === id),
-  replace = replaceCachedTask,
+  replace = replaceCachedTaskSilently,
   render = renderTasks,
   update = updateTask,
   refresh = refreshTasksView,
@@ -390,13 +411,11 @@ async function runAsNeededTaskUpdate (task, fieldsForTurn, {
   const wasPicked = picks.isPicked(task._id)
 
   replace(optimistic)
-  let pickChanged = false
   if (optimistic.readiness === 'waiting' && wasPicked) {
     picks.toggle(task._id)
-    pickChanged = true
   }
   render()
-  if (!pickChanged) announceTaskRefresh()
+  announceTaskRefresh()
 
   const result = await saveTaskWithRefresh(
     () => update(task._id, fields),
@@ -405,13 +424,11 @@ async function runAsNeededTaskUpdate (task, fieldsForTurn, {
   if (result.stage === 'write') {
     replace(original)
     const nowPicked = picks.isPicked(task._id)
-    let restoredPick = false
     if (nowPicked !== wasPicked) {
       picks.toggle(task._id)
-      restoredPick = true
     }
     render()
-    if (!restoredPick) announceTaskRefresh()
+    announceTaskRefresh()
     const message = "Couldn't update that. The chore is unchanged."
     showFailure(message)
     return { ...result, message }
@@ -488,6 +505,14 @@ function renderAsNeeded (snapshot = categoryLocationStore.getSnapshot()) {
   container.innerHTML = asNeededScreenHtml(
     tasks, snapshot, localDateFromDate(new Date(tasksViewNow())), state)
   restoreAsNeededFocus(container, focusKey)
+}
+
+export async function saveTaskEditorFields (taskId, fields, {
+  update = updateTask
+} = {}) {
+  await update(taskId, fields)
+  const current = tasksCache.find(task => task._id === taskId)
+  if (current) replaceCachedTask({ ...current, ...fields })
 }
 
 export function archiveTaskOptimistically (task, {
@@ -1076,7 +1101,7 @@ function handleEstimateClick (evt, card) {
 async function runChoreCompletion (task, {
   nowMs = Date.now(),
   getCurrent = id => tasksCache.find(item => item._id === id),
-  replace = replaceCachedTask,
+  replace = replaceCachedTaskSilently,
   render = () => {
     if (typeof document !== 'undefined' && document.getElementById('activeCards')) {
       renderTasks()
@@ -1102,14 +1127,12 @@ async function runChoreCompletion (task, {
   )
   // Once the write has landed, this chore is no longer part of the work the
   // user plans to do next. A failed repaint must not put persisted work back.
-  let pickChanged = false
   if (result.stage !== 'write' && picks.isPicked(task._id)) {
     picks.toggle(task._id)
-    pickChanged = true
   }
   if (result.stage === 'refresh') {
     render()
-    if (!pickChanged) announceTaskRefresh()
+    announceTaskRefresh()
   }
   return result
 }
@@ -1131,7 +1154,7 @@ async function addChoreToSession (task, target, origin) {
 async function addChoreToRunningSession (task, origin) {
   try {
     const aggregate = await sessionStore.attachTasks(
-      state.currentSession._id, [task._id], { whileRunning: true })
+      state.currentSession._id, [task._id])
     setCurrentSessionAggregate(aggregate)
     // Attaching cannot refuse: a session that finished while the sheet was open
     // comes back untouched rather than throwing. Handing that one on to Doing
@@ -1209,9 +1232,7 @@ async function openChoreEditor (id, origin = 'chores') {
   }
   if (choice === 'archive') {
     return archiveTaskOptimistically(task, {
-      replace: replacement => {
-        tasksCache = tasksCache.map(item => item._id === id ? replacement : item)
-      },
+      replace: replaceCachedTask,
       clearEditing: () => {},
       render: renderTasks,
       showFailure: message => showEditorFailure(message, origin),

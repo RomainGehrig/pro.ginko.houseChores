@@ -64,7 +64,9 @@ export function pauseLabel (session) {
 export const autoPauseNote = () => 'Everything is resolved. Conclude, or add more.'
 
 export const fitsLabel = remainingMs =>
-  (Number(remainingMs) || 0) > 0 ? "Fits what's left" : 'Short ones, if you want to keep going'
+  (Number(remainingMs) || 0) > 0
+    ? "Fits what's left"
+    : 'Shortest ones, if you want to keep going'
 
 export function quickAddLabel (typed) {
   const title = String(typed ?? '').trim()
