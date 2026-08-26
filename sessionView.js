@@ -44,11 +44,28 @@ let heldToDetail = false
 const element = id => document.getElementById(id)
 const today = () => localDateFromDate(new Date())
 
-export function showSessionStartNotice (startResult, status) {
+export function showSessionStartNotice (startResult, status, proposalTasks = []) {
   if (!status) return false
   if (startResult?.reason === 'no_eligible_tasks') {
     status.textContent = 'None of the picked chores is available to start. ' +
       'Pick what you want to do now.'
+    status.setAttribute('role', 'status')
+    status.setAttribute('data-state', 'info')
+    return true
+  }
+  const rejectedIds = new Set(startResult?.rejectedTaskIds || [])
+  const rejectedNames = proposalTasks
+    .filter(task => rejectedIds.has(task?._id))
+    .map(task => String(task?.name || 'Unnamed chore'))
+  if (rejectedNames.length) {
+    const names = rejectedNames.length === 1
+      ? rejectedNames[0]
+      : rejectedNames.length === 2
+        ? rejectedNames.join(' and ')
+        : rejectedNames.slice(0, -1).join(', ') + ' and ' + rejectedNames.at(-1)
+    status.textContent = 'Started without ' + names + ' because ' +
+      (rejectedNames.length === 1 ? 'it is' : 'they are') +
+      ' no longer available to start.'
     status.setAttribute('role', 'status')
     status.setAttribute('data-state', 'info')
     return true
@@ -462,7 +479,7 @@ async function startSession () {
   try {
     const startResult = await sessionStore.start(proposal, Date.now())
     if (!startResult.aggregate) {
-      showSessionStartNotice(startResult, status)
+      showSessionStartNotice(startResult, status, bundle)
       return
     }
     const { aggregate } = startResult
@@ -471,7 +488,7 @@ async function startSession () {
     setNavVisible('doing', true)
     showView('doing')
     await startDoing(aggregate)
-    showSessionStartNotice(startResult, document.getElementById('doingStatus'))
+    showSessionStartNotice(startResult, document.getElementById('doingStatus'), bundle)
   } catch (error) {
     status.innerHTML = '<span data-state="error" role="alert">' +
       escapeHtml('Could not start or recover the session: ' + error.message) + '</span>'

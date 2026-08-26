@@ -459,6 +459,7 @@ test('start revalidates proposal tasks after recovery without reapplying fit or 
     'ready-over-budget'
   ])
   assert.deepEqual(result.aggregate.session.taskBundle, persisted.taskBundle)
+  assert.deepEqual(result.rejectedTaskIds, ['condition-changed'])
 })
 
 test('start does not create an empty session when delayed recovery leaves no eligible task', async () => {

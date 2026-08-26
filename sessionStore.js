@@ -191,14 +191,20 @@ export function createSessionStore ({
     const eligibleTasks = requestedIds
       .map(id => currentById.get(id))
       .filter(attachableTask)
+    const eligibleIds = new Set(eligibleTasks.map(task => task._id))
+    const rejectedTaskIds = requestedIds.filter(id => !eligibleIds.has(id))
     if (!eligibleTasks.length) {
-      return { aggregate: null, restored: false, reason: 'no_eligible_tasks' }
+      return {
+        aggregate: null, restored: false, reason: 'no_eligible_tasks', rejectedTaskIds
+      }
     }
     const revalidatedProposal = { ...proposal, tasks: eligibleTasks }
     const created = await createSessionRecord(buildSessionDraft(revalidatedProposal, nowMs))
     const persisted = created?._id ? await getSession(created._id) : null
     if (!persisted) throw new Error('The new session could not be read after creation.')
-    return { aggregate: await hydrate(persisted, nowMs), restored: false }
+    return {
+      aggregate: await hydrate(persisted, nowMs), restored: false, rejectedTaskIds
+    }
   }
 
   async function pause (sessionId, atMs = now()) {

@@ -53,6 +53,25 @@ test('an empty revalidated start stays factual and leaves the Quick session avai
   assert.equal(status.getAttribute('data-state'), 'info')
 })
 
+test('a partial revalidated start names the picked chore that was left out', () => {
+  const status = statusElement()
+
+  assert.equal(sessionView.showSessionStartNotice({
+    aggregate: { session: { taskBundle: ['folding'] } },
+    restored: false,
+    rejectedTaskIds: ['dishwasher']
+  }, status, [
+    { _id: 'dishwasher', name: 'Empty dishwasher' },
+    { _id: 'folding', name: 'Fold clothes' }
+  ]), true)
+  assert.equal(
+    status.textContent,
+    'Started without Empty dishwasher because it is no longer available to start.'
+  )
+  assert.equal(status.getAttribute('role'), 'status')
+  assert.equal(status.getAttribute('data-state'), 'info')
+})
+
 test('missing and valid budgets update the inline session status without disabling controls', () => {
   const status = statusElement()
   const propose = { disabled: false }
