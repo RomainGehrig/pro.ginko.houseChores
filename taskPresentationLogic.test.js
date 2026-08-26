@@ -105,11 +105,25 @@ test('resolved and unavailable cards remain visible without outcome controls whi
   assert.match(markup, /data-task-id="missing"[\s\S]*Unavailable task/)
   assert.doesNotMatch(markup, /data-outcome=/)
 
-  // Paused is where chores get added, so the panel is the paused state itself
-  // rather than something a second button has to open.
+  // The add panel belongs to the session itself rather than hiding behind a
+  // second control.
   assert.match(markup, /id="doingContinuePanel"[^>]*class="[^"]*doing-add/)
   assert.doesNotMatch(markup, /id="doingContinuePanel"[^>]*hidden/)
   assert.doesNotMatch(markup, /id="openContinueBtn"|id="doingDecisionPanel"/)
+})
+
+test('an active session keeps its add panel available while the clock runs', () => {
+  const markup = buildDoingSessionHtml(
+    {
+      _id: 's1', status: 'active', timeBudgetMinutes: 15,
+      accumulatedActiveMs: 0, activeStartedAt: 1000
+    },
+    [{ _id: 't1', name: 'Clean sink', estimatedDuration: 5 }],
+    [], [], 2000
+  )
+
+  assert.match(markup, /id="doingContinuePanel"[^>]*class="[^"]*doing-add/)
+  assert.doesNotMatch(markup, /id="doingContinuePanel"[^>]*hidden/)
 })
 
 test('the head states the clock, what it is doing, and both ways out of the session', () => {
@@ -178,6 +192,12 @@ test('picker markup escapes every stored suggestion and search-result title', ()
   // The estimate is its own cell, so the whole cell is the instrument face.
   assert.match(markup, /<span class="continue-row-est fig">5 min<\/span>/)
   assert.match(markup, /<span class="continue-row-est fig">30 min<\/span>/)
+})
+
+test('an empty suggestion rail states only that no suggestions are waiting', () => {
+  const markup = buildContinuationSuggestionsHtml([])
+  assert.match(markup, /No suggested chores are waiting/)
+  assert.doesNotMatch(markup, /Nothing short enough/)
 })
 
 test('continuation budget copy isolates its measurement and states the rule after it', () => {

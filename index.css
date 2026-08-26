@@ -3064,8 +3064,8 @@ textarea {
 }
 
 @media (min-width: 900px) {
-  /* The rail's column only exists while the rail does — a running session
-     would otherwise hold 330px of nothing open beside it. */
+  /* The second column belongs to the visible add rail, so a state without the
+     rail never reserves 330px of empty space beside the session. */
   .doing-layout {
     align-items: start;
     display: grid;

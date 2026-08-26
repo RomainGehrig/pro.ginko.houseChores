@@ -45,6 +45,44 @@ test('active schedule edits preserve the current date unless explicitly changed'
   })
 })
 
+test('an editor save merges onto the cache entry current when its write finishes', async () => {
+  const original = {
+    _id: 'concurrent-edit', name: 'Descale kettle', estimatedDuration: 5,
+    status: 'active', schedule: { type: 'one_off' }
+  }
+  await tasksView.refreshTaskCache({ readTasks: async () => [original] })
+  let releaseWrite
+  let markWriteStarted
+  const writeGate = new Promise(resolve => { releaseWrite = resolve })
+  const writeStarted = new Promise(resolve => { markWriteStarted = resolve })
+
+  assert.equal(typeof tasksView.saveTaskEditorFields, 'function')
+  const saving = tasksView.saveTaskEditorFields(original._id, {
+    name: 'Descale the kettle', estimatedDuration: 8
+  }, {
+    update: async () => {
+      markWriteStarted()
+      await writeGate
+    }
+  })
+  await writeStarted
+  tasksView.replaceCachedTask({
+    ...original,
+    lastCompletedDate: 999,
+    scheduledDate: '2026-09-01'
+  })
+  releaseWrite()
+  await saving
+
+  assert.deepEqual(tasksView.getActiveTasks(), [{
+    ...original,
+    name: 'Descale the kettle',
+    estimatedDuration: 8,
+    lastCompletedDate: 999,
+    scheduledDate: '2026-09-01'
+  }])
+})
+
 test('outside completion advances the chore and removes it from the pending session', async () => {
   const nowMs = new Date(2026, 7, 23, 12, 0, 0).getTime()
   const writes = []
@@ -164,6 +202,47 @@ test('active archive is optimistic and its queued commit writes only status', as
   await queued[0].action.commit()
   assert.deepEqual(updates, [['task-archive', { status: 'archived' }]])
   assert.equal(await result.queued, queued[0].action)
+})
+
+test('an overlay-aware cache refresh keeps a pending archive out of active chores', async () => {
+  const active = {
+    _id: 'pending-archive', name: 'Clean loft', status: 'active',
+    schedule: { type: 'one_off' }
+  }
+  const pending = new Map([['task:pending-archive', {
+    archived: { ...active, status: 'archived' }
+  }]])
+
+  assert.equal(typeof tasksView.refreshTaskCache, 'function')
+  const refreshed = await tasksView.refreshTaskCache({
+    readTasks: async () => [{ ...active, serverVersion: 'still-active' }],
+    pendingArchives: pending
+  })
+
+  assert.deepEqual(refreshed, [])
+})
+
+test('task refresh contains a subscriber rejected async result', async () => {
+  const active = {
+    _id: 'async-subscriber', name: 'Clean landing', status: 'active',
+    schedule: { type: 'one_off' }
+  }
+  await tasksView.refreshTaskCache({ readTasks: async () => [active] })
+  let asyncResultObserved = false
+  const unsubscribe = tasksView.subscribeTaskRefresh(() => ({
+    then (_resolve, reject) {
+      asyncResultObserved = true
+      reject(new Error('contained subscriber failure'))
+    }
+  }))
+
+  try {
+    tasksView.replaceCachedTask({ ...active, name: 'Clean the landing' })
+    await new Promise(resolve => setImmediate(resolve))
+    assert.equal(asyncResultObserved, true)
+  } finally {
+    unsubscribe()
+  }
 })
 
 test('failed archive commit restores the exact cached record and reports factual status', async () => {

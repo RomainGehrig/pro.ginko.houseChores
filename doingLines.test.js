@@ -80,8 +80,8 @@ test('the note explains why the session stopped on its own, and offers both ways
 
 test('what fits changes its offer once you are past the time you set', () => {
   assert.equal(fitsLabel(8 * 60000), "Fits what's left")
-  assert.equal(fitsLabel(0), 'Short ones, if you want to keep going')
-  assert.equal(fitsLabel(-5 * 60000), 'Short ones, if you want to keep going')
+  assert.equal(fitsLabel(0), 'Shortest ones, if you want to keep going')
+  assert.equal(fitsLabel(-5 * 60000), 'Shortest ones, if you want to keep going')
 })
 
 test('the quick add offers the words you typed, as a chore', () => {

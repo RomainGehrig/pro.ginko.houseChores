@@ -153,7 +153,7 @@ export function buildDoingSessionHtml (
       '<div id="doingTaskList">' + tasksHtml + '</div>' +
     '</div>' +
     '<aside id="doingContinuePanel" class="doing-add" aria-label="Add to the session"' +
-      (paused ? '' : ' hidden') + '></aside>' +
+      (active || paused ? '' : ' hidden') + '></aside>' +
   '</div>'
 }
 
@@ -162,8 +162,9 @@ export function buildDoingSessionHtml (
 export function buildAddPanelHtml (remainingMs) {
   return '<h2 class="display doing-add-title">Add to the session</h2>' +
     '<p class="muted doing-add-note" id="continueRemaining"></p>' +
-    '<p class="eyebrow eyebrow-quiet doing-add-fits">' +
+    '<p class="eyebrow eyebrow-quiet doing-add-fits" id="continueFits">' +
       escapeHtml(fitsLabel(remainingMs)) + '</p>' +
+    '<div id="continueTasksStatus" class="inline-status" role="status"></div>' +
     '<div id="continueSuggestions" class="continue-rows"></div>' +
     '<input id="continueSearchInput" class="input doing-add-search" type="search" ' +
       'placeholder="Search a chore, or type a new one" ' +
@@ -185,7 +186,7 @@ const continueRow = (task, control) =>
 // un-tick itself — but the row is what you see and press.
 export function buildContinuationSuggestionsHtml (tasks) {
   if (!tasks.length) {
-    return '<p class="muted continue-empty">Nothing short enough is waiting. ' +
+    return '<p class="muted continue-empty">No suggested chores are waiting. ' +
       'Search below for anything at all.</p>'
   }
   return tasks.map(task => continueRow(task,
