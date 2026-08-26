@@ -381,6 +381,11 @@ async function runAsNeededTaskUpdate (task, fieldsForTurn, {
   const fields = typeof fieldsForTurn === 'function'
     ? fieldsForTurn(original)
     : fieldsForTurn
+  if (!fields || typeof fields !== 'object') {
+    const message = 'That readiness action no longer applies. The chore is unchanged.'
+    showFailure(message)
+    return { ok: false, stage: 'validation', message }
+  }
   const optimistic = { ...original, ...fields }
   const wasPicked = picks.isPicked(task._id)
 
@@ -453,7 +458,13 @@ function restoreAsNeededFocus (container, focusKey) {
   const preferred = focusKey.controlClass
     ? row?.querySelector?.('.' + focusKey.controlClass)
     : null
-  const target = preferred || row?.querySelector?.('.as-needed-edit') ||
+  const inverseClass = focusKey.controlClass === 'as-needed-ready'
+    ? 'as-needed-not-ready'
+    : focusKey.controlClass === 'as-needed-not-ready'
+      ? 'as-needed-ready'
+      : null
+  const inverse = inverseClass ? row?.querySelector?.('.' + inverseClass) : null
+  const target = preferred || inverse || row?.querySelector?.('.as-needed-edit') ||
     document.querySelector?.('#view-as-needed .route-heading')
   target?.focus?.()
 }

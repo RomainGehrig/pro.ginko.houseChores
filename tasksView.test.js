@@ -415,9 +415,7 @@ test('As needed readiness actions repaint eligibility and remove an unavailable 
 
     await clickAction('as-needed-ready', 'periodic-ready')
 
-    assert.deepEqual(writes[0], ['periodic-ready', {
-      readiness: 'ready', scheduledDate: '2030-01-07'
-    }])
+    assert.deepEqual(writes[0], ['periodic-ready', { readiness: 'ready' }])
     assert.equal(records[0].readiness, 'ready')
     assert.ok(tasksView.getActiveTasks().some(task => task._id === 'periodic-ready'))
     const readyMarkup = node('asNeededCards').innerHTML.match(
@@ -434,7 +432,7 @@ test('As needed readiness actions repaint eligibility and remove an unavailable 
     await clickAction('as-needed-not-ready', 'fixed-not-ready')
 
     assert.deepEqual(writes[2], ['fixed-not-ready', {
-      readiness: 'waiting', scheduledDate: '2030-01-11'
+      readiness: 'waiting', scheduledDate: '2099-12-25'
     }])
     assert.equal(records[2].readiness, 'waiting')
     assert.deepEqual(sessionPicks.getPickedIds(), [])
@@ -692,6 +690,39 @@ test('as-needed readiness updates cache and persistence before refreshing', asyn
     ...original, readiness: 'ready', scheduledDate: '2026-08-24'
   }])
   assert.deepEqual(result, { ok: true, stage: null, message: '' })
+})
+
+test('a queued readiness action that no longer applies stops before writing', async () => {
+  const original = {
+    _id: 'filter', name: 'Order filter', status: 'active',
+    taskMode: 'as_needed', readiness: 'waiting', scheduledDate: '2026-09-02',
+    schedule: { type: 'one_off' }
+  }
+  let replacements = 0
+  let renders = 0
+  let writes = 0
+  let refreshes = 0
+  let failureMessage = ''
+
+  const result = await tasksView.updateAsNeededTaskOptimistically(original, () => null, {
+    getCurrent: () => original,
+    replace: () => { replacements++ },
+    render: () => { renders++ },
+    update: async () => { writes++ },
+    refresh: async () => { refreshes++ },
+    picks: { isPicked: () => false, toggle: () => false },
+    showFailure: message => { failureMessage = message }
+  })
+
+  assert.deepEqual({ replacements, renders, writes, refreshes }, {
+    replacements: 0, renders: 0, writes: 0, refreshes: 0
+  })
+  assert.equal(failureMessage, 'That readiness action no longer applies. The chore is unchanged.')
+  assert.deepEqual(result, {
+    ok: false,
+    stage: 'validation',
+    message: 'That readiness action no longer applies. The chore is unchanged.'
+  })
 })
 
 test('as-needed write failure restores the previous cache and picked state', async () => {

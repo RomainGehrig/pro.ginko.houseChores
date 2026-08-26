@@ -10,9 +10,26 @@ import {
   markReadyFields
 } from './asNeededLogic.js'
 
-test('mark ready records the confirmation day', () => {
+test('mark ready preserves the planned check date', () => {
   assert.deepEqual(markReadyFields('2026-08-24'), {
-    readiness: 'ready', scheduledDate: '2026-08-24'
+    readiness: 'ready'
+  })
+})
+
+test('Not ready restores a still-future planned check instead of replacing it', () => {
+  assert.deepEqual(deferReadinessFields({
+    readiness: 'ready',
+    schedule: { type: 'periodic', every: 1, unit: 'week' },
+    scheduledDate: '2026-09-01'
+  }, '2026-08-24'), {
+    readiness: 'waiting', scheduledDate: '2026-09-01'
+  })
+  assert.deepEqual(deferReadinessFields({
+    readiness: 'ready',
+    schedule: { type: 'one_off' },
+    scheduledDate: '2026-09-01'
+  }, '2026-08-24'), {
+    readiness: 'waiting', scheduledDate: '2026-09-01'
   })
 })
 
