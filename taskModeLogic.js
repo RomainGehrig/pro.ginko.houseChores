@@ -11,11 +11,14 @@ export function taskReadinessOf (task) {
   return task?.readiness === 'ready' ? 'ready' : 'waiting'
 }
 
+export const isReadyAsNeededTask = task =>
+  isAsNeededTask(task) && taskReadinessOf(task) === 'ready'
+
 export const isTaskEligible = task =>
   !isAsNeededTask(task) || taskReadinessOf(task) === 'ready'
 
-const readySinceOf = task =>
-  taskReadinessOf(task) === 'ready' && parseLocalDate(task?.readySince)
+export const taskReadySinceOf = task =>
+  isReadyAsNeededTask(task) && parseLocalDate(task?.readySince)
     ? task.readySince
     : null
 
@@ -24,7 +27,7 @@ export function normalizeTaskAvailability (task = {}) {
     ...task,
     taskMode: taskModeOf(task),
     readiness: taskReadinessOf(task),
-    readySince: readySinceOf(task)
+    readySince: taskReadySinceOf(task)
   }
 }
 
@@ -36,6 +39,6 @@ export function taskModeFields (task, nextMode) {
   return {
     taskMode: 'as_needed',
     readiness,
-    readySince: readiness === 'ready' ? readySinceOf(task) : null
+    readySince: readiness === 'ready' ? taskReadySinceOf(task) : null
   }
 }

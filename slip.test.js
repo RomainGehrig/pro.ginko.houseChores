@@ -58,6 +58,10 @@ test('dueGroup assigns calendar bands at today, seven and thirty day boundaries'
   assert.equal(groupFor('2026-09-07'), 'THIS MONTH')
   assert.equal(groupFor('2026-09-08'), 'LATER')
   assert.equal(groupFor(null), 'SOMEDAY')
+  assert.equal(dueGroup({
+    taskMode: 'as_needed', readiness: 'ready', readySince: '2026-08-08',
+    scheduledDate: '2030-01-01'
+  }, '2026-08-08'), 'READY')
 })
 
 test('groupAndSort orders groups by date band, active ripeness, then drafts', () => {
@@ -95,6 +99,27 @@ test('groupAndSort orders groups by date band, active ripeness, then drafts', ()
       { name: 'SOMEDAY', taskIds: ['someday'] }
     ]
   )
+})
+
+test('a ready as-needed chore is grouped as actionable despite its future check plan', () => {
+  const tasks = [
+    {
+      _id: 'future-check', name: 'Empty dishwasher', status: 'active',
+      taskMode: 'as_needed', readiness: 'ready', readySince: '2026-08-08',
+      scheduledDate: '2030-01-01', schedule: { type: 'periodic', every: 2, unit: 'day' }
+    },
+    {
+      _id: 'this-week', name: 'Water plants', status: 'active',
+      scheduledDate: '2026-08-10', schedule: { type: 'one_off' }
+    }
+  ]
+
+  assert.deepEqual(groupAndSort(tasks, '2026-08-08').map(group => [
+    group.name, group.tasks.map(task => task._id)
+  ]), [
+    ['READY', ['future-check']],
+    ['THIS WEEK', ['this-week']]
+  ])
 })
 
 test('a completion reads the same whether the session stamped it or a date was typed', () => {

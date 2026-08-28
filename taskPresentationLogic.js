@@ -10,7 +10,7 @@ import {
 import { normalizeReferenceName, resolveReference } from './categoryLocationLogic.js'
 import { cadencePhrase, formatScheduledDate, parseLocalDate, scheduleSummary } from './scheduleLogic.js'
 import { daysSinceCompletion } from './slip.js'
-import { isAsNeededTask, taskReadinessOf } from './taskModeLogic.js'
+import { isAsNeededTask, taskReadinessOf, taskReadySinceOf } from './taskModeLogic.js'
 
 const SHORT_MONTHS = [
   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -47,10 +47,10 @@ function scheduleFactHtml (schedule) {
 // are. The day is stated once, as a plain fact, and only when there is one.
 export function buildChoreNoteHtml (task, today) {
   if (isAsNeededTask(task)) {
-    const date = parseLocalDate(task?.scheduledDate)
-      ? compactScheduledDate(task.scheduledDate)
-      : ''
-    const readinessFact = taskReadinessOf(task) === 'ready'
+    const ready = taskReadinessOf(task) === 'ready'
+    const attentionDate = ready ? taskReadySinceOf(task) : task?.scheduledDate
+    const date = parseLocalDate(attentionDate) ? compactScheduledDate(attentionDate) : ''
+    const readinessFact = ready
       ? (date ? 'ready since ' + date : 'ready')
       : (date ? 'check ' + date : 'no check date')
     const scheduleFact = task?.schedule?.type === 'periodic'

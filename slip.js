@@ -2,6 +2,7 @@
 // ABOUTME: Keeps prioritization arithmetic internal and separate from user-facing copy.
 
 import { parseLocalDate } from './scheduleLogic.js'
+import { isReadyAsNeededTask, taskReadySinceOf } from './taskModeLogic.js'
 
 const PERIOD_DAYS = { day: 1, week: 7, month: 30, year: 365 }
 const DAY_MS = 24 * 60 * 60 * 1000
@@ -60,9 +61,15 @@ export function cadenceDays (schedule) {
   return null
 }
 
+export function taskAttentionDate (task, today) {
+  return isReadyAsNeededTask(task)
+    ? taskReadySinceOf(task) || today
+    : task?.scheduledDate
+}
+
 export function slip (task, today) {
   const cadence = cadenceDays(task?.schedule)
-  const lateDays = daysBetween(task?.scheduledDate, today)
+  const lateDays = daysBetween(taskAttentionDate(task, today), today)
   if (!cadence || lateDays === null || lateDays <= 0) return 0
 
   const cadencesLate = lateDays / cadence
@@ -73,6 +80,7 @@ export function slip (task, today) {
 // Read forward from today rather than off a calendar: the next seven days are
 // this week wherever the week happens to break, the next thirty this month.
 export function dueGroup (task, today) {
+  if (isReadyAsNeededTask(task)) return 'READY'
   const daysUntil = daysBetween(today, task?.scheduledDate)
   if (daysUntil === null) return 'SOMEDAY'
   if (daysUntil < 0) return 'READY'
@@ -92,8 +100,8 @@ function compareTasks (today) {
       (rightDraft ? 0 : slip(right, today))
     if (ripenessDifference !== 0) return -ripenessDifference
 
-    const dateDifference = String(left?.scheduledDate || '').localeCompare(
-      String(right?.scheduledDate || '')
+    const dateDifference = String(taskAttentionDate(left, today) || '').localeCompare(
+      String(taskAttentionDate(right, today) || '')
     )
     if (dateDifference !== 0) return dateDifference
 

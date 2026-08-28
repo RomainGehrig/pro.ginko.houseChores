@@ -1,11 +1,17 @@
-import { isTaskEligible } from './taskModeLogic.js'
+import { isReadyAsNeededTask, isTaskEligible, taskReadySinceOf } from './taskModeLogic.js'
+
+const priorityDate = task => isReadyAsNeededTask(task)
+  ? taskReadySinceOf(task) || '0000-01-01'
+  : task?.scheduledDate
 
 export function prioritizeTasks(tasks) {
   return [...tasks].sort((a, b) => {
-    if (!a.scheduledDate && !b.scheduledDate) return 0
-    if (!a.scheduledDate) return 1
-    if (!b.scheduledDate) return -1
-    return a.scheduledDate.localeCompare(b.scheduledDate)
+    const aDate = priorityDate(a)
+    const bDate = priorityDate(b)
+    if (!aDate && !bDate) return 0
+    if (!aDate) return 1
+    if (!bDate) return -1
+    return aDate.localeCompare(bDate)
   })
 }
 

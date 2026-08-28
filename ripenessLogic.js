@@ -1,7 +1,7 @@
 // ABOUTME: Ripeness as warmth — how ready a chore is to be picked up, on a 0..1 scale.
 // ABOUTME: Feeds the Today pool's colour ramp and its ripest-first order.
 
-import { slip, cadenceDays, daysBetween, groupAndSort } from './slip.js'
+import { slip, cadenceDays, daysBetween, groupAndSort, taskAttentionDate } from './slip.js'
 
 // Past its date, a chore occupies the warm end. The span below is what is left
 // for the approach, so a chore due today already reads warmer than anything
@@ -21,7 +21,7 @@ function horizonDays (task) {
 }
 
 export function ripeness (task, today) {
-  const daysUntil = daysBetween(today, task?.scheduledDate)
+  const daysUntil = daysBetween(today, taskAttentionDate(task, today))
 
   // Undated chores are not waiting on anything, so nothing is pulling on them.
   if (daysUntil === null) return 0

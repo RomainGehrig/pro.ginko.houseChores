@@ -318,10 +318,19 @@ test('as-needed chore notes state the inspection fact and cadence', () => {
   const ready = buildChoreNoteHtml({
     taskMode: 'as_needed',
     readiness: 'ready',
+    readySince: '2026-08-24',
     scheduledDate: '2026-08-28',
     schedule: { type: 'periodic', every: 2, unit: 'day' }
   }, '2026-08-24')
-  assert.equal(ready, 'ready since <span class="fig">28</span> Aug · about every <span class="fig">2</span> days')
+  assert.equal(ready, 'ready since <span class="fig">24</span> Aug · about every <span class="fig">2</span> days')
+
+  const legacyReady = buildChoreNoteHtml({
+    taskMode: 'as_needed',
+    readiness: 'ready',
+    scheduledDate: '2030-01-01',
+    schedule: { type: 'one_off' }
+  }, '2026-08-24')
+  assert.equal(legacyReady, 'ready · once')
 
   const undatedOneOff = buildChoreNoteHtml({
     taskMode: 'as_needed',

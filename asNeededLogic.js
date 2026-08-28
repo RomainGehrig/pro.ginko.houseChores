@@ -10,6 +10,7 @@ import {
 } from './scheduleLogic.js'
 import { dueGroup, groupAndSort } from './slip.js'
 import { matchesLedgerFilter } from './chores/ledgerLogic.js'
+import { taskReadySinceOf } from './taskModeLogic.js'
 
 const GROUPS = [
   { key: 'ready', label: 'Ready' },
@@ -34,8 +35,8 @@ const liveAsNeededTask = task =>
   task?.taskMode === 'as_needed'
 
 const compareReadyTasks = (left, right) => {
-  const dateDifference = String(left?.scheduledDate || '').localeCompare(
-    String(right?.scheduledDate || '')
+  const dateDifference = String(taskReadySinceOf(left) || '').localeCompare(
+    String(taskReadySinceOf(right) || '')
   )
   if (dateDifference !== 0) return dateDifference
 

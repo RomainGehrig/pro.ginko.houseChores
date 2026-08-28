@@ -80,8 +80,14 @@ test('as-needed groups include only live as-needed chores in fixed neutral bands
   const tasks = [
     task({ _id: 'scheduled', taskMode: 'scheduled' }),
     task({ _id: 'archived', status: 'archived' }),
-    task({ _id: 'ready-new', name: 'Ready new', readiness: 'ready', scheduledDate: '2026-08-23' }),
-    task({ _id: 'ready-old', name: 'Ready old', readiness: 'ready', scheduledDate: '2026-08-01' }),
+    task({
+      _id: 'ready-new', name: 'Ready new', readiness: 'ready',
+      readySince: '2026-08-23', scheduledDate: '2030-01-01'
+    }),
+    task({
+      _id: 'ready-old', name: 'Ready old', readiness: 'ready',
+      readySince: '2026-08-01', scheduledDate: '2030-01-02'
+    }),
     task({ _id: 'past', name: 'Past check', scheduledDate: '2026-08-20' }),
     task({ _id: 'today', name: 'Today check' }),
     task({ _id: 'week', name: 'Weekly check', scheduledDate: '2026-08-27' }),

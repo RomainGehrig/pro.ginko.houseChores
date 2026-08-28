@@ -80,3 +80,15 @@ test('pool ordering tolerates an empty bed', () => {
   assert.deepEqual(poolOrder([], TODAY), [])
   assert.deepEqual(poolOrder(null, TODAY), [])
 })
+
+test('the pool treats a ready as-needed chore as actionable now, not on its planned check date', () => {
+  const tasks = [
+    { _id: 'today', scheduledDate: TODAY, schedule: periodic(4) },
+    {
+      _id: 'condition-ready', taskMode: 'as_needed', readiness: 'ready',
+      readySince: TODAY, scheduledDate: '2030-01-01', schedule: periodic(2)
+    }
+  ]
+
+  assert.deepEqual(poolOrder(tasks, TODAY).map(task => task._id), ['condition-ready', 'today'])
+})

@@ -31,7 +31,10 @@ test('filler selection uses the stable category id', () => {
 test('waiting as-needed chores never survive a retained pick or fill an empty slot', () => {
   const availabilityTasks = [
     { _id: 'waiting', taskMode: 'as_needed', readiness: 'waiting', estimatedDuration: 5, scheduledDate: '2026-08-01' },
-    { _id: 'ready', taskMode: 'as_needed', readiness: 'ready', estimatedDuration: 5, scheduledDate: '2026-08-10' },
+    {
+      _id: 'ready', taskMode: 'as_needed', readiness: 'ready', readySince: '2026-08-10',
+      estimatedDuration: 5, scheduledDate: '2030-01-01'
+    },
     { _id: 'scheduled', estimatedDuration: 5, scheduledDate: '2026-08-20' }
   ]
 
@@ -40,6 +43,18 @@ test('waiting as-needed chores never survive a retained pick or fill an empty sl
     ['ready', 'scheduled']
   )
   assert.equal(findFillerTask(availabilityTasks, [], 30, null)._id, 'ready')
+})
+
+test('a ready as-needed chore is proposed before chores whose dates are still ahead', () => {
+  const proposal = buildBundle([
+    { _id: 'tomorrow', estimatedDuration: 5, scheduledDate: '2026-08-25' },
+    {
+      _id: 'ready', taskMode: 'as_needed', readiness: 'ready', readySince: '2026-08-24',
+      estimatedDuration: 5, scheduledDate: '2030-01-01'
+    }
+  ], 10, null)
+
+  assert.deepEqual(proposal.map(task => task._id), ['ready', 'tomorrow'])
 })
 
 // Filling is help, not a reset. What the user put in stays in, in the order they
