@@ -618,9 +618,9 @@ export function buildInboxCountLine (proposedCount) {
   return 'Capture · ' + proposedCount + ' waiting'
 }
 
-export function buildChoresCountLine (activeCount) {
-  if (activeCount === 0) return 'Chores · none available'
-  return 'Chores · ' + activeCount + ' available'
+export function buildChoresCountLine (view, count) {
+  const state = view === 'archive' ? 'archived' : view === 'unscheduled' ? 'unscheduled' : 'available'
+  return 'Chores · ' + (count === 0 ? 'none' : count) + ' ' + state
 }
 
 export function renderInboxNavigation (
@@ -827,10 +827,14 @@ function renderLedger (snapshot = categoryLocationStore.getSnapshot()) {
     state.currentSession, sessionPicks.getPickedIds(), active.map(task => task._id))
   const listState = ledgerState(snapshot, marks)
   const looseCount = unscheduledTasks(active, today, {}, snapshot.categories || []).length
+  const archivedCount = tasksCache.filter(task => task.status === 'archived').length
   renderSessionFloat()
 
   const countLine = document.getElementById('choresCountLine')
-  if (countLine) countLine.textContent = buildChoresCountLine(active.length)
+  const paneCount = ledger.view === 'archive'
+    ? archivedCount
+    : ledger.view === 'unscheduled' ? looseCount : active.length
+  if (countLine) countLine.textContent = buildChoresCountLine(ledger.view, paneCount)
   document.getElementById('choresViews').innerHTML = ledgerViewsHtml(looseCount, ledger.view)
   document.getElementById('choreCategoryFilter').innerHTML = ledgerCategoryPillsHtml(
     selectableReferences(snapshot.categories), ledger.categoryId)

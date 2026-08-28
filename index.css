@@ -1046,6 +1046,11 @@ label:has(input[type="radio"]) {
   color: var(--graphite);
 }
 
+.quick-recovery-link {
+  color: var(--graphite);
+  font-weight: 600;
+}
+
 /* The ledger's line sits between the filters and the first band, so it needs
    air under it as well as over it — a band label is a heading, not a caption. */
 #choresStatus,

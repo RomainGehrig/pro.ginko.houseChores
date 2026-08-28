@@ -112,6 +112,8 @@ test('route shell declares five primary canonical anchors, eight focus headings,
   assert.match(html, /id="asNeededStatus"[^>]*role="status"/)
   assert.match(html, /id="choresStatus"[^>]*role="status"/)
   assert.match(html, /<section id="view-chores"[\s\S]*?<a[^>]*href="#\/setup"[^>]*>Setup<\/a>/)
+  assert.match(html, /<section id="view-chores"[\s\S]*?<h1[^>]*>Chore ledger<\/h1>/)
+  assert.doesNotMatch(html, /<section id="view-chores"[\s\S]*?<h1[^>]*>[^<]*Available chores/)
   assert.match(html, /id="archiveStatus"[^>]*role="status"/)
   assert.match(html, /id="undoToast"[^>]*hidden[^>]*role="status"[^>]*aria-live="polite"/)
   assert.match(html, /id="undoToastMessage"/)

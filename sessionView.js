@@ -330,7 +330,11 @@ export function quickSessionPlacementModel (task, placement) {
       added: placement.added
     }),
     ...(placement.target === 'unavailable'
-      ? { recovery: { href: '#/as-needed', label: 'Open As needed' } }
+      ? {
+          recovery: {
+            href: '#/as-needed', label: 'Open As needed', className: 'quick-recovery-link'
+          }
+        }
       : {})
   }
 }
@@ -341,7 +345,7 @@ function showQuickSessionPlacement (task, placement) {
   status.textContent = model.message
   if (model.recovery) {
     const link = document.createElement('a')
-    link.className = 'ledger-setup-link'
+    link.className = model.recovery.className
     link.href = model.recovery.href
     link.textContent = model.recovery.label
     status.append(' ', link)

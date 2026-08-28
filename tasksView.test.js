@@ -416,7 +416,9 @@ test('As needed readiness actions repaint eligibility and remove an unavailable 
 
     await clickAction('as-needed-ready', 'periodic-ready')
 
-    assert.deepEqual(writes[0], ['periodic-ready', { readiness: 'ready' }])
+    assert.deepEqual(writes[0], ['periodic-ready', {
+      readiness: 'ready', readySince: '2030-01-07'
+    }])
     assert.equal(records[0].readiness, 'ready')
     assert.ok(tasksView.getActiveTasks().some(task => task._id === 'periodic-ready'))
     const readyMarkup = node('asNeededCards').innerHTML.match(
@@ -426,14 +428,14 @@ test('As needed readiness actions repaint eligibility and remove an unavailable 
     await clickAction('as-needed-later', 'periodic-later')
 
     assert.deepEqual(writes[1], ['periodic-later', {
-      readiness: 'waiting', scheduledDate: '2030-01-09'
+      readiness: 'waiting', readySince: null, scheduledDate: '2030-01-09'
     }])
     assert.equal(records[1].scheduledDate, '2030-01-09')
 
     await clickAction('as-needed-not-ready', 'fixed-not-ready')
 
     assert.deepEqual(writes[2], ['fixed-not-ready', {
-      readiness: 'waiting', scheduledDate: '2099-12-25'
+      readiness: 'waiting', readySince: null, scheduledDate: '2099-12-25'
     }])
     assert.equal(records[2].readiness, 'waiting')
     assert.deepEqual(sessionPicks.getPickedIds(), [])
@@ -481,7 +483,7 @@ test('As needed one-off dates and two-tap completion use their explicit boundari
       action: 'later', date: '2026-09-02'
     })
     assert.deepEqual(writes[0], ['once-later', {
-      readiness: 'waiting', scheduledDate: '2026-09-02'
+      readiness: 'waiting', readySince: null, scheduledDate: '2026-09-02'
     }])
     assert.equal(records[0].scheduledDate, '2026-09-02')
     assert.doesNotMatch(node('asNeededCards').innerHTML, /id="as-needed-date-once-later"/)
@@ -529,6 +531,7 @@ test('approval writes the reviewed schedule and clears AI suggestions', () => {
     schedule: { type: 'periodic', every: 2, unit: 'week' },
     taskMode: 'scheduled',
     readiness: null,
+    readySince: null,
     suggestedCategory: null,
     suggestedDuration: null,
     suggestedSchedule: null,
@@ -551,6 +554,7 @@ test('active schedule edits preserve the current date unless explicitly changed'
     schedule: { type: 'fixed', pattern: { kind: 'weekdays', weekdays: [1] } },
     taskMode: 'scheduled',
     readiness: null,
+    readySince: null,
     status: 'approved_recurring'
   })
 })
@@ -558,7 +562,8 @@ test('active schedule edits preserve the current date unless explicitly changed'
 test('schedule saves preserve readiness only while mode stays as-needed', () => {
   const readyAsNeeded = {
     taskMode: 'as_needed',
-    readiness: 'ready'
+    readiness: 'ready',
+    readySince: '2026-08-24'
   }
   const asNeededResult = {
     ok: true,
@@ -573,10 +578,13 @@ test('schedule saves preserve readiness only while mode stays as-needed', () => 
     schedule: asNeededResult.schedule,
     status: 'approved_recurring',
     taskMode: 'as_needed',
-    readiness: 'ready'
+    readiness: 'ready',
+    readySince: '2026-08-24'
   })
   assert.equal(buildActiveTaskScheduleFields(readyAsNeeded, scheduledResult).readiness, null)
+  assert.equal(buildActiveTaskScheduleFields(readyAsNeeded, scheduledResult).readySince, null)
   assert.equal(buildApprovedTaskFields({ taskMode: 'scheduled' }, {}, 5, asNeededResult).readiness, 'waiting')
+  assert.equal(buildApprovedTaskFields({ taskMode: 'scheduled' }, {}, 5, asNeededResult).readySince, null)
 })
 
 test('an editor save merges onto the cache entry current when its write finishes', async () => {
@@ -1336,6 +1344,7 @@ test('completion followed by Not ready writes in click order and keeps the later
   assert.deepEqual(harness.persisted(), [{
     ...original,
     readiness: 'waiting',
+    readySince: null,
     scheduledDate: '2030-02-01',
     lastCompletedDate: completedAt
   }])
@@ -1379,6 +1388,7 @@ test('Not ready followed by completion writes in click order from the preceding 
   assert.deepEqual(harness.persisted(), [{
     ...original,
     readiness: 'waiting',
+    readySince: null,
     scheduledDate: '2030-02-15',
     lastCompletedDate: completedAt
   }])
@@ -1463,6 +1473,7 @@ test('a completion refresh failure settles before the queued readiness click run
   assert.deepEqual(harness.persisted(), [{
     ...original,
     readiness: 'waiting',
+    readySince: null,
     scheduledDate: '2030-02-01',
     lastCompletedDate: completedAt
   }])
@@ -1718,9 +1729,12 @@ test('the inbox and chores eyebrows count without judging', () => {
   assert.equal(tasksView.buildInboxCountLine(1), 'Capture · 1 waiting')
   assert.equal(tasksView.buildInboxCountLine(4), 'Capture · 4 waiting')
 
-  assert.equal(tasksView.buildChoresCountLine(0), 'Chores · none available')
-  assert.equal(tasksView.buildChoresCountLine(1), 'Chores · 1 available')
-  assert.equal(tasksView.buildChoresCountLine(9), 'Chores · 9 available')
+  assert.equal(tasksView.buildChoresCountLine('active', 0), 'Chores · none available')
+  assert.equal(tasksView.buildChoresCountLine('active', 9), 'Chores · 9 available')
+  assert.equal(tasksView.buildChoresCountLine('unscheduled', 0), 'Chores · none unscheduled')
+  assert.equal(tasksView.buildChoresCountLine('unscheduled', 3), 'Chores · 3 unscheduled')
+  assert.equal(tasksView.buildChoresCountLine('archive', 0), 'Chores · none archived')
+  assert.equal(tasksView.buildChoresCountLine('archive', 4), 'Chores · 4 archived')
 })
 
 test('the suggestion control is absent, not refusing, when suggestions are off', () => {

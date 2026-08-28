@@ -236,7 +236,9 @@ test('a stale Quick rejection offers the As needed screen as its recovery contro
     { target: 'unavailable', added: false }
   ), {
     message: 'Check rain barrel is waiting for its condition.',
-    recovery: { href: '#/as-needed', label: 'Open As needed' }
+    recovery: {
+      href: '#/as-needed', label: 'Open As needed', className: 'quick-recovery-link'
+    }
   })
 })
 
