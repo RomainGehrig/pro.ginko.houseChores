@@ -27,23 +27,33 @@ test('as-needed tasks are eligible only when explicitly ready', () => {
 test('normalization emits explicit compatible fields without mutating input', () => {
   const legacy = { _id: 'legacy', name: 'Dust shelves' }
   assert.deepEqual(normalizeTaskAvailability(legacy), {
-    _id: 'legacy', name: 'Dust shelves', taskMode: 'scheduled', readiness: null
+    _id: 'legacy', name: 'Dust shelves', taskMode: 'scheduled', readiness: null, readySince: null
   })
   assert.equal('taskMode' in legacy, false)
   assert.deepEqual(normalizeTaskAvailability({ taskMode: 'as_needed', readiness: 'bad' }), {
-    taskMode: 'as_needed', readiness: 'waiting'
+    taskMode: 'as_needed', readiness: 'waiting', readySince: null
+  })
+  assert.deepEqual(normalizeTaskAvailability({
+    taskMode: 'as_needed', readiness: 'ready', readySince: '2026-08-24'
+  }), {
+    taskMode: 'as_needed', readiness: 'ready', readySince: '2026-08-24'
+  })
+  assert.deepEqual(normalizeTaskAvailability({
+    taskMode: 'as_needed', readiness: 'ready', readySince: 'not-a-date'
+  }), {
+    taskMode: 'as_needed', readiness: 'ready', readySince: null
   })
 })
 
 test('mode changes clear stale readiness and never revive it later', () => {
-  const ready = { taskMode: 'as_needed', readiness: 'ready' }
+  const ready = { taskMode: 'as_needed', readiness: 'ready', readySince: '2026-08-24' }
   assert.deepEqual(taskModeFields(ready, 'scheduled'), {
-    taskMode: 'scheduled', readiness: null
+    taskMode: 'scheduled', readiness: null, readySince: null
   })
   assert.deepEqual(taskModeFields({ ...ready, taskMode: 'scheduled' }, 'as_needed'), {
-    taskMode: 'as_needed', readiness: 'waiting'
+    taskMode: 'as_needed', readiness: 'waiting', readySince: null
   })
   assert.deepEqual(taskModeFields(ready, 'as_needed'), {
-    taskMode: 'as_needed', readiness: 'ready'
+    taskMode: 'as_needed', readiness: 'ready', readySince: '2026-08-24'
   })
 })

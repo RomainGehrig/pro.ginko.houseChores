@@ -1,3 +1,5 @@
+import { parseLocalDate } from './scheduleLogic.js'
+
 export const taskModeOf = task => task?.taskMode === 'as_needed'
   ? 'as_needed'
   : 'scheduled'
@@ -12,20 +14,28 @@ export function taskReadinessOf (task) {
 export const isTaskEligible = task =>
   !isAsNeededTask(task) || taskReadinessOf(task) === 'ready'
 
+const readySinceOf = task =>
+  taskReadinessOf(task) === 'ready' && parseLocalDate(task?.readySince)
+    ? task.readySince
+    : null
+
 export function normalizeTaskAvailability (task = {}) {
   return {
     ...task,
     taskMode: taskModeOf(task),
-    readiness: taskReadinessOf(task)
+    readiness: taskReadinessOf(task),
+    readySince: readySinceOf(task)
   }
 }
 
 export function taskModeFields (task, nextMode) {
   if (nextMode !== 'as_needed') {
-    return { taskMode: 'scheduled', readiness: null }
+    return { taskMode: 'scheduled', readiness: null, readySince: null }
   }
+  const readiness = isAsNeededTask(task) ? taskReadinessOf(task) : 'waiting'
   return {
     taskMode: 'as_needed',
-    readiness: isAsNeededTask(task) ? taskReadinessOf(task) : 'waiting'
+    readiness,
+    readySince: readiness === 'ready' ? readySinceOf(task) : null
   }
 }

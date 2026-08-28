@@ -14,6 +14,7 @@ test('new tasks stay frictionless and await scheduling during review', () => {
     lastCompletedDate: null,
     taskMode: 'scheduled',
     readiness: null,
+    readySince: null,
     status: 'proposed',
     suggestedCategory: null,
     suggestedDuration: null,
@@ -27,16 +28,16 @@ test('task reads normalize legacy and malformed availability without writing it 
   globalThis.freezr = {
     query: async () => [
       { _id: 'legacy', name: 'Dust shelves', schedule: { type: 'one_off' } },
-      { _id: 'as-needed', name: 'Inspect rain barrel', schedule: { type: 'one_off' }, taskMode: 'as_needed', readiness: 'bad' }
+      { _id: 'as-needed', name: 'Inspect rain barrel', schedule: { type: 'one_off' }, taskMode: 'as_needed', readiness: 'bad', readySince: '2026-08-24' }
     ],
     update: async (...args) => { updateCalls.push(args) }
   }
 
   try {
     const tasks = await listAllTasks()
-    assert.deepEqual(tasks.map(({ _id, taskMode, readiness }) => ({ _id, taskMode, readiness })), [
-      { _id: 'legacy', taskMode: 'scheduled', readiness: null },
-      { _id: 'as-needed', taskMode: 'as_needed', readiness: 'waiting' }
+    assert.deepEqual(tasks.map(({ _id, taskMode, readiness, readySince }) => ({ _id, taskMode, readiness, readySince })), [
+      { _id: 'legacy', taskMode: 'scheduled', readiness: null, readySince: null },
+      { _id: 'as-needed', taskMode: 'as_needed', readiness: 'waiting', readySince: null }
     ])
     assert.deepEqual(updateCalls, [])
   } finally {

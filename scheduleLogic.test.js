@@ -253,23 +253,25 @@ test('builds outcome-specific task updates', () => {
 test('as-needed outcomes return to waiting while cancellation changes nothing', () => {
   const completion = { completionDate: '2026-08-24', completedAt: 1756036800000 }
   const asNeededPeriodic = {
-    taskMode: 'as_needed', readiness: 'ready', scheduledDate: '2026-01-01',
+    taskMode: 'as_needed', readiness: 'ready', readySince: '2026-08-21', scheduledDate: '2026-01-01',
     schedule: { type: 'periodic', every: 3, unit: 'day' }
   }
   const asNeededOnce = {
-    taskMode: 'as_needed', readiness: 'ready', scheduledDate: '2026-08-24',
+    taskMode: 'as_needed', readiness: 'ready', readySince: '2026-08-22', scheduledDate: '2026-08-24',
     schedule: { type: 'one_off' }
   }
 
   assert.deepEqual(taskUpdateForOutcome(asNeededPeriodic, 'done', completion), {
     lastCompletedDate: completion.completedAt,
     scheduledDate: '2026-08-27',
-    readiness: 'waiting'
+    readiness: 'waiting',
+    readySince: null
   })
   assert.deepEqual(taskUpdateForOutcome(asNeededOnce, 'already_done', completion), {
     lastCompletedDate: completion.completedAt,
     status: 'archived',
-    readiness: 'waiting'
+    readiness: 'waiting',
+    readySince: null
   })
   assert.equal(taskUpdateForOutcome(asNeededPeriodic, 'cancelled', completion), null)
 })

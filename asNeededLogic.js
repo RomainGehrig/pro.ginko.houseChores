@@ -44,15 +44,18 @@ const compareReadyTasks = (left, right) => {
   return String(left?._id || '').localeCompare(String(right?._id || ''))
 }
 
-export function markReadyFields () {
-  return { readiness: 'ready' }
+export function markReadyFields (readySince) {
+  return {
+    readiness: 'ready',
+    readySince: parseLocalDate(readySince) ? readySince : null
+  }
 }
 
 export function deferReadinessFields (task, checkedOn, selectedDate) {
   const schedule = normalizeSchedule(task?.schedule)
   if (schedule?.type === 'one_off') {
     if (parseLocalDate(selectedDate)) {
-      return { readiness: 'waiting', scheduledDate: selectedDate }
+      return { readiness: 'waiting', readySince: null, scheduledDate: selectedDate }
     }
   }
 
@@ -60,7 +63,7 @@ export function deferReadinessFields (task, checkedOn, selectedDate) {
   const checkDate = parseLocalDate(checkedOn)
   if (task?.readiness === 'ready' && plannedDate && checkDate &&
     task.scheduledDate > checkedOn) {
-    return { readiness: 'waiting', scheduledDate: task.scheduledDate }
+    return { readiness: 'waiting', readySince: null, scheduledDate: task.scheduledDate }
   }
 
   if (schedule?.type === 'one_off') return null
@@ -70,7 +73,7 @@ export function deferReadinessFields (task, checkedOn, selectedDate) {
     schedule,
     scheduledDate: checkedOn
   }, checkedOn)
-  return { readiness: 'waiting', scheduledDate }
+  return { readiness: 'waiting', readySince: null, scheduledDate }
 }
 
 export function asNeededScheduleSummary (schedule) {

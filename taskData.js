@@ -14,6 +14,7 @@ export function buildNewTaskRecord (name) {
     lastCompletedDate: null,
     taskMode: 'scheduled',
     readiness: null,
+    readySince: null,
     status: 'proposed',
     suggestedCategory: null,
     suggestedDuration: null,

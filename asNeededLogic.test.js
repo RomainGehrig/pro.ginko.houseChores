@@ -12,7 +12,7 @@ import {
 
 test('mark ready preserves the planned check date', () => {
   assert.deepEqual(markReadyFields('2026-08-24'), {
-    readiness: 'ready'
+    readiness: 'ready', readySince: '2026-08-24'
   })
 })
 
@@ -22,14 +22,14 @@ test('Not ready restores a still-future planned check instead of replacing it', 
     schedule: { type: 'periodic', every: 1, unit: 'week' },
     scheduledDate: '2026-09-01'
   }, '2026-08-24'), {
-    readiness: 'waiting', scheduledDate: '2026-09-01'
+    readiness: 'waiting', readySince: null, scheduledDate: '2026-09-01'
   })
   assert.deepEqual(deferReadinessFields({
     readiness: 'ready',
     schedule: { type: 'one_off' },
     scheduledDate: '2026-09-01'
   }, '2026-08-24'), {
-    readiness: 'waiting', scheduledDate: '2026-09-01'
+    readiness: 'waiting', readySince: null, scheduledDate: '2026-09-01'
   })
 })
 
@@ -38,7 +38,7 @@ test('periodic deferral advances from the check day', () => {
     schedule: { type: 'periodic', every: 3, unit: 'day' },
     scheduledDate: '2026-01-01'
   }, '2026-08-24'), {
-    readiness: 'waiting', scheduledDate: '2026-08-27'
+    readiness: 'waiting', readySince: null, scheduledDate: '2026-08-27'
   })
 })
 
@@ -47,7 +47,7 @@ test('fixed deferral ignores a stale future attention date and advances from the
     schedule: { type: 'fixed', pattern: { kind: 'weekdays', weekdays: [5] } },
     scheduledDate: '2026-12-25'
   }, '2026-08-24'), {
-    readiness: 'waiting', scheduledDate: '2026-08-28'
+    readiness: 'waiting', readySince: null, scheduledDate: '2026-08-28'
   })
 })
 
@@ -56,7 +56,7 @@ test('one-off deferral waits for a valid inline date', () => {
   assert.equal(deferReadinessFields(task, '2026-08-24'), null)
   assert.equal(deferReadinessFields(task, '2026-08-24', 'not-a-date'), null)
   assert.deepEqual(deferReadinessFields(task, '2026-08-24', '2026-09-02'), {
-    readiness: 'waiting', scheduledDate: '2026-09-02'
+    readiness: 'waiting', readySince: null, scheduledDate: '2026-09-02'
   })
 })
 

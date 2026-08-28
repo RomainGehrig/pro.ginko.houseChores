@@ -131,7 +131,7 @@ export function taskUpdateForOutcome (task, outcome, completion) {
   }
 
   return task.taskMode === 'as_needed'
-    ? { ...update, readiness: 'waiting' }
+    ? { ...update, readiness: 'waiting', readySince: null }
     : update
 }
 

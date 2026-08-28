@@ -1221,7 +1221,8 @@ async function openChoreEditor (id, origin = 'chores') {
   const body = sheetBody()
   if (choice === 'session') return addChoreToSession(task, target, origin)
   if (choice === 'ready') {
-    return updateAsNeededTaskOptimistically(task, () => markReadyFields())
+    const today = localDateFromDate(new Date(tasksViewNow()))
+    return updateAsNeededTaskOptimistically(task, () => markReadyFields(today))
   }
   if (choice === 'done') {
     const result = await markChoreRecentlyDone(task)

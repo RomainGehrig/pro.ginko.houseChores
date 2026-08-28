@@ -468,7 +468,7 @@
         },
         "scheduledDate": {
           "type": "String",
-          "description": "Local YYYY-MM-DD attention date: the current occurrence for scheduled tasks, the next inspection date while as-needed tasks are waiting, or the readiness-confirmed date while they are ready; null while proposed."
+          "description": "Local YYYY-MM-DD attention date: the current occurrence for scheduled tasks or the next planned inspection for as-needed tasks; null while proposed or unscheduled."
         },
         "taskMode": {
           "type": "String",
@@ -477,6 +477,10 @@
         "readiness": {
           "type": "String",
           "description": "For as-needed tasks, waiting until the condition is confirmed or ready for work; null for scheduled tasks."
+        },
+        "readySince": {
+          "type": "String",
+          "description": "Local YYYY-MM-DD date when an as-needed task was most recently marked ready; null while waiting or for scheduled tasks."
         },
         "schedule": {
           "type": "Object",
