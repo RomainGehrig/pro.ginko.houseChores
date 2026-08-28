@@ -410,7 +410,11 @@ async function runAsNeededTaskUpdate (task, fieldsForTurn, {
   const optimistic = { ...original, ...fields }
   const wasPicked = picks.isPicked(task._id)
 
-  replace(optimistic)
+  if (replace(optimistic) === false) {
+    const message = 'That chore is no longer in this list. Nothing was changed.'
+    showFailure(message)
+    return { ok: false, stage: 'validation', message }
+  }
   if (optimistic.readiness === 'waiting' && wasPicked) {
     picks.toggle(task._id)
   }
@@ -1115,7 +1119,14 @@ async function runChoreCompletion (task, {
   refresh = refreshTasksView,
   picks = sessionPicks
 } = {}) {
-  const current = getCurrent(task._id) || task
+  const current = getCurrent(task._id)
+  if (!current) {
+    return {
+      ok: false,
+      stage: 'validation',
+      message: 'That chore is no longer in this list. Nothing was changed.'
+    }
+  }
   const fields = taskUpdateForOutcome(current, 'completed', {
     completedAt: nowMs,
     completionDate: localDateFromDate(new Date(nowMs))

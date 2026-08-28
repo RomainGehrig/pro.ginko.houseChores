@@ -627,18 +627,20 @@ test('an editor save merges onto the cache entry current when its write finishes
 
 test('outside completion advances the chore and removes it from the pending session', async () => {
   const nowMs = new Date(2026, 7, 23, 12, 0, 0).getTime()
+  const task = {
+    _id: 'task-1',
+    status: 'approved_recurring',
+    scheduledDate: '2026-08-20',
+    schedule: { type: 'periodic', every: 1, unit: 'week' }
+  }
   const writes = []
   const order = []
   sessionPicks.reset()
   sessionPicks.set(['task-1', 'task-2'])
 
-  const result = await tasksView.markChoreRecentlyDone({
-    _id: 'task-1',
-    status: 'approved_recurring',
-    scheduledDate: '2026-08-20',
-    schedule: { type: 'periodic', every: 1, unit: 'week' }
-  }, {
+  const result = await tasksView.markChoreRecentlyDone(task, {
     nowMs,
+    getCurrent: () => task,
     update: async (...args) => { order.push('write'); writes.push(args) },
     refresh: async () => { order.push('refresh') }
   })
@@ -654,13 +656,13 @@ test('outside completion advances the chore and removes it from the pending sess
 })
 
 test('a recorded completion leaves the pending session even when refresh fails', async () => {
+  const task = { _id: 'task-1', schedule: { type: 'one_off' } }
   sessionPicks.reset()
   sessionPicks.set(['task-1', 'task-2'])
 
-  const result = await tasksView.markChoreRecentlyDone({
-    _id: 'task-1', schedule: { type: 'one_off' }
-  }, {
+  const result = await tasksView.markChoreRecentlyDone(task, {
     nowMs: new Date(2026, 7, 23, 12, 0, 0).getTime(),
+    getCurrent: () => task,
     update: async () => {},
     refresh: async () => { throw new Error('refresh offline') }
   })
@@ -675,14 +677,14 @@ test('a recorded completion leaves the pending session even when refresh fails',
 })
 
 test('a completion write failure keeps the pending chore and skips refresh', async () => {
+  const task = { _id: 'task-1', schedule: { type: 'one_off' } }
   let refreshed = false
   sessionPicks.reset()
   sessionPicks.set(['task-1', 'task-2'])
 
-  const result = await tasksView.markChoreRecentlyDone({
-    _id: 'task-1', schedule: { type: 'one_off' }
-  }, {
+  const result = await tasksView.markChoreRecentlyDone(task, {
     nowMs: new Date(2026, 7, 23, 12, 0, 0).getTime(),
+    getCurrent: () => task,
     update: async () => { throw new Error('write offline') },
     refresh: async () => { refreshed = true }
   })
@@ -694,6 +696,30 @@ test('a completion write failure keeps the pending chore and skips refresh', asy
   })
   assert.equal(refreshed, false)
   assert.deepEqual(sessionPicks.getPickedIds(), ['task-1', 'task-2'])
+  sessionPicks.reset()
+})
+
+test('a completion whose chore left the cache stops before persistence', async () => {
+  const task = { _id: 'gone', schedule: { type: 'one_off' } }
+  let writes = 0
+  let refreshes = 0
+  sessionPicks.reset()
+  sessionPicks.set([task._id])
+
+  const result = await tasksView.markChoreRecentlyDone(task, {
+    getCurrent: () => null,
+    update: async () => { writes++ },
+    refresh: async () => { refreshes++ }
+  })
+
+  assert.deepEqual(result, {
+    ok: false,
+    stage: 'validation',
+    message: 'That chore is no longer in this list. Nothing was changed.'
+  })
+  assert.equal(writes, 0)
+  assert.equal(refreshes, 0)
+  assert.deepEqual(sessionPicks.getPickedIds(), [task._id])
   sessionPicks.reset()
 })
 
@@ -770,6 +796,37 @@ test('a queued readiness action that no longer applies stops before writing', as
     stage: 'validation',
     message: 'That readiness action no longer applies. The chore is unchanged.'
   })
+})
+
+test('a readiness action whose optimistic target left the cache stops before persistence', async () => {
+  const original = {
+    _id: 'gone-ready', taskMode: 'as_needed', readiness: 'waiting',
+    schedule: { type: 'one_off' }
+  }
+  let renders = 0
+  let writes = 0
+  let refreshes = 0
+  let failureMessage = ''
+
+  const result = await tasksView.updateAsNeededTaskOptimistically(original, {
+    readiness: 'ready', readySince: '2026-08-28'
+  }, {
+    getCurrent: () => original,
+    replace: () => false,
+    render: () => { renders++ },
+    update: async () => { writes++ },
+    refresh: async () => { refreshes++ },
+    picks: { isPicked: () => false, toggle: () => false },
+    showFailure: message => { failureMessage = message }
+  })
+
+  assert.deepEqual(result, {
+    ok: false,
+    stage: 'validation',
+    message: 'That chore is no longer in this list. Nothing was changed.'
+  })
+  assert.deepEqual({ renders, writes, refreshes }, { renders: 0, writes: 0, refreshes: 0 })
+  assert.equal(failureMessage, result.message)
 })
 
 test('as-needed write failure restores the previous cache and picked state', async () => {
