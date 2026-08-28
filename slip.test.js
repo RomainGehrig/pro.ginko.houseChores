@@ -122,6 +122,25 @@ test('a ready as-needed chore is grouped as actionable despite its future check 
   ])
 })
 
+test('legacy ready chores use today when ordering inside the actionable band', () => {
+  const tasks = [
+    {
+      _id: 'legacy-ready', name: 'Legacy ready', status: 'active',
+      taskMode: 'as_needed', readiness: 'ready', scheduledDate: '2030-01-01',
+      schedule: { type: 'periodic', every: 2, unit: 'day' }
+    },
+    {
+      _id: 'ripe', name: 'Ripe scheduled', status: 'active', scheduledDate: '2026-08-01',
+      schedule: { type: 'periodic', every: 2, unit: 'day' }
+    }
+  ]
+
+  assert.deepEqual(
+    groupAndSort(tasks, '2026-08-26')[0].tasks.map(task => task._id),
+    ['ripe', 'legacy-ready']
+  )
+})
+
 test('a completion reads the same whether the session stamped it or a date was typed', () => {
   const stamped = Date.UTC(2026, 7, 8, 14, 30)
   assert.equal(daysSinceCompletion(stamped, '2026-08-15'), 7)

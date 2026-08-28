@@ -88,6 +88,10 @@ test('as-needed groups include only live as-needed chores in fixed neutral bands
       _id: 'ready-old', name: 'Ready old', readiness: 'ready',
       readySince: '2026-08-01', scheduledDate: '2030-01-02'
     }),
+    task({
+      _id: 'ready-legacy', name: 'Ready legacy', readiness: 'ready',
+      scheduledDate: '2020-01-01'
+    }),
     task({ _id: 'past', name: 'Past check', scheduledDate: '2026-08-20' }),
     task({ _id: 'today', name: 'Today check' }),
     task({ _id: 'week', name: 'Weekly check', scheduledDate: '2026-08-27' }),
@@ -100,7 +104,7 @@ test('as-needed groups include only live as-needed chores in fixed neutral bands
     buildAsNeededGroups(tasks, '2026-08-24', {}, categories)
       .map(group => [group.key, group.tasks.map(task => task._id)]),
     [
-      ['ready', ['ready-old', 'ready-new']],
+      ['ready', ['ready-old', 'ready-new', 'ready-legacy']],
       ['check-now', ['past', 'today']],
       ['this-week', ['week']],
       ['this-month', ['month']],

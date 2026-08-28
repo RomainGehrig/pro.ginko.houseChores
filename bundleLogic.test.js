@@ -4,8 +4,11 @@ import {
   buildBundle,
   buildBundleProposal,
   buildSessionDraft,
-  findFillerTask
+  findFillerTask,
+  prioritizeTasks
 } from './bundleLogic.js'
+
+const TODAY = '2026-08-26'
 
 const tasks = [
   { _id: 't1', categoryId: 'c1', estimatedDuration: 5, scheduledDate: '2026-08-20' },
@@ -55,6 +58,21 @@ test('a ready as-needed chore is proposed before chores whose dates are still ah
   ], 10, null)
 
   assert.deepEqual(proposal.map(task => task._id), ['ready', 'tomorrow'])
+})
+
+test('a legacy ready chore without readySince uses today on every priority surface', () => {
+  const candidates = [
+    {
+      _id: 'legacy-ready', taskMode: 'as_needed', readiness: 'ready',
+      scheduledDate: '2030-01-01'
+    },
+    { _id: 'ripe', scheduledDate: '2026-08-01' }
+  ]
+
+  assert.deepEqual(
+    prioritizeTasks(candidates, TODAY).map(task => task._id),
+    ['ripe', 'legacy-ready']
+  )
 })
 
 // Filling is help, not a reset. What the user put in stays in, in the order they
@@ -112,11 +130,11 @@ test('readiness and set-aside choices compose without overriding explicit eligib
   const expected = ['ready-picked', 'scheduled-picked', 'ready-auto', 'scheduled-auto']
 
   assert.deepEqual(
-    buildBundle(crossProduct, 50, 'wanted', keptIds, setAsideIds).map(task => task._id),
+    buildBundle(crossProduct, 50, 'wanted', keptIds, setAsideIds, TODAY).map(task => task._id),
     expected
   )
   assert.deepEqual(
-    buildBundleProposal(crossProduct, 50, 'wanted', [], keptIds, setAsideIds)
+    buildBundleProposal(crossProduct, 50, 'wanted', [], keptIds, setAsideIds, TODAY)
       .tasks.map(task => task._id),
     expected
   )

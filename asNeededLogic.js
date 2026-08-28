@@ -8,9 +8,8 @@ import {
   parseLocalDate,
   scheduleSummary
 } from './scheduleLogic.js'
-import { dueGroup, groupAndSort } from './slip.js'
+import { dueGroup, groupAndSort, taskAttentionDate } from './slip.js'
 import { matchesLedgerFilter } from './chores/ledgerLogic.js'
-import { taskReadySinceOf } from './taskModeLogic.js'
 
 const GROUPS = [
   { key: 'ready', label: 'Ready' },
@@ -34,10 +33,9 @@ const liveAsNeededTask = task =>
   (task?.status === 'active' || task?.status === 'approved_recurring') &&
   task?.taskMode === 'as_needed'
 
-const compareReadyTasks = (left, right) => {
-  const dateDifference = String(taskReadySinceOf(left) || '').localeCompare(
-    String(taskReadySinceOf(right) || '')
-  )
+const compareReadyTasks = today => (left, right) => {
+  const dateDifference = String(taskAttentionDate(left, today) || '').localeCompare(
+    String(taskAttentionDate(right, today) || ''))
   if (dateDifference !== 0) return dateDifference
 
   const nameDifference = String(left?.name || '').localeCompare(String(right?.name || ''))
@@ -95,7 +93,7 @@ export function buildAsNeededGroups (tasks, today, filter, categories) {
 
   grouped.get('ready').push(...matching
     .filter(task => task.readiness === 'ready')
-    .sort(compareReadyTasks))
+    .sort(compareReadyTasks(today)))
 
   for (const group of groupAndSort(
     matching.filter(task => task.readiness !== 'ready'), today

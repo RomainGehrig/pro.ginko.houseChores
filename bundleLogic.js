@@ -1,13 +1,10 @@
-import { isReadyAsNeededTask, isTaskEligible, taskReadySinceOf } from './taskModeLogic.js'
+import { isTaskEligible } from './taskModeLogic.js'
+import { taskAttentionDate } from './slip.js'
 
-const priorityDate = task => isReadyAsNeededTask(task)
-  ? taskReadySinceOf(task) || '0000-01-01'
-  : task?.scheduledDate
-
-export function prioritizeTasks(tasks) {
+export function prioritizeTasks(tasks, today) {
   return [...tasks].sort((a, b) => {
-    const aDate = priorityDate(a)
-    const bDate = priorityDate(b)
+    const aDate = taskAttentionDate(a, today)
+    const bDate = taskAttentionDate(b, today)
     if (!aDate && !bDate) return 0
     if (!aDate) return 1
     if (!bDate) return -1
@@ -22,7 +19,9 @@ export function prioritizeTasks(tasks) {
 // is the user's later statement that this chore does not belong in the draft.
 // Once the budget is spent nothing more is added, but nothing eligible that was
 // already there is ever taken away.
-export function buildBundle(tasks, budgetMinutes, categoryFilterId, keptIds = [], setAsideIds = []) {
+export function buildBundle(
+  tasks, budgetMinutes, categoryFilterId, keptIds = [], setAsideIds = [], today
+) {
   const available = (tasks || []).filter(isTaskEligible)
   const byId = new Map(available.map(task => [task._id, task]))
   const kept = (keptIds || []).map(id => byId.get(id)).filter(Boolean)
@@ -35,7 +34,7 @@ export function buildBundle(tasks, budgetMinutes, categoryFilterId, keptIds = []
     if (categoryFilterId && t.categoryId !== categoryFilterId) return false
     return t.estimatedDuration && t.estimatedDuration > 0
   })
-  const prioritized = prioritizeTasks(eligible)
+  const prioritized = prioritizeTasks(eligible, today)
   const bundle = [...kept]
   let remaining = kept.reduce(
     (left, task) => left - (Number(task.estimatedDuration) || 0), budgetMinutes)
@@ -49,12 +48,12 @@ export function buildBundle(tasks, budgetMinutes, categoryFilterId, keptIds = []
 }
 
 export function buildBundleProposal (
-  tasks, budgetMinutes, categoryFilterId, categories, keptIds = [], setAsideIds = []
+  tasks, budgetMinutes, categoryFilterId, categories, keptIds = [], setAsideIds = [], today
 ) {
   const capturedCategoryId = categoryFilterId || null
   const category = categories.find(item => item._id === capturedCategoryId)
   return {
-    tasks: buildBundle(tasks, budgetMinutes, capturedCategoryId, keptIds, setAsideIds)
+    tasks: buildBundle(tasks, budgetMinutes, capturedCategoryId, keptIds, setAsideIds, today)
       .map(task => ({ ...task })),
     timeBudgetMinutes: budgetMinutes,
     categoryFilterId: capturedCategoryId,
@@ -81,13 +80,13 @@ export function buildSessionDraft (proposal, startTime) {
   }
 }
 
-export function findFillerTask(tasks, excludeIds, remainingMinutes, categoryFilterId) {
+export function findFillerTask(tasks, excludeIds, remainingMinutes, categoryFilterId, today) {
   const available = (tasks || []).filter(isTaskEligible)
   const eligible = available.filter(t =>
     !excludeIds.includes(t._id) &&
     (!categoryFilterId || t.categoryId === categoryFilterId) &&
     t.estimatedDuration && t.estimatedDuration <= remainingMinutes
   )
-  const prioritized = prioritizeTasks(eligible)
+  const prioritized = prioritizeTasks(eligible, today)
   return prioritized[0] || null
 }

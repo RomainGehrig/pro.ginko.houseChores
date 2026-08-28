@@ -22,25 +22,25 @@ export function normalizeContinuationSuggestionEntries (value) {
   })
 }
 
-export function suggestContinuationTasks (tasks, excludedIds, remainingMs) {
+export function suggestContinuationTasks (tasks, excludedIds, remainingMs, today) {
   const excluded = new Set(excludedIds)
   const eligible = prioritizeTasks(tasks.filter(task =>
     active(task) && !excluded.has(task._id) && estimateMs(task) > 0
-  ))
+  ), today)
   if ((Number(remainingMs) || 0) > 0) {
     return eligible.filter(task => estimateMs(task) <= remainingMs)
   }
   return eligible.sort((left, right) => estimateMs(left) - estimateMs(right)).slice(0, 3)
 }
 
-export function searchContinuationTasks (tasks, query, excludedIds) {
+export function searchContinuationTasks (tasks, query, excludedIds, today) {
   const needle = String(query || '').trim().toLocaleLowerCase()
   if (!needle) return []
   const excluded = new Set(excludedIds)
   return prioritizeTasks(tasks.filter(task =>
     active(task) && !excluded.has(task._id) &&
     String(task.name || '').toLocaleLowerCase().includes(needle)
-  ))
+  ), today)
 }
 
 export function suggestionSelectionFits (selectedTasks, candidate, remainingMs) {

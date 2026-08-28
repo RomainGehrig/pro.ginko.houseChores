@@ -226,7 +226,8 @@ function updateAddPanelTiming (elapsedMs, nowMs) {
   const suggestions = suggestContinuationTasks(
     continuationTasks,
     state.currentSession.taskBundle || [],
-    remainingMs
+    remainingMs,
+    localDateFromDate(new Date(nowMs))
   )
   const suggestionIds = suggestions.map(task => task._id).join('\n')
   if (suggestionsContainer.dataset.suggestionIds === suggestionIds) {
@@ -314,7 +315,8 @@ function renderContinuationQuery (typed) {
   const results = searchContinuationTasks(
     continuationTasks,
     typed,
-    state.currentSession.taskBundle || []
+    state.currentSession.taskBundle || [],
+    localDateFromDate(new Date())
   )
   const container = document.getElementById('continueSearchResults')
   if (container) container.innerHTML = buildContinuationSearchResultsHtml(results)

@@ -225,7 +225,8 @@ function fillBundle () {
     selectedCategoryId || null,
     selectableReferences(categoryLocationStore.getSnapshot().categories),
     before,
-    excludedIds
+    excludedIds,
+    today()
   )
   const after = sessionPicks.set(proposal.tasks.map(task => task._id))
 
