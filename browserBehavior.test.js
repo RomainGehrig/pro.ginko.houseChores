@@ -1452,7 +1452,8 @@ test('as-needed chore lifecycle stays aligned across As needed, Chores, and Quic
           '#asNeededCards [data-id="' + oneOff._id + '"] .as-needed-date'),
         readinessWrites: writes.filter(write =>
           Object.hasOwn(write.fields, 'readiness') &&
-          Object.keys(write.fields).every(key => ['readiness', 'scheduledDate'].includes(key)))
+          Object.keys(write.fields).every(key =>
+            ['readiness', 'readySince', 'scheduledDate'].includes(key)))
       }
     `
   })
@@ -1474,9 +1475,9 @@ test('as-needed chore lifecycle stays aligned across As needed, Chores, and Quic
   assert.equal(result.oneOff.scheduledDate, '2026-09-02')
   assert.equal(result.oneOffPromptGone, true)
   assert.deepEqual(result.readinessWrites.map(write => [write.id, write.fields]), [
-    ['task-1', { readiness: 'ready' }],
-    ['task-1', { readiness: 'waiting', scheduledDate: '2030-01-09' }],
-    ['task-2', { readiness: 'waiting', scheduledDate: '2026-09-02' }]
+    ['task-1', { readiness: 'ready', readySince: '2030-01-07' }],
+    ['task-1', { readiness: 'waiting', readySince: null, scheduledDate: '2030-01-09' }],
+    ['task-2', { readiness: 'waiting', readySince: null, scheduledDate: '2026-09-02' }]
   ])
 })
 
