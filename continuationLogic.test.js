@@ -47,6 +47,22 @@ test('search ignores budget but excludes drafts and attached tasks', () => {
   )
 })
 
+test('continuation candidates omit waiting as-needed chores', () => {
+  const availabilityTasks = [
+    { _id: 'waiting', name: 'Polish mirror', status: 'active', taskMode: 'as_needed', readiness: 'waiting', estimatedDuration: 5, scheduledDate: '2026-08-01' },
+    { _id: 'ready', name: 'Polish mirror', status: 'active', taskMode: 'as_needed', readiness: 'ready', estimatedDuration: 5, scheduledDate: '2026-08-02' }
+  ]
+
+  assert.deepEqual(
+    suggestContinuationTasks(availabilityTasks, [], 10 * 60000).map(task => task._id),
+    ['ready']
+  )
+  assert.deepEqual(
+    searchContinuationTasks(availabilityTasks, 'mirror', []).map(task => task._id),
+    ['ready']
+  )
+})
+
 test('several suggestions consume the allowance cumulatively', () => {
   assert.equal(suggestionSelectionFits(
     [{ estimatedDuration: 6 }], { estimatedDuration: 4 }, 10 * 60000

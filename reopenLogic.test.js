@@ -43,6 +43,31 @@ test('reopening the latest outcome returns the time it claimed', () => {
   assert.equal(plan.restoresSchedule, true)
 })
 
+test('reopening an as-needed completion restores its prior ready state', () => {
+  const task = {
+    _id: 't2', lastCompletedDate: null, scheduledDate: '2026-08-24',
+    readiness: 'ready', readySince: '2026-08-23'
+  }
+  const taskUpdate = {
+    lastCompletedDate: 1756036800000,
+    scheduledDate: '2026-08-27',
+    readiness: 'waiting',
+    readySince: null
+  }
+  const execution = {
+    _id: 'e2', taskId: 't2', activeElapsedMs: 900000, rawDurationMs: 300000,
+    taskUpdate,
+    taskFieldsBefore: taskFieldsBeforeUpdate(task, taskUpdate)
+  }
+
+  assert.deepEqual(reopenPlan(execution, [execution]).taskUpdate, {
+    lastCompletedDate: null,
+    scheduledDate: '2026-08-24',
+    readiness: 'ready',
+    readySince: '2026-08-23'
+  })
+})
+
 test('reopening an earlier outcome leaves the checkpoint where the later one put it', () => {
   const execution = { _id: 'e1', taskId: 't1', activeElapsedMs: 600000, rawDurationMs: 600000 }
   const plan = reopenPlan(execution, [

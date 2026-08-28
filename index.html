@@ -48,6 +48,23 @@
     </section>
   </section>
 
+  <section id="view-as-needed" class="view" style="display:none">
+    <header class="ledger-head as-needed-head">
+      <div class="ledger-title">
+        <p class="eyebrow"><span id="asNeededCountLine">As needed</span></p>
+        <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">As needed. </span>Things to check</h1>
+      </div>
+      <div id="asNeededFilters" class="ledger-filters">
+        <input id="asNeededSearch" class="input" type="search" placeholder="Search as needed" aria-label="Search as-needed chores">
+        <div id="asNeededCategoryFilter" class="ledger-cats" role="group" aria-label="Category filter"></div>
+      </div>
+    </header>
+    <div id="asNeededStatus" class="inline-status" role="status"></div>
+    <div class="ledger-body as-needed-body">
+      <div id="asNeededCards" class="ledger-pane as-needed-pane"></div>
+    </div>
+  </section>
+
   <section id="view-inbox" class="view" style="display:none">
     <div class="inbox-left">
       <header class="inbox-head">
@@ -81,7 +98,8 @@
     <header class="ledger-head">
       <div class="ledger-title">
         <p class="eyebrow"><span id="choresCountLine">Chores</span></p>
-        <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">Chores. </span>The whole ledger</h1>
+        <h1 class="route-heading display" tabindex="-1"><span class="visually-hidden">Chores. </span>Chore ledger</h1>
+        <a class="ledger-setup-link" href="#/setup">Setup</a>
       </div>
       <div id="choresViews" class="seg ledger-views" role="group" aria-label="Which chores"></div>
       <div id="choresFilters" class="ledger-filters">
@@ -185,8 +203,8 @@
 <nav class="bottom-nav" aria-label="Primary">
   <p class="nav-wordmark display">Chore Planner</p>
   <a data-route="today" href="#/today">Quick session</a>
+  <a data-route="as-needed" href="#/as-needed">As needed</a>
   <a data-route="chores" href="#/chores">Chores</a>
   <a id="inboxNav" data-route="inbox" href="#/inbox" aria-label="Capture, no chores to confirm">Capture <span class="nav-count fig" hidden>0</span></a>
   <a data-route="log" href="#/log">Log</a>
-  <a data-route="setup" href="#/setup">Setup</a>
 </nav>

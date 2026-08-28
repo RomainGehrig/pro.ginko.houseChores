@@ -10,6 +10,16 @@ const activeSession = ({ taskBundle }) => ({
   accumulatedActiveMs: 0, activeStartedAt: 1723111140000, checkpointElapsedMs: 0
 })
 
+const deferred = () => {
+  let resolve
+  let reject
+  const promise = new Promise((resolvePromise, rejectPromise) => {
+    resolve = resolvePromise
+    reject = rejectPromise
+  })
+  return { promise, resolve, reject }
+}
+
 test('fresh store repairs the exact task update persisted with an execution', async () => {
   const tasks = new Map([['weekly', {
     _id: 'weekly', status: 'active', scheduledDate: '2026-08-08',
@@ -21,7 +31,8 @@ test('fresh store repairs the exact task update persisted with an execution', as
     activeElapsedMs: 60000, outcome: 'done',
     taskUpdateSnapshot: {
       lastCompletedDate: 1723111200000,
-      scheduledDate: '2026-08-15'
+      scheduledDate: '2026-08-15',
+      readiness: 'waiting'
     }
   }]
   let failOnce = true
@@ -47,6 +58,38 @@ test('fresh store repairs the exact task update persisted with an execution', as
 
   assert.equal(tasks.get('weekly').scheduledDate, '2026-08-15')
   assert.equal(tasks.get('weekly').lastCompletedDate, 1723111200000)
+  assert.equal(tasks.get('weekly').readiness, 'waiting')
+})
+
+test('recovery discards an unknown readiness while retaining valid schedule fields', async () => {
+  const task = {
+    _id: 'weekly', status: 'active', scheduledDate: '2026-08-08',
+    readiness: 'ready', lastCompletedDate: null
+  }
+  const updates = []
+  const store = createSessionStore({
+    getSession: async () => activeSession({ taskBundle: ['weekly'] }),
+    listExecutions: async () => [{
+      taskId: 'weekly', sessionId: 's1', endTime: 1000,
+      taskUpdateSnapshot: {
+        lastCompletedDate: 1000,
+        scheduledDate: '2026-08-15',
+        readiness: 'future_value'
+      }
+    }],
+    listTasks: async () => [structuredClone(task)],
+    updateSessionRecord: async () => {},
+    updateTaskRecord: async (id, fields) => updates.push({ id, fields })
+  })
+
+  const aggregate = await store.refresh('s1', 1000)
+
+  const expectedUpdate = {
+    lastCompletedDate: 1000,
+    scheduledDate: '2026-08-15'
+  }
+  assert.deepEqual(updates, [{ id: 'weekly', fields: expectedUpdate }])
+  assert.deepEqual(aggregate.bundle[0], { ...task, ...expectedUpdate })
 })
 
 test('fresh store does not repeat a task update whose response was lost', async () => {
@@ -267,6 +310,33 @@ test('hydrate makes archived bundle tasks unavailable but keeps proposed Quick-a
   assert.equal(aggregate.bundle[1].unavailable, undefined)
 })
 
+test('refresh keeps a newly waiting persisted bundle task in place as unavailable', async () => {
+  const session = {
+    _id: 's1', status: 'active', startTime: 1000,
+    taskBundle: ['scheduled', 'waiting'], accumulatedActiveMs: 0,
+    activeStartedAt: 1000, checkpointElapsedMs: 0
+  }
+  const store = createSessionStore({
+    getSession: async () => structuredClone(session),
+    listExecutions: async () => [],
+    listTasks: async () => [{
+      _id: 'scheduled', name: 'Sweep porch', status: 'active'
+    }, {
+      _id: 'waiting', name: 'Check rain barrel', status: 'active',
+      taskMode: 'as_needed', readiness: 'waiting'
+    }],
+    updateSessionRecord: async () => {}
+  })
+
+  const aggregate = await store.refresh('s1', 5000)
+
+  assert.deepEqual(aggregate.bundle.map(task => task._id), ['scheduled', 'waiting'])
+  assert.deepEqual(aggregate.bundle[1], {
+    _id: 'waiting', name: 'Check rain barrel', status: 'active',
+    taskMode: 'as_needed', readiness: 'waiting', unavailable: true
+  })
+})
+
 test('restore repairs a final execution into paused state', async () => {
   const updates = []
   const session = {
@@ -315,7 +385,7 @@ test('start creates one compact snapshot when none is unfinished', async () => {
     listSessions: async () => [],
     getSession: async id => created?._id === id ? created : null,
     listExecutions: async () => [],
-    listTasks: async ids => ids.map(_id => ({ _id, name: _id })),
+    listTasks: async ids => ids.map(_id => ({ _id, name: _id, status: 'active' })),
     createSessionRecord: async draft => (created = { _id: 'new', ...draft }),
     updateSessionRecord: async () => {}
   })
@@ -328,13 +398,121 @@ test('start creates one compact snapshot when none is unfinished', async () => {
   assert.deepEqual(result.aggregate.session.taskBundle, ['t1'])
 })
 
+test('start revalidates proposal tasks after recovery without reapplying fit or category rules', async () => {
+  const recoveryStarted = deferred()
+  const releaseRecovery = deferred()
+  const tasks = new Map([
+    ['scheduled-outside-filter', {
+      _id: 'scheduled-outside-filter', status: 'active', categoryId: 'other',
+      estimatedDuration: 90, taskMode: 'scheduled', readiness: null
+    }],
+    ['condition-changed', {
+      _id: 'condition-changed', status: 'approved_recurring', categoryId: 'chosen',
+      estimatedDuration: 5, taskMode: 'as_needed', readiness: 'ready'
+    }],
+    ['ready-over-budget', {
+      _id: 'ready-over-budget', status: 'approved_recurring', categoryId: 'chosen',
+      estimatedDuration: 120, taskMode: 'as_needed', readiness: 'ready'
+    }]
+  ])
+  let persisted
+  const store = createSessionStore({
+    listSessions: async () => {
+      recoveryStarted.resolve()
+      await releaseRecovery.promise
+      return []
+    },
+    getSession: async id => persisted?._id === id ? structuredClone(persisted) : null,
+    listExecutions: async () => [],
+    // Deliberately return datastore order rather than proposal order. Start owns
+    // the user's captured order and must rebuild from the requested ids.
+    listTasks: async ids => [...tasks.values()].reverse()
+      .filter(task => ids.includes(task._id)).map(task => structuredClone(task)),
+    createSessionRecord: async draft => {
+      persisted = { _id: 'new', ...structuredClone(draft) }
+      return { _id: 'new' }
+    },
+    updateSessionRecord: async () => {}
+  })
+
+  const starting = store.start({
+    tasks: [
+      tasks.get('scheduled-outside-filter'),
+      tasks.get('condition-changed'),
+      tasks.get('ready-over-budget')
+    ],
+    timeBudgetMinutes: 1,
+    categoryFilterId: 'chosen',
+    categoryFilter: 'Chosen'
+  }, 9000)
+  await recoveryStarted.promise
+  tasks.set('condition-changed', {
+    ...tasks.get('condition-changed'), readiness: 'waiting'
+  })
+  releaseRecovery.resolve()
+
+  const result = await starting
+
+  assert.equal(result.restored, false)
+  assert.deepEqual(persisted.taskBundle, [
+    'scheduled-outside-filter',
+    'ready-over-budget'
+  ])
+  assert.deepEqual(result.aggregate.session.taskBundle, persisted.taskBundle)
+  assert.deepEqual(result.rejectedTaskIds, ['condition-changed'])
+})
+
+test('start does not create an empty session when delayed recovery leaves no eligible task', async () => {
+  const recoveryStarted = deferred()
+  const releaseRecovery = deferred()
+  let task = {
+    _id: 'dishwasher', status: 'approved_recurring',
+    taskMode: 'as_needed', readiness: 'ready'
+  }
+  let creates = 0
+  let persisted
+  const store = createSessionStore({
+    listSessions: async () => {
+      recoveryStarted.resolve()
+      await releaseRecovery.promise
+      return []
+    },
+    listTasks: async ids => ids.includes(task._id) ? [structuredClone(task)] : [],
+    getSession: async id => persisted?._id === id ? structuredClone(persisted) : null,
+    listExecutions: async () => [],
+    createSessionRecord: async draft => {
+      creates++
+      persisted = { _id: 'must-not-exist', ...structuredClone(draft) }
+      return { _id: persisted._id }
+    },
+    updateSessionRecord: async () => {}
+  })
+
+  const starting = store.start({
+    tasks: [structuredClone(task)],
+    timeBudgetMinutes: 30,
+    categoryFilterId: null,
+    categoryFilter: null
+  }, 9000)
+  await recoveryStarted.promise
+  task = { ...task, readiness: 'waiting' }
+  releaseRecovery.resolve()
+
+  const result = await starting
+
+  assert.equal(creates, 0)
+  assert.equal(result.aggregate, null)
+  assert.equal(result.restored, false)
+  assert.equal(result.reason, 'no_eligible_tasks')
+})
+
 test('start re-reads the persisted snapshot after Freezr returns only create metadata', async () => {
   let persisted
   const store = createSessionStore({
     listSessions: async () => [],
     getSession: async id => persisted?._id === id ? structuredClone(persisted) : null,
     listExecutions: async () => [],
-    listTasks: async ids => ids.map(_id => ({ _id, name: _id })),
+    listTasks: async ids => ids.map(_id => ({ _id, name: _id, status: 'active' })),
     createSessionRecord: async draft => {
       persisted = { ...structuredClone(draft), _id: 'new' }
       return { _id: 'new', _date_modified: 12345 }
@@ -503,6 +681,28 @@ test('attaching a searched task ignores the exhausted budget and deduplicates ID
   assert.deepEqual(aggregate.session.taskBundle, ['t1', 'searched-30m'])
   assert.equal(aggregate.bundle[1].estimatedDuration, 30)
   assert.equal(aggregate.session.status, 'paused')
+})
+
+test('attaching tasks excludes waiting as-needed chores while keeping eligible requests', async () => {
+  let session = {
+    _id: 's1', status: 'paused', startTime: 1000, taskBundle: [],
+    accumulatedActiveMs: 0, activeStartedAt: null, checkpointElapsedMs: 0, pausedAt: 1000
+  }
+  const tasks = new Map([
+    ['scheduled', { _id: 'scheduled', name: 'Sweep porch', status: 'active' }],
+    ['ready', { _id: 'ready', name: 'Check rain barrel', status: 'active', taskMode: 'as_needed', readiness: 'ready' }],
+    ['waiting', { _id: 'waiting', name: 'Close shutters', status: 'active', taskMode: 'as_needed', readiness: 'waiting' }]
+  ])
+  const store = createSessionStore({
+    getSession: async () => structuredClone(session),
+    listExecutions: async () => [],
+    listTasks: async ids => ids.map(id => tasks.get(id)).filter(Boolean),
+    updateSessionRecord: async (id, fields) => { session = { ...session, ...fields } }
+  })
+
+  const aggregate = await store.attachTasks('s1', ['scheduled', 'ready', 'waiting'])
+
+  assert.deepEqual(aggregate.session.taskBundle, ['scheduled', 'ready'])
 })
 
 test('attaching a searched task revalidates that it is still active before writing', async () => {
@@ -1372,6 +1572,56 @@ test('a hand-picked chore with no estimate joins a running session all the same'
   const aggregate = await store.attachTasks('s1', ['t3'])
 
   assert.deepEqual(aggregate.session.taskBundle, ['t1', 't3'])
+})
+
+test('a stale live waiting attachment reports rejection without ending the running session', async () => {
+  const session = {
+    _id: 's1', status: 'active', startTime: 1000, taskBundle: ['t1'],
+    accumulatedActiveMs: 0, activeStartedAt: 1000, checkpointElapsedMs: 0
+  }
+  const store = createSessionStore({
+    now: () => 301000,
+    getSession: async () => structuredClone(session),
+    listExecutions: async () => [],
+    listTasks: async ids => ids.map(id => ({
+      t1: { _id: 't1', name: 'Sink', status: 'active' },
+      waiting: {
+        _id: 'waiting', name: 'Check rain barrel', status: 'active',
+        taskMode: 'as_needed', readiness: 'waiting'
+      }
+    })[id]).filter(Boolean),
+    updateSessionRecord: async () => assert.fail('waiting task must not be attached')
+  })
+
+  const aggregate = await store.attachTasks('s1', ['waiting'], { whileRunning: true })
+
+  assert.equal(aggregate.session.status, 'active')
+  assert.deepEqual(aggregate.session.taskBundle, ['t1'])
+  assert.deepEqual(aggregate.rejectedTaskIds, ['waiting'])
+})
+
+test('an archived waiting as-needed task still rejects attachment', async () => {
+  const session = {
+    _id: 's1', status: 'paused', startTime: 1000, taskBundle: ['t1'],
+    accumulatedActiveMs: 0, activeStartedAt: null, checkpointElapsedMs: 0, pausedAt: 1000
+  }
+  const store = createSessionStore({
+    getSession: async () => structuredClone(session),
+    listExecutions: async () => [],
+    listTasks: async ids => ids.map(id => ({
+      t1: { _id: 't1', name: 'Sink', status: 'active' },
+      archived: {
+        _id: 'archived', name: 'Old rain barrel', status: 'archived',
+        taskMode: 'as_needed', readiness: 'waiting'
+      }
+    })[id]).filter(Boolean),
+    updateSessionRecord: async () => assert.fail('archived task must not be attached')
+  })
+
+  await assert.rejects(
+    store.attachTasks('s1', ['archived']),
+    { message: 'That task is no longer available.' }
+  )
 })
 
 // Attaching cannot refuse — it answers with the session as it really is. A

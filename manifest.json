@@ -11,11 +11,11 @@
       "modules": [
         "index.js"
       ],
-      "Description": "Single-page chore planner with calendar-scheduled task intake and review, user-managed category/location assignments, scheduled-date-prioritized sessions, timer-based doing mode, post-session review, and read-only history."
+      "Description": "Single-page chore planner with calendar-scheduled and condition-gated as-needed chore intake and review, user-managed category/location assignments, scheduled-date-prioritized sessions, timer-based doing mode, post-session review, and read-only history."
     }
   },
   "display_name": "houseChores",
-  "description": "# Build Brief: Household Chore Planner\n\nBuild a small household chore and admin-task planner. The primary goal is to help one or more people turn available time into a realistic, focused bundle of tasks.\n\n## Core user flow\n- A user adds chores or admin tasks, individually or as a batch.\n- AI can propose missing task details, such as category, estimated duration, and a typed schedule rule.\n- The user reviews and approves suggested details and chooses the current scheduled date before tasks become active.\n- The user selects available time: 5, 15, 30 minutes, or a custom duration; they may optionally filter by category.\n- The app proposes a task bundle that fits the time and orders eligible tasks by scheduled date.\n- The user enters a focused \u201cdoing\u201d mode with a timer.\n- Each task can be marked done, cancelled, or already completed.\n- The app records the actual duration and completion outcome, advancing repeating schedules only after completion.\n- After a session, the user can correct time taken and optionally rate task difficulty. AI may suggest updated future duration estimates based on past executions.\n\n## Core data\n\n### Task\n- Name\n- Category\n- Estimated duration\n- Current scheduled date\n- Typed one-off, periodic, or fixed calendar schedule\n- Last completed date\n- Status: proposed, approved recurring, active, or archived\n\n### Task execution\n- Task reference\n- Session reference\n- Start and end time\n- Actual duration\n- Outcome: done, cancelled, already done\n- Optional difficulty rating\n- Notes\n\n### Work session\n- Selected time budget\n- Optional category filter\n- Generated task bundle\n- Start and end time\n\n### Categories\n- Admin\n- Clean / Reset\n- Fix\n- Plan\n- Organize\n- Run Errands\n\nMeals and groceries can initially be treated as subcategories of Run Errands.\n\n## AI behavior\n- AI may enrich raw task names with likely category, estimated duration, and a typed schedule rule.\n- AI schedule suggestions must always be reviewable and editable before saving, and AI never selects the current scheduled date.\n- After enough execution history exists, AI may suggest revised duration estimates.\n- Do not let AI silently change approved task data.\n\n## Prioritization rules\n- Include active tasks even when they are scheduled for the future.\n- Prefer earlier scheduled dates before later scheduled dates.\n- Fit as many suitable tasks as possible within the chosen time budget.\n- Avoid exceeding the chosen budget unless the user explicitly opts in.\n- If a task is completed early, optionally show an additional task that fits the remaining time.\n\n## First-version scope\nInclude task intake, approval, calendar-scheduled tasks, time-based bundles, a timer-based doing mode, completion tracking, and basic AI enrichment.\n\nKeep accounts, permissions, notifications, external calendar integration, gamification, complex household assignment, and advanced optimization out of the first version unless they are essentially free in the framework.",
+  "description": "# Build Brief: Household Chore Planner\n\nBuild a small household chore and admin-task planner. The primary goal is to help one or more people turn available time into a realistic, focused bundle of tasks.\n\n## Core user flow\n- A user adds chores or admin tasks, individually or as a batch.\n- AI can propose missing task details, such as category, estimated duration, and a typed schedule rule.\n- The user reviews and approves suggested details, choosing either an execution schedule or an inspection schedule for a condition-gated as-needed chore.\n- An as-needed chore becomes eligible for work only when its external condition is confirmed; its schedule proposes when to inspect, not an obligation.\n- The user selects available time: 5, 15, 30 minutes, or a custom duration; they may optionally filter by category.\n- The app proposes a task bundle that fits the time and orders eligible tasks by scheduled date.\n- The user enters a focused \u201cdoing\u201d mode with a timer.\n- Each task can be marked done, cancelled, or already completed.\n- The app records the actual duration and completion outcome, advancing repeating execution or inspection schedules only after completion or a check.\n- After a session, the user can correct time taken and optionally rate task difficulty. AI may suggest updated future duration estimates based on past executions.\n\n## Core data\n\n### Task\n- Name\n- Category\n- Estimated duration\n- Current scheduled date or inspection date\n- Typed one-off, periodic, or fixed calendar schedule\n- Task mode: scheduled execution or condition-gated as needed\n- Readiness: waiting or ready for as-needed chores\n- Last completed date\n- Status: proposed, approved recurring, active, or archived\n\n### Task execution\n- Task reference\n- Session reference\n- Start and end time\n- Actual duration\n- Outcome: done, cancelled, already done\n- Optional difficulty rating\n- Notes\n\n### Work session\n- Selected time budget\n- Optional category filter\n- Generated task bundle\n- Start and end time\n\n### Categories\n- Admin\n- Clean / Reset\n- Fix\n- Plan\n- Organize\n- Run Errands\n\nMeals and groceries can initially be treated as subcategories of Run Errands.\n\n## AI behavior\n- AI may enrich raw task names with likely category, estimated duration, and a typed schedule rule.\n- AI schedule suggestions must always be reviewable and editable before saving, and AI never selects the current scheduled date.\n- After enough execution history exists, AI may suggest revised duration estimates.\n- Do not let AI silently change approved task data.\n\n## Prioritization rules\n- Include active tasks even when they are scheduled for the future.\n- Prefer earlier scheduled dates before later scheduled dates.\n- Fit as many suitable tasks as possible within the chosen time budget.\n- Avoid exceeding the chosen budget unless the user explicitly opts in.\n- If a task is completed early, optionally show an additional task that fits the remaining time.\n\n## First-version scope\nInclude task intake, approval, calendar-scheduled and condition-gated as-needed chores, time-based bundles, a timer-based doing mode, completion tracking, and basic AI enrichment.\n\nKeep accounts, permissions, notifications, external calendar integration, gamification, complex household assignment, and advanced optimization out of the first version unless they are essentially free in the framework.",
   "files": [
     {
       "path": "index.js",
@@ -60,6 +60,22 @@
     {
       "path": "scheduleLogic.test.js",
       "Description": "Node tests covering schedule normalization, legacy compatibility, validation, summaries, matching, and completion advancement."
+    },
+    {
+      "path": "asNeededLogic.js",
+      "Description": "Pure readiness transitions and inspection-language schedule summaries for condition-gated chores."
+    },
+    {
+      "path": "asNeededLogic.test.js",
+      "Description": "Node tests covering as-needed confirmation, deferral dates, and inspection-language summaries."
+    },
+    {
+      "path": "asNeededView.js",
+      "Description": "Pure markup for grouped condition-gated chores and their direct readiness actions."
+    },
+    {
+      "path": "asNeededView.test.js",
+      "Description": "Node tests covering grouped As needed markup, direct actions, and neutral inspection language."
     },
     {
       "path": "slip.js",
@@ -112,6 +128,14 @@
     {
       "path": "taskData.test.js",
       "Description": "Node tests covering proposed-task defaults, idempotent creation, and permanent deletion."
+    },
+    {
+      "path": "taskModeLogic.js",
+      "Description": "Pure task-mode, readiness, eligibility, normalization, and mode-change persistence rules."
+    },
+    {
+      "path": "taskModeLogic.test.js",
+      "Description": "Node tests covering task-mode compatibility, readiness, eligibility, normalization, and mode changes."
     },
     {
       "path": "taskMigration.js",
@@ -444,7 +468,19 @@
         },
         "scheduledDate": {
           "type": "String",
-          "description": "Local YYYY-MM-DD planning date for the current task occurrence, or null while proposed."
+          "description": "Local YYYY-MM-DD attention date: the current occurrence for scheduled tasks or the next planned inspection for as-needed tasks; null while proposed or unscheduled."
+        },
+        "taskMode": {
+          "type": "String",
+          "description": "Whether the schedule proposes execution (scheduled) or an inspection of an external condition (as_needed); missing values mean scheduled."
+        },
+        "readiness": {
+          "type": "String",
+          "description": "For as-needed tasks, waiting until the condition is confirmed or ready for work; null for scheduled tasks."
+        },
+        "readySince": {
+          "type": "String",
+          "description": "Local YYYY-MM-DD date when an as-needed task was most recently marked ready; null while waiting or for scheduled tasks."
         },
         "schedule": {
           "type": "Object",

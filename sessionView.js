@@ -21,7 +21,7 @@ import {
   completionFailureMessage, disarmDone
 } from './chores/choreActions.js'
 import {
-  sessionAddActionLabel, sessionAddLanded, sessionAddNote, sessionAddTarget
+  sessionAddActionLabel, sessionAddLanded, sessionAddNote, sessionAddRejected, sessionAddTarget
 } from './sessionAdd.js'
 import {
   pickedBundle, bundleTotal, bundleTotalLine, bundleFitLine, vesselGeometry,
@@ -44,8 +44,33 @@ let heldToDetail = false
 const element = id => document.getElementById(id)
 const today = () => localDateFromDate(new Date())
 
-export function showSessionStartNotice (startResult, status) {
-  if (!startResult?.restored || !status) return false
+export function showSessionStartNotice (startResult, status, proposalTasks = []) {
+  if (!status) return false
+  if (startResult?.reason === 'no_eligible_tasks') {
+    status.textContent = 'None of the picked chores is available to start. ' +
+      'Pick what you want to do now.'
+    status.setAttribute('role', 'status')
+    status.setAttribute('data-state', 'info')
+    return true
+  }
+  const rejectedIds = new Set(startResult?.rejectedTaskIds || [])
+  const rejectedNames = proposalTasks
+    .filter(task => rejectedIds.has(task?._id))
+    .map(task => String(task?.name || 'Unnamed chore'))
+  if (rejectedNames.length) {
+    const names = rejectedNames.length === 1
+      ? rejectedNames[0]
+      : rejectedNames.length === 2
+        ? rejectedNames.join(' and ')
+        : rejectedNames.slice(0, -1).join(', ') + ' and ' + rejectedNames.at(-1)
+    status.textContent = 'Started without ' + names + ' because ' +
+      (rejectedNames.length === 1 ? 'it is' : 'they are') +
+      ' no longer available to start.'
+    status.setAttribute('role', 'status')
+    status.setAttribute('data-state', 'info')
+    return true
+  }
+  if (!startResult?.restored) return false
   status.textContent = 'Resuming your unfinished session — the new bundle was not started.'
   status.setAttribute('role', 'status')
   status.setAttribute('data-state', 'info')
@@ -200,7 +225,8 @@ function fillBundle () {
     selectedCategoryId || null,
     selectableReferences(categoryLocationStore.getSnapshot().categories),
     before,
-    excludedIds
+    excludedIds,
+    today()
   )
   const after = sessionPicks.set(proposal.tasks.map(task => task._id))
 
@@ -286,6 +312,9 @@ export async function addQuickChoreToSession (task, target, {
   setAggregate(aggregate)
 
   if (!sessionAddLanded(aggregate.session, task._id)) {
+    if (sessionAddRejected(aggregate, task._id)) {
+      return { target: 'unavailable', added: false, aggregate }
+    }
     const added = isPicked(task._id) || togglePick(task._id)
     return { target: 'ended', added, aggregate }
   }
@@ -294,13 +323,34 @@ export async function addQuickChoreToSession (task, target, {
   return { target: 'running', added: true, aggregate }
 }
 
+export function quickSessionPlacementModel (task, placement) {
+  return {
+    message: sessionAddNote({
+      name: task.name,
+      target: placement.target,
+      added: placement.added
+    }),
+    ...(placement.target === 'unavailable'
+      ? {
+          recovery: {
+            href: '#/as-needed', label: 'Open As needed', className: 'quick-recovery-link'
+          }
+        }
+      : {})
+  }
+}
+
 function showQuickSessionPlacement (task, placement) {
   const status = element('sessionStatus')
-  status.textContent = sessionAddNote({
-    name: task.name,
-    target: placement.target,
-    added: placement.added
-  })
+  const model = quickSessionPlacementModel(task, placement)
+  status.textContent = model.message
+  if (model.recovery) {
+    const link = document.createElement('a')
+    link.className = model.recovery.className
+    link.href = model.recovery.href
+    link.textContent = model.recovery.label
+    status.append(' ', link)
+  }
   status.setAttribute('role', 'status')
   status.setAttribute('data-state', 'info')
 }
@@ -450,13 +500,17 @@ async function startSession () {
 
   try {
     const startResult = await sessionStore.start(proposal, Date.now())
+    if (!startResult.aggregate) {
+      showSessionStartNotice(startResult, status, bundle)
+      return
+    }
     const { aggregate } = startResult
     setCurrentSessionAggregate(aggregate)
     clearPicksForStart(startResult)
     setNavVisible('doing', true)
     showView('doing')
     await startDoing(aggregate)
-    showSessionStartNotice(startResult, document.getElementById('doingStatus'))
+    showSessionStartNotice(startResult, document.getElementById('doingStatus'), bundle)
   } catch (error) {
     status.innerHTML = '<span data-state="error" role="alert">' +
       escapeHtml('Could not start or recover the session: ' + error.message) + '</span>'

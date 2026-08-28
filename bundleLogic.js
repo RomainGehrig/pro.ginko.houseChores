@@ -1,30 +1,40 @@
-export function prioritizeTasks(tasks) {
+import { isTaskEligible } from './taskModeLogic.js'
+import { taskAttentionDate } from './slip.js'
+
+export function prioritizeTasks(tasks, today) {
   return [...tasks].sort((a, b) => {
-    if (!a.scheduledDate && !b.scheduledDate) return 0
-    if (!a.scheduledDate) return 1
-    if (!b.scheduledDate) return -1
-    return a.scheduledDate.localeCompare(b.scheduledDate)
+    const aDate = taskAttentionDate(a, today)
+    const bDate = taskAttentionDate(b, today)
+    if (!aDate && !bDate) return 0
+    if (!aDate) return 1
+    if (!bDate) return -1
+    return aDate.localeCompare(bDate)
   })
 }
 
-// Filling is help, not a reset. Anything already picked stays picked, in the
-// order it was picked, whatever it totals and whatever the filter says — a pick
-// is the user's statement of intent, and the app only decides what to add
-// around it. Once the budget is spent nothing more is added, but nothing that
-// was there is ever taken away.
-export function buildBundle(tasks, budgetMinutes, categoryFilterId, keptIds = [], setAsideIds = []) {
-  const byId = new Map(tasks.map(task => [task._id, task]))
+// Filling is help, not a reset. Anything already picked and still available
+// stays picked, in the order it was picked, whatever it totals and whatever
+// the filter says — a pick is the user's statement of intent, and the app only
+// decides what to add around it. Readiness is the exception because Not ready
+// is the user's later statement that this chore does not belong in the draft.
+// Once the budget is spent nothing more is added, but nothing eligible that was
+// already there is ever taken away.
+export function buildBundle(
+  tasks, budgetMinutes, categoryFilterId, keptIds = [], setAsideIds = [], today
+) {
+  const available = (tasks || []).filter(isTaskEligible)
+  const byId = new Map(available.map(task => [task._id, task]))
   const kept = (keptIds || []).map(id => byId.get(id)).filter(Boolean)
   const keptIdSet = new Set(kept.map(task => task._id))
   const setAsideIdSet = new Set(setAsideIds || [])
 
-  const eligible = tasks.filter(t => {
+  const eligible = available.filter(t => {
     if (keptIdSet.has(t._id)) return false
     if (setAsideIdSet.has(t._id)) return false
     if (categoryFilterId && t.categoryId !== categoryFilterId) return false
     return t.estimatedDuration && t.estimatedDuration > 0
   })
-  const prioritized = prioritizeTasks(eligible)
+  const prioritized = prioritizeTasks(eligible, today)
   const bundle = [...kept]
   let remaining = kept.reduce(
     (left, task) => left - (Number(task.estimatedDuration) || 0), budgetMinutes)
@@ -38,12 +48,12 @@ export function buildBundle(tasks, budgetMinutes, categoryFilterId, keptIds = []
 }
 
 export function buildBundleProposal (
-  tasks, budgetMinutes, categoryFilterId, categories, keptIds = [], setAsideIds = []
+  tasks, budgetMinutes, categoryFilterId, categories, keptIds = [], setAsideIds = [], today
 ) {
   const capturedCategoryId = categoryFilterId || null
   const category = categories.find(item => item._id === capturedCategoryId)
   return {
-    tasks: buildBundle(tasks, budgetMinutes, capturedCategoryId, keptIds, setAsideIds)
+    tasks: buildBundle(tasks, budgetMinutes, capturedCategoryId, keptIds, setAsideIds, today)
       .map(task => ({ ...task })),
     timeBudgetMinutes: budgetMinutes,
     categoryFilterId: capturedCategoryId,
@@ -70,12 +80,13 @@ export function buildSessionDraft (proposal, startTime) {
   }
 }
 
-export function findFillerTask(tasks, excludeIds, remainingMinutes, categoryFilterId) {
-  const eligible = tasks.filter(t =>
+export function findFillerTask(tasks, excludeIds, remainingMinutes, categoryFilterId, today) {
+  const available = (tasks || []).filter(isTaskEligible)
+  const eligible = available.filter(t =>
     !excludeIds.includes(t._id) &&
     (!categoryFilterId || t.categoryId === categoryFilterId) &&
     t.estimatedDuration && t.estimatedDuration <= remainingMinutes
   )
-  const prioritized = prioritizeTasks(eligible)
+  const prioritized = prioritizeTasks(eligible, today)
   return prioritized[0] || null
 }

@@ -23,12 +23,15 @@ test('prompt requests reviewable typed schedules without a scheduled date', () =
   assert.match(prompt, /"type": "fixed"/)
   assert.match(prompt, /weekdays/)
   assert.match(prompt, /Do not suggest a scheduledDate/)
+  assert.doesNotMatch(prompt, /taskMode|readiness/)
 })
 
 test('keeps valid schedule suggestions and drops invalid ones', () => {
   assert.deepEqual(normalizeEnrichmentSuggestion({
     category: 'Clean',
     estimatedDuration: 10,
+    taskMode: 'as_needed',
+    readiness: 'ready',
     scheduledDate: '2026-08-21',
     schedule: { type: 'fixed', pattern: { kind: 'weekdays', weekdays: [5] } }
   }), {

@@ -41,6 +41,7 @@ function failureReason (message) {
 
 export function completionFailureMessage (result) {
   if (result?.ok) return ''
+  if (result?.stage === 'validation') return String(result?.message || '')
   const base = result?.stage === 'refresh'
     ? "Recorded, but couldn't refresh the chores."
     : "Couldn't record that. The chore is unchanged."

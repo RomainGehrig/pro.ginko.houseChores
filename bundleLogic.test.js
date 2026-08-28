@@ -4,8 +4,11 @@ import {
   buildBundle,
   buildBundleProposal,
   buildSessionDraft,
-  findFillerTask
+  findFillerTask,
+  prioritizeTasks
 } from './bundleLogic.js'
+
+const TODAY = '2026-08-26'
 
 const tasks = [
   { _id: 't1', categoryId: 'c1', estimatedDuration: 5, scheduledDate: '2026-08-20' },
@@ -26,6 +29,50 @@ test('unfiltered bundle still considers every task', () => {
 
 test('filler selection uses the stable category id', () => {
   assert.equal(findFillerTask(tasks, [], 5, 'c2')._id, 't2')
+})
+
+test('waiting as-needed chores never survive a retained pick or fill an empty slot', () => {
+  const availabilityTasks = [
+    { _id: 'waiting', taskMode: 'as_needed', readiness: 'waiting', estimatedDuration: 5, scheduledDate: '2026-08-01' },
+    {
+      _id: 'ready', taskMode: 'as_needed', readiness: 'ready', readySince: '2026-08-10',
+      estimatedDuration: 5, scheduledDate: '2030-01-01'
+    },
+    { _id: 'scheduled', estimatedDuration: 5, scheduledDate: '2026-08-20' }
+  ]
+
+  assert.deepEqual(
+    buildBundle(availabilityTasks, 30, null, ['waiting']).map(task => task._id),
+    ['ready', 'scheduled']
+  )
+  assert.equal(findFillerTask(availabilityTasks, [], 30, null)._id, 'ready')
+})
+
+test('a ready as-needed chore is proposed before chores whose dates are still ahead', () => {
+  const proposal = buildBundle([
+    { _id: 'tomorrow', estimatedDuration: 5, scheduledDate: '2026-08-25' },
+    {
+      _id: 'ready', taskMode: 'as_needed', readiness: 'ready', readySince: '2026-08-24',
+      estimatedDuration: 5, scheduledDate: '2030-01-01'
+    }
+  ], 10, null)
+
+  assert.deepEqual(proposal.map(task => task._id), ['ready', 'tomorrow'])
+})
+
+test('a legacy ready chore without readySince uses today on every priority surface', () => {
+  const candidates = [
+    {
+      _id: 'legacy-ready', taskMode: 'as_needed', readiness: 'ready',
+      scheduledDate: '2030-01-01'
+    },
+    { _id: 'ripe', scheduledDate: '2026-08-01' }
+  ]
+
+  assert.deepEqual(
+    prioritizeTasks(candidates, TODAY).map(task => task._id),
+    ['ripe', 'legacy-ready']
+  )
 })
 
 // Filling is help, not a reset. What the user put in stays in, in the order they
@@ -63,6 +110,34 @@ test('a pick survives a filter it does not match and a budget it does not fit', 
 test('the proposal carries the picks through with everything else', () => {
   const proposal = buildBundleProposal(fillTasks, 30, null, [], ['c'])
   assert.deepEqual(proposal.tasks.map(task => task._id), ['c', 'a', 'b'])
+})
+
+test('readiness and set-aside choices compose without overriding explicit eligible picks', () => {
+  const crossProduct = [
+    { _id: 'waiting-picked', taskMode: 'as_needed', readiness: 'waiting', categoryId: 'wanted', estimatedDuration: 5, scheduledDate: '2030-01-01' },
+    { _id: 'ready-picked', taskMode: 'as_needed', readiness: 'ready', categoryId: 'wanted', estimatedDuration: 5, scheduledDate: '2030-01-02' },
+    { _id: 'scheduled-picked', taskMode: 'scheduled', categoryId: 'other', estimatedDuration: 20, scheduledDate: '2030-01-03' },
+    { _id: 'waiting-auto', taskMode: 'as_needed', readiness: 'waiting', categoryId: 'wanted', estimatedDuration: 5, scheduledDate: '2030-01-04' },
+    { _id: 'ready-set-aside', taskMode: 'as_needed', readiness: 'ready', categoryId: 'wanted', estimatedDuration: 5, scheduledDate: '2030-01-05' },
+    { _id: 'scheduled-set-aside', taskMode: 'scheduled', categoryId: 'wanted', estimatedDuration: 5, scheduledDate: '2030-01-06' },
+    { _id: 'ready-auto', taskMode: 'as_needed', readiness: 'ready', categoryId: 'wanted', estimatedDuration: 5, scheduledDate: '2030-01-07' },
+    { _id: 'scheduled-auto', taskMode: 'scheduled', categoryId: 'wanted', estimatedDuration: 5, scheduledDate: '2030-01-08' }
+  ]
+  const keptIds = ['waiting-picked', 'ready-picked', 'scheduled-picked']
+  const setAsideIds = [
+    'ready-picked', 'scheduled-picked', 'ready-set-aside', 'scheduled-set-aside'
+  ]
+  const expected = ['ready-picked', 'scheduled-picked', 'ready-auto', 'scheduled-auto']
+
+  assert.deepEqual(
+    buildBundle(crossProduct, 50, 'wanted', keptIds, setAsideIds, TODAY).map(task => task._id),
+    expected
+  )
+  assert.deepEqual(
+    buildBundleProposal(crossProduct, 50, 'wanted', [], keptIds, setAsideIds, TODAY)
+      .tasks.map(task => task._id),
+    expected
+  )
 })
 
 test('the proposal leaves out chores set aside for this draft', () => {

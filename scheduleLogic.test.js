@@ -250,6 +250,32 @@ test('builds outcome-specific task updates', () => {
   }), null)
 })
 
+test('as-needed outcomes return to waiting while cancellation changes nothing', () => {
+  const completion = { completionDate: '2026-08-24', completedAt: 1756036800000 }
+  const asNeededPeriodic = {
+    taskMode: 'as_needed', readiness: 'ready', readySince: '2026-08-21', scheduledDate: '2026-01-01',
+    schedule: { type: 'periodic', every: 3, unit: 'day' }
+  }
+  const asNeededOnce = {
+    taskMode: 'as_needed', readiness: 'ready', readySince: '2026-08-22', scheduledDate: '2026-08-24',
+    schedule: { type: 'one_off' }
+  }
+
+  assert.deepEqual(taskUpdateForOutcome(asNeededPeriodic, 'done', completion), {
+    lastCompletedDate: completion.completedAt,
+    scheduledDate: '2026-08-27',
+    readiness: 'waiting',
+    readySince: null
+  })
+  assert.deepEqual(taskUpdateForOutcome(asNeededOnce, 'already_done', completion), {
+    lastCompletedDate: completion.completedAt,
+    status: 'archived',
+    readiness: 'waiting',
+    readySince: null
+  })
+  assert.equal(taskUpdateForOutcome(asNeededPeriodic, 'cancelled', completion), null)
+})
+
 // The row used to print the cadence in days with the unit dropped — "about
 // every 7" for a weekly chore. The rhythm is said the way it was set.
 test('the cadence is a phrase with its unit, and the summary is built from it', () => {

@@ -28,6 +28,9 @@ export function sessionAddTarget (session, taskId) {
 export const sessionAddLanded = (session, taskId) =>
   (session?.taskBundle || []).includes(taskId)
 
+export const sessionAddRejected = (aggregate, taskId) =>
+  (aggregate?.rejectedTaskIds || []).includes(taskId)
+
 // A chore already in the session under way gets no action: there is no taking
 // one back out mid-session, and a control that would only refuse is worse than
 // no control at all.
@@ -42,6 +45,7 @@ export function sessionAddActionLabel (target, isPicked) {
 export function sessionAddNote ({ name, target, added }) {
   const chore = String(name ?? '')
   if (target === 'running') return chore + ' is in the session you are doing.'
+  if (target === 'unavailable') return chore + ' is waiting for its condition.'
   // The session it was sent to had already finished. Naming only where the
   // chore ended up would leave the user to work out for themselves why it is
   // not where they put it.

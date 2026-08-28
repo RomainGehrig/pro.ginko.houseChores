@@ -1,5 +1,6 @@
 import { normalizeTaskSchedule } from './scheduleLogic.js'
 import { upgradeLegacyTasks } from './taskMigration.js'
+import { normalizeTaskAvailability } from './taskModeLogic.js'
 
 export function buildNewTaskRecord (name) {
   return {
@@ -11,6 +12,9 @@ export function buildNewTaskRecord (name) {
     scheduledDate: null,
     schedule: { type: 'one_off' },
     lastCompletedDate: null,
+    taskMode: 'scheduled',
+    readiness: null,
+    readySince: null,
     status: 'proposed',
     suggestedCategory: null,
     suggestedDuration: null,
@@ -25,7 +29,8 @@ export const listAllTasks = async () => {
   const tasks = await freezr.query('tasks', {}, { sort: { _date_modified: -1 } })
   const upgraded = await upgradeLegacyTasks(tasks, (id, fields) =>
     freezr.update('tasks', id, fields))
-  return upgraded.map(task => normalizeTaskSchedule(task))
+  return upgraded.map(task =>
+    normalizeTaskAvailability(normalizeTaskSchedule(task)))
 }
 
 export const createTask = name => freezr.create('tasks', buildNewTaskRecord(name))

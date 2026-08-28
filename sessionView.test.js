@@ -37,6 +37,41 @@ test('new session start does not add a restore notice', () => {
   assert.equal(status.textContent, '')
 })
 
+test('an empty revalidated start stays factual and leaves the Quick session available', () => {
+  const status = statusElement()
+
+  assert.equal(sessionView.showSessionStartNotice({
+    aggregate: null,
+    restored: false,
+    reason: 'no_eligible_tasks'
+  }, status), true)
+  assert.equal(
+    status.textContent,
+    'None of the picked chores is available to start. Pick what you want to do now.'
+  )
+  assert.equal(status.getAttribute('role'), 'status')
+  assert.equal(status.getAttribute('data-state'), 'info')
+})
+
+test('a partial revalidated start names the picked chore that was left out', () => {
+  const status = statusElement()
+
+  assert.equal(sessionView.showSessionStartNotice({
+    aggregate: { session: { taskBundle: ['folding'] } },
+    restored: false,
+    rejectedTaskIds: ['dishwasher']
+  }, status, [
+    { _id: 'dishwasher', name: 'Empty dishwasher' },
+    { _id: 'folding', name: 'Fold clothes' }
+  ]), true)
+  assert.equal(
+    status.textContent,
+    'Started without Empty dishwasher because it is no longer available to start.'
+  )
+  assert.equal(status.getAttribute('role'), 'status')
+  assert.equal(status.getAttribute('data-state'), 'info')
+})
+
 test('missing and valid budgets update the inline session status without disabling controls', () => {
   const status = statusElement()
   const propose = { disabled: false }
@@ -161,6 +196,50 @@ test('Quick Session sends its session action to the session already under way', 
     ['state', aggregate],
     ['render', aggregate]
   ])
+})
+
+test('a stale waiting chore stays unavailable when its running-session attachment is rejected', async () => {
+  const calls = []
+  const aggregate = {
+    session: { _id: 'session-1', status: 'active', taskBundle: ['task-1'] },
+    bundle: [],
+    executions: [],
+    rejectedTaskIds: ['task-2']
+  }
+
+  const placement = await sessionView.addQuickChoreToSession(
+    { _id: 'task-2', name: 'Check rain barrel' },
+    'running',
+    {
+      currentSession: { _id: 'session-1', status: 'active', taskBundle: ['task-1'] },
+      attachTasks: async (...args) => {
+        calls.push(['attach', ...args])
+        return aggregate
+      },
+      setAggregate: value => calls.push(['state', value]),
+      renderRunning: async value => calls.push(['render', value]),
+      isPicked: () => false,
+      togglePick: id => calls.push(['toggle', id])
+    }
+  )
+
+  assert.deepEqual(placement, { target: 'unavailable', added: false, aggregate })
+  assert.deepEqual(calls, [
+    ['attach', 'session-1', ['task-2'], { whileRunning: true }],
+    ['state', aggregate]
+  ])
+})
+
+test('a stale Quick rejection offers the As needed screen as its recovery control', () => {
+  assert.deepEqual(sessionView.quickSessionPlacementModel(
+    { name: 'Check rain barrel' },
+    { target: 'unavailable', added: false }
+  ), {
+    message: 'Check rain barrel is waiting for its condition.',
+    recovery: {
+      href: '#/as-needed', label: 'Open As needed', className: 'quick-recovery-link'
+    }
+  })
 })
 
 test('a failed Quick Session completion is stated inline without changing the chore', () => {

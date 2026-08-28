@@ -7,6 +7,7 @@ import { createTaskWithId, listTasksByIds, updateTask } from './taskData.js'
 import { buildSessionDraft } from './bundleLogic.js'
 import { normalizeContinuationSuggestionEntries } from './continuationLogic.js'
 import { reopenPlan } from './reopenLogic.js'
+import { isTaskEligible } from './taskModeLogic.js'
 import {
   chooseCurrentSession,
   conclusionFields,
@@ -19,7 +20,8 @@ import {
 
 const unavailableTask = id => ({ _id: id, name: 'Unavailable task', unavailable: true })
 const terminal = session => session.status === 'completed' || session.status === 'interrupted'
-const attachableTask = task => task?.status === 'active' || task?.status === 'approved_recurring'
+const liveTask = task => task?.status === 'active' || task?.status === 'approved_recurring'
+const attachableTask = task => liveTask(task) && isTaskEligible(task)
 const usableBundledTask = task => attachableTask(task) ||
   task?.status === 'proposed' || task?.status === 'draft'
 
@@ -39,6 +41,9 @@ function validTaskUpdateSnapshot (execution) {
   const snapshot = { lastCompletedDate: completedAt }
   if (typeof source.scheduledDate === 'string') snapshot.scheduledDate = source.scheduledDate
   if (source.status === 'archived') snapshot.status = 'archived'
+  if (source.readiness === 'waiting' || source.readiness === 'ready') {
+    snapshot.readiness = source.readiness
+  }
   return snapshot
 }
 
@@ -176,10 +181,30 @@ export function createSessionStore ({
   async function start (proposal, nowMs = Date.now()) {
     const existing = await restoreCurrent(nowMs)
     if (existing) return { aggregate: existing, restored: true }
-    const created = await createSessionRecord(buildSessionDraft(proposal, nowMs))
+    // Recovery can take long enough for a picked chore to change underneath the
+    // proposal. The user's captured order still owns the session, but current
+    // storage owns whether each chore can enter new work at all.
+    const requestedIds = [...new Set((proposal?.tasks || [])
+      .map(task => task?._id).filter(Boolean))]
+    const currentTasks = await listTasks(requestedIds)
+    const currentById = new Map(currentTasks.map(task => [task._id, task]))
+    const eligibleTasks = requestedIds
+      .map(id => currentById.get(id))
+      .filter(attachableTask)
+    const eligibleIds = new Set(eligibleTasks.map(task => task._id))
+    const rejectedTaskIds = requestedIds.filter(id => !eligibleIds.has(id))
+    if (!eligibleTasks.length) {
+      return {
+        aggregate: null, restored: false, reason: 'no_eligible_tasks', rejectedTaskIds
+      }
+    }
+    const revalidatedProposal = { ...proposal, tasks: eligibleTasks }
+    const created = await createSessionRecord(buildSessionDraft(revalidatedProposal, nowMs))
     const persisted = created?._id ? await getSession(created._id) : null
     if (!persisted) throw new Error('The new session could not be read after creation.')
-    return { aggregate: await hydrate(persisted, nowMs), restored: false }
+    return {
+      aggregate: await hydrate(persisted, nowMs), restored: false, rejectedTaskIds
+    }
   }
 
   async function pause (sessionId, atMs = now()) {
@@ -224,24 +249,29 @@ export function createSessionStore ({
     if (!openToAdditions) return aggregate
     const requestedIds = [...new Set(taskIds || [])]
     const requestedTasks = await listTasks(requestedIds)
+    const requestedById = new Map(requestedTasks.map(task => [task._id, task]))
     if (requestedTasks.length !== requestedIds.length ||
-      requestedTasks.some(task => !attachableTask(task))) {
+      requestedTasks.some(task => !liveTask(task))) {
       throw new Error(suggestionTaskIds
         ? 'That task is no longer available as a suggestion.'
         : 'That task is no longer available.')
     }
+    const attachableIds = requestedIds.filter(id => attachableTask(requestedById.get(id)))
+    const attachableTasks = attachableIds.map(id => requestedById.get(id))
+    const rejectedTaskIds = requestedIds.filter(id => !isTaskEligible(requestedById.get(id)))
+    if (!attachableIds.length) return { ...aggregate, rejectedTaskIds }
     const taskBundle = [...new Set([
       ...(aggregate.session.taskBundle || []),
-      ...requestedIds
+      ...attachableIds
     ])]
     if (suggestionTaskIds !== null) {
       const existingEntries = normalizeContinuationSuggestionEntries(
         aggregate.session.continuationSuggestionEntries
       )
       const entryIds = new Set(existingEntries.map(entry => entry.taskId))
-      const candidateTasks = requestedTasks.filter(task => !entryIds.has(task._id))
+      const candidateTasks = attachableTasks.filter(task => !entryIds.has(task._id))
       const requestedSuggestionIds = new Set(suggestionTaskIds || [])
-      if (requestedIds.some(id => !requestedSuggestionIds.has(id)) ||
+      if (attachableIds.some(id => !requestedSuggestionIds.has(id)) ||
         candidateTasks.some(task => !(Number(task.estimatedDuration) > 0))) {
         throw new Error('That task is no longer available as a suggestion.')
       }
@@ -259,7 +289,7 @@ export function createSessionStore ({
     } else {
       await updateSessionRecord(sessionId, { taskBundle })
     }
-    return refresh(sessionId, atMs)
+    return { ...(await refresh(sessionId, atMs)), rejectedTaskIds }
   }
 
   async function resume (sessionId, atMs = now()) {

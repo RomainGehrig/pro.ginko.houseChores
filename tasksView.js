@@ -38,14 +38,20 @@ import { runArchiveAction } from './archiveView.js'
 import { sessionStore } from './sessionStore.js'
 import { sessionPicks } from './sessionPicks.js'
 import { bundleTotal, pickedBundle } from './pickingLogic.js'
+import { isAsNeededTask, isTaskEligible, taskModeFields } from './taskModeLogic.js'
+import { deferReadinessFields, markReadyFields } from './asNeededLogic.js'
+import { asNeededCategoryPillsHtml, asNeededScreenHtml } from './asNeededView.js'
 import {
-  sessionAddActionLabel, sessionAddLanded, sessionAddNote, sessionAddTarget,
+  sessionAddActionLabel, sessionAddLanded, sessionAddNote, sessionAddRejected, sessionAddTarget,
   sessionFloatModel, sessionMarks, sessionUnderWay
 } from './sessionAdd.js'
 import { setCurrentSessionAggregate, state } from './state.js'
 
 let tasksCache = []
 const pendingTaskArchives = new Map()
+const taskOperationQueues = new Map()
+let tasksRefreshGeneration = 0
+let tasksViewNow = Date.now
 
 // Suggestions are one optional permission, owned by Setup. Off is the default,
 // and off means the control is not there at all — not there and refusing.
@@ -61,6 +67,13 @@ const ledger = {
   openTaskId: null,
   confirmDoneId: null,
   confirmDeleteId: null
+}
+
+const asNeededState = {
+  query: '',
+  categoryId: '',
+  confirmingDoneId: null,
+  datePrompt: null
 }
 
 export function overlayPendingTaskArchives (tasks, pendingArchives) {
@@ -93,8 +106,12 @@ function announceTaskRefresh () {
   }
 }
 
-export async function initTasksView({ onSessionAggregateChange = null } = {}) {
+export async function initTasksView({
+  onSessionAggregateChange = null,
+  now = Date.now
+} = {}) {
   applySessionAggregate = onSessionAggregateChange
+  tasksViewNow = now
   document.getElementById('addTasksBtn').addEventListener('click', handleAddTasks)
   document.getElementById('enrichBtn').addEventListener('click', handleEnrich)
   document.getElementById('proposedCards').addEventListener('click', handleProposedClick)
@@ -115,6 +132,13 @@ export async function initTasksView({ onSessionAggregateChange = null } = {}) {
   document.getElementById('choreSearch').addEventListener('input', event => {
     ledger.query = event.target.value
     renderLedger()
+  })
+  document.getElementById('asNeededCards')?.addEventListener('click', handleAsNeededClick)
+  document.getElementById('asNeededCards')?.addEventListener('input', handleAsNeededInput)
+  document.getElementById('asNeededCategoryFilter')?.addEventListener('click', handleAsNeededCategoryClick)
+  document.getElementById('asNeededSearch')?.addEventListener('input', event => {
+    asNeededState.query = event.target.value
+    renderAsNeeded()
   })
 
   categoryLocationStore.subscribe(renderTasksAfterReferencePublication)
@@ -158,31 +182,61 @@ export function refreshSessionMarks () {
   if (typeof document !== 'undefined' && document.getElementById('activeCards')) renderLedger()
 }
 
-export async function refreshTaskCache ({
+async function refreshTaskCachePublication ({
   readTasks = listAllTasks,
   pendingArchives = pendingTaskArchives
 } = {}) {
+  const refreshGeneration = ++tasksRefreshGeneration
   const fetched = await readTasks()
+  // A task read is a snapshot of the entire cache. A later read or optimistic
+  // replacement owns publication, even when this older response arrives last.
+  if (refreshGeneration !== tasksRefreshGeneration) {
+    return { published: false, tasks: getActiveTasks() }
+  }
   tasksCache = overlayPendingTaskArchives(fetched, pendingArchives)
+  reconcileAsNeededTransientState()
   // A pick is a chore you mean to do next, so one that has left the list is not
   // a pick any more — left behind, it would put the chore back in the session
   // the day it is restored. What the server holds is what counts here: an
   // archive still waiting on its undo keeps its pick, to give back with the
   // chore if the undo comes.
-  sessionPicks.retain(fetched.filter(stillOnTheList).map(task => task._id))
-  return getActiveTasks()
+  sessionPicks.retain(fetched.filter(availableLiveTask).map(task => task._id))
+  return { published: true, tasks: getActiveTasks() }
+}
+
+export async function refreshTaskCache (options = {}) {
+  return (await refreshTaskCachePublication(options)).tasks
 }
 
 export async function refreshTasksView() {
-  await refreshTaskCache()
+  const publication = await refreshTaskCachePublication()
+  if (!publication.published) return
   renderTasks()
   announceTaskRefresh()
+}
+
+function reconcileAsNeededTransientState () {
+  const confirmingTask = tasksCache.find(task => task._id === asNeededState.confirmingDoneId)
+  if (!confirmingTask || !liveTask(confirmingTask) || !isAsNeededTask(confirmingTask) ||
+    confirmingTask.readiness !== 'ready') {
+    asNeededState.confirmingDoneId = null
+  }
+
+  const prompt = asNeededState.datePrompt
+  if (!prompt) return
+  const promptTask = tasksCache.find(task => task._id === prompt.taskId)
+  const applicableReadiness = prompt?.action === 'not-ready' ? 'ready' : 'waiting'
+  if (!promptTask || !liveTask(promptTask) || !isAsNeededTask(promptTask) ||
+    promptTask.schedule?.type !== 'one_off' || promptTask.readiness !== applicableReadiness) {
+    asNeededState.datePrompt = null
+  }
 }
 
 function renderTasks() {
   const snapshot = categoryLocationStore.getSnapshot()
   renderProposed()
   renderLedger(snapshot)
+  renderAsNeeded(snapshot)
   syncEnrichmentAvailability()
 }
 
@@ -257,20 +311,204 @@ function restoreTaskEditorDrafts (drafts) {
   }
 }
 
-const stillOnTheList = task =>
+const liveTask = task =>
   task.status === 'active' || task.status === 'approved_recurring'
 
+const availableLiveTask = task => liveTask(task) && isTaskEligible(task)
+
 export function getActiveTasks() {
-  return tasksCache.filter(stillOnTheList)
+  return tasksCache.filter(availableLiveTask)
 }
 
-export function replaceCachedTask (replacement) {
+export function getAsNeededTasks () {
+  return tasksCache.filter(task => liveTask(task) && isAsNeededTask(task))
+}
+
+export function replaceCachedTask (replacement, { notify = true } = {}) {
   const index = tasksCache.findIndex(task => task._id === replacement?._id)
   if (index < 0) return false
+  // Do this before replacing so an already-fetched aggregate cannot overwrite
+  // the new optimistic task while its own write and refresh are still moving.
+  tasksRefreshGeneration++
   tasksCache = tasksCache.map((task, taskIndex) =>
     taskIndex === index ? replacement : task)
-  announceTaskRefresh()
+  if (notify) announceTaskRefresh()
   return true
+}
+
+const replaceCachedTaskSilently = replacement =>
+  replaceCachedTask(replacement, { notify: false })
+
+export async function saveChoreEditorFields (task, fields, {
+  getCurrent = id => tasksCache.find(item => item._id === id),
+  replace = replaceCachedTaskSilently,
+  render = renderTasks,
+  update = updateTask,
+  picks = sessionPicks,
+  eligibleIds = () => tasksCache.filter(availableLiveTask).map(item => item._id),
+  showFailure = message => showEditorFailure(message)
+} = {}) {
+  try {
+    await update(task._id, fields)
+  } catch {
+    const message = "Couldn't save that. The chore is unchanged."
+    showFailure(message)
+    return { ok: false, stage: 'write', message }
+  }
+
+  // Publication starts only after the write is durable. replaceCachedTask also
+  // invalidates any aggregate read that captured the older task beforehand.
+  const current = getCurrent(task._id) || task
+  replace({ ...current, ...fields })
+  reconcileAsNeededTransientState()
+  picks.retain(eligibleIds())
+  render()
+  announceTaskRefresh()
+  return { ok: true, stage: null, message: '' }
+}
+
+// Readiness and completion both rewrite the same task record. Every click gets
+// a turn in arrival order, even after the prior turn fails, and each turn reads
+// the cache left by the turn before it rather than the card that was clicked.
+function enqueueTaskOperation (taskId, operation) {
+  const previous = taskOperationQueues.get(taskId)
+  const pending = previous ? previous.then(operation, operation) : operation()
+  let tracked
+  tracked = pending.finally(() => {
+    if (taskOperationQueues.get(taskId) === tracked) {
+      taskOperationQueues.delete(taskId)
+    }
+  })
+  taskOperationQueues.set(taskId, tracked)
+  return tracked
+}
+
+async function runAsNeededTaskUpdate (task, fieldsForTurn, {
+  getCurrent = id => tasksCache.find(item => item._id === id),
+  replace = replaceCachedTaskSilently,
+  render = renderTasks,
+  update = updateTask,
+  refresh = refreshTasksView,
+  picks = sessionPicks,
+  clearFeedback = () => {
+    if (typeof document !== 'undefined' && document.getElementById('asNeededStatus')) {
+      showEditorNote('', 'as-needed')
+    }
+  },
+  showFailure = message => showEditorFailure(message, 'as-needed')
+} = {}) {
+  clearFeedback()
+  const original = getCurrent(task._id) || task
+  const fields = typeof fieldsForTurn === 'function'
+    ? fieldsForTurn(original)
+    : fieldsForTurn
+  if (!fields || typeof fields !== 'object') {
+    const message = 'That readiness action no longer applies. The chore is unchanged.'
+    showFailure(message)
+    return { ok: false, stage: 'validation', message }
+  }
+  const optimistic = { ...original, ...fields }
+  const wasPicked = picks.isPicked(task._id)
+
+  if (replace(optimistic) === false) {
+    const message = 'That chore is no longer in this list. Nothing was changed.'
+    showFailure(message)
+    return { ok: false, stage: 'validation', message }
+  }
+  if (optimistic.readiness === 'waiting' && wasPicked) {
+    picks.toggle(task._id)
+  }
+  render()
+  announceTaskRefresh()
+
+  const result = await saveTaskWithRefresh(
+    () => update(task._id, fields),
+    refresh
+  )
+  if (result.stage === 'write') {
+    replace(original)
+    const nowPicked = picks.isPicked(task._id)
+    if (nowPicked !== wasPicked) {
+      picks.toggle(task._id)
+    }
+    render()
+    announceTaskRefresh()
+    const message = "Couldn't update that. The chore is unchanged."
+    showFailure(message)
+    return { ...result, message }
+  }
+  if (result.stage === 'refresh') showFailure(result.message)
+  return result
+}
+
+export function updateAsNeededTaskOptimistically (task, fieldsForTurn, dependencies = {}) {
+  return enqueueTaskOperation(task._id, () =>
+    runAsNeededTaskUpdate(task, fieldsForTurn, dependencies))
+}
+
+function asNeededFilterCategoryName (snapshot) {
+  return (snapshot.categories || [])
+    .find(category => category._id === asNeededState.categoryId)?.name || 'All'
+}
+
+function currentAsNeededState (snapshot) {
+  return {
+    ...asNeededState,
+    filter: {
+      query: asNeededState.query,
+      category: asNeededFilterCategoryName(snapshot)
+    }
+  }
+}
+
+function rememberAsNeededFocus (container) {
+  const active = document.activeElement
+  if (!active || typeof container.contains !== 'function' || !container.contains(active)) return null
+  const row = active.closest?.('.as-needed-row')
+  const taskId = active.dataset?.id || row?.dataset?.id
+  if (!taskId) return null
+  const controlClass = [...(active.classList || [])]
+    .find(name => name.startsWith('as-needed-')) || null
+  return { taskId, controlClass }
+}
+
+function restoreAsNeededFocus (container, focusKey) {
+  if (!focusKey || typeof container.querySelectorAll !== 'function') return
+  const row = [...container.querySelectorAll('.as-needed-row')]
+    .find(item => item.dataset?.id === focusKey.taskId)
+  const preferred = focusKey.controlClass
+    ? row?.querySelector?.('.' + focusKey.controlClass)
+    : null
+  const inverseClass = focusKey.controlClass === 'as-needed-ready'
+    ? 'as-needed-not-ready'
+    : focusKey.controlClass === 'as-needed-not-ready'
+      ? 'as-needed-ready'
+      : null
+  const inverse = inverseClass ? row?.querySelector?.('.' + inverseClass) : null
+  const target = preferred || inverse || row?.querySelector?.('.as-needed-edit') ||
+    document.querySelector?.('#view-as-needed .route-heading')
+  target?.focus?.()
+}
+
+function renderAsNeeded (snapshot = categoryLocationStore.getSnapshot()) {
+  const container = document.getElementById('asNeededCards')
+  if (!container) return
+  const focusKey = rememberAsNeededFocus(container)
+
+  const tasks = getAsNeededTasks()
+  const state = currentAsNeededState(snapshot)
+  const readyCount = tasks.filter(task => task.readiness === 'ready').length
+  const countLine = document.getElementById('asNeededCountLine')
+  if (countLine) countLine.textContent = tasks.length + ' as needed · ' + readyCount + ' ready'
+
+  const categoryFilter = document.getElementById('asNeededCategoryFilter')
+  if (categoryFilter) {
+    categoryFilter.innerHTML = asNeededCategoryPillsHtml(
+      selectableReferences(snapshot.categories), state)
+  }
+  container.innerHTML = asNeededScreenHtml(
+    tasks, snapshot, localDateFromDate(new Date(tasksViewNow())), state)
+  restoreAsNeededFocus(container, focusKey)
 }
 
 export async function saveTaskEditorFields (taskId, fields, {
@@ -384,9 +622,9 @@ export function buildInboxCountLine (proposedCount) {
   return 'Capture · ' + proposedCount + ' waiting'
 }
 
-export function buildChoresCountLine (activeCount) {
-  if (activeCount === 0) return 'Chores · none yet'
-  return 'Chores · ' + activeCount + ' active'
+export function buildChoresCountLine (view, count) {
+  const state = view === 'archive' ? 'archived' : view === 'unscheduled' ? 'unscheduled' : 'available'
+  return 'Chores · ' + (count === 0 ? 'none' : count) + ' ' + state
 }
 
 export function renderInboxNavigation (
@@ -587,16 +825,20 @@ function renderSessionFloat () {
 }
 
 function renderLedger (snapshot = categoryLocationStore.getSnapshot()) {
-  const today = localDateFromDate(new Date())
+  const today = localDateFromDate(new Date(tasksViewNow()))
   const active = getActiveTasks()
   const marks = sessionMarks(
     state.currentSession, sessionPicks.getPickedIds(), active.map(task => task._id))
   const listState = ledgerState(snapshot, marks)
   const looseCount = unscheduledTasks(active, today, {}, snapshot.categories || []).length
+  const archivedCount = tasksCache.filter(task => task.status === 'archived').length
   renderSessionFloat()
 
   const countLine = document.getElementById('choresCountLine')
-  if (countLine) countLine.textContent = buildChoresCountLine(active.length)
+  const paneCount = ledger.view === 'archive'
+    ? archivedCount
+    : ledger.view === 'unscheduled' ? looseCount : active.length
+  if (countLine) countLine.textContent = buildChoresCountLine(ledger.view, paneCount)
   document.getElementById('choresViews').innerHTML = ledgerViewsHtml(looseCount, ledger.view)
   document.getElementById('choreCategoryFilter').innerHTML = ledgerCategoryPillsHtml(
     selectableReferences(snapshot.categories), ledger.categoryId)
@@ -726,6 +968,7 @@ export function buildApprovedTaskFields (task, referenceFields, duration, schedu
     estimatedDuration: duration,
     scheduledDate: scheduleResult.scheduledDate,
     schedule: scheduleResult.schedule,
+    ...taskModeFields(task, scheduleResult.taskMode),
     suggestedCategory: null,
     suggestedDuration: null,
     suggestedSchedule: null,
@@ -737,6 +980,7 @@ export function buildActiveTaskScheduleFields (task, scheduleResult) {
   return {
     scheduledDate: scheduleResult.scheduledDate,
     schedule: scheduleResult.schedule,
+    ...taskModeFields(task, scheduleResult.taskMode),
     status: scheduleResult.schedule.type === 'one_off' ? 'active' : 'approved_recurring'
   }
 }
@@ -776,8 +1020,12 @@ function syncEnrichmentAvailability() {
 
 // A fact about what just happened, in the colour everything else is in. The
 // failure line below it is the only thing on this screen that is not neutral.
-function showChoresNote (message) {
-  const status = document.getElementById('choresStatus')
+function editorStatus (origin) {
+  return document.getElementById(origin === 'as-needed' ? 'asNeededStatus' : 'choresStatus')
+}
+
+function showEditorNote (message, origin = 'chores') {
+  const status = editorStatus(origin)
   status.textContent = message
   status.removeAttribute('data-state')
   status.setAttribute('role', 'status')
@@ -791,8 +1039,8 @@ function clearChoresNote () {
   status.setAttribute('role', 'status')
 }
 
-function showChoresFailure (message) {
-  const status = document.getElementById('choresStatus')
+function showEditorFailure (message, origin = 'chores') {
+  const status = editorStatus(origin)
   status.textContent = message
   status.dataset.state = 'error'
   status.setAttribute('role', 'alert')
@@ -815,6 +1063,13 @@ function handleLedgerCategoryClick (evt) {
   if (!tab) return
   ledger.categoryId = tab.dataset.categoryId || ''
   renderLedger()
+}
+
+function handleAsNeededCategoryClick (evt) {
+  const tab = evt.target.closest('[data-category-id]')
+  if (!tab) return
+  asNeededState.categoryId = tab.dataset.categoryId || ''
+  renderAsNeeded()
 }
 
 // The estimate is one value written from three places — the two steps, the
@@ -851,38 +1106,67 @@ function handleEstimateClick (evt, card) {
 // This is the Chores-screen meaning of "Mark as done": move the chore's rhythm
 // from now without inventing a session or a timed execution. Quick Session
 // details deliberately use the same boundary.
-export async function markChoreRecentlyDone (task, {
+async function runChoreCompletion (task, {
   nowMs = Date.now(),
+  getCurrent = id => tasksCache.find(item => item._id === id),
+  replace = replaceCachedTaskSilently,
+  render = () => {
+    if (typeof document !== 'undefined' && document.getElementById('activeCards')) {
+      renderTasks()
+    }
+  },
   update = updateTask,
-  refresh = refreshTasksView
+  refresh = refreshTasksView,
+  picks = sessionPicks
 } = {}) {
-  const fields = taskUpdateForOutcome(task, 'completed', {
+  const current = getCurrent(task._id)
+  if (!current) {
+    return {
+      ok: false,
+      stage: 'validation',
+      message: 'That chore is no longer in this list. Nothing was changed.'
+    }
+  }
+  const fields = taskUpdateForOutcome(current, 'completed', {
     completedAt: nowMs,
     completionDate: localDateFromDate(new Date(nowMs))
   })
   const result = await saveTaskWithRefresh(
-    () => update(task._id, fields),
+    async () => {
+      await update(task._id, fields)
+      // If the aggregate refresh fails, storage still owns this completion.
+      // Keep the cache on that persisted state for the next queued turn.
+      replace({ ...current, ...fields })
+    },
     refresh
   )
   // Once the write has landed, this chore is no longer part of the work the
   // user plans to do next. A failed repaint must not put persisted work back.
-  if (result.stage !== 'write' && sessionPicks.isPicked(task._id)) {
-    sessionPicks.toggle(task._id)
+  if (result.stage !== 'write' && picks.isPicked(task._id)) {
+    picks.toggle(task._id)
+  }
+  if (result.stage === 'refresh') {
+    render()
+    announceTaskRefresh()
   }
   return result
+}
+
+export function markChoreRecentlyDone (task, dependencies = {}) {
+  return enqueueTaskOperation(task._id, () => runChoreCompletion(task, dependencies))
 }
 
 // Putting a chore in a session is not an edit of the chore, so it leaves the
 // editor rather than waiting for Save. Which session it means is settled before
 // the sheet opens, so the label and the act cannot disagree.
-async function addChoreToSession (task, target) {
-  if (target === 'running') return addChoreToRunningSession(task)
+async function addChoreToSession (task, target, origin) {
+  if (target === 'running') return addChoreToRunningSession(task, origin)
 
   const added = sessionPicks.toggle(task._id)
-  showChoresNote(sessionAddNote({ name: task.name, target: 'next', added }))
+  showEditorNote(sessionAddNote({ name: task.name, target: 'next', added }), origin)
 }
 
-async function addChoreToRunningSession (task) {
+async function addChoreToRunningSession (task, origin) {
   try {
     const aggregate = await sessionStore.attachTasks(
       state.currentSession._id, [task._id])
@@ -891,30 +1175,38 @@ async function addChoreToRunningSession (task) {
     // comes back untouched rather than throwing. Handing that one on to Doing
     // would carry the user off to a receipt they never asked for, on the
     // strength of an add that never happened.
-    if (!sessionAddLanded(aggregate.session, task._id)) return addChoreToFinishedSession(task)
+    if (!sessionAddLanded(aggregate.session, task._id)) {
+      if (sessionAddRejected(aggregate, task._id)) {
+        renderLedger()
+        showEditorNote(
+          sessionAddNote({ name: task.name, target: 'unavailable', added: false }), origin)
+        return
+      }
+      return addChoreToFinishedSession(task, origin)
+    }
     await applySessionAggregate?.(aggregate)
     // The picks store did not move, so nothing else will repaint the list.
     renderLedger()
-    showChoresNote(sessionAddNote({ name: task.name, target: 'running', added: true }))
+    showEditorNote(sessionAddNote({ name: task.name, target: 'running', added: true }), origin)
   } catch (error) {
-    showChoresFailure('Could not add that to the session you are doing: ' + error.message)
+    showEditorFailure('Could not add that to the session you are doing: ' + error.message, origin)
   }
 }
 
 // The session it was going into has finished. The chore still has somewhere to
 // go, so it goes to the one being put together rather than nowhere at all.
-function addChoreToFinishedSession (task) {
+function addChoreToFinishedSession (task, origin) {
   if (!sessionPicks.isPicked(task._id)) sessionPicks.toggle(task._id)
   // The session in hand is a finished one now, so the stamps it was casting
   // have to go whether or not the pick itself moved.
   renderLedger()
-  showChoresNote(sessionAddNote({ name: task.name, target: 'ended', added: true }))
+  showEditorNote(sessionAddNote({ name: task.name, target: 'ended', added: true }), origin)
 }
 
 // The editor is a dialogue of its own, so an edit can be abandoned without
 // having already been written. Only Save writes, and it writes everything at
 // once — including the name, which the row itself never let you touch.
-async function openChoreEditor (id) {
+async function openChoreEditor (id, origin = 'chores') {
   const task = tasksCache.find(item => item._id === id)
   if (!task) return
   const snapshot = categoryLocationStore.getSnapshot()
@@ -922,12 +1214,17 @@ async function openChoreEditor (id) {
   ledger.confirmDoneId = null
 
   // Both title-row controls are about the chore rather than about the edit:
-  // one files a completion, the other puts it in a session.
+  // one files a completion, the other puts eligible work in a session.
   const target = sessionAddTarget(state.currentSession, id)
+  const sessionAction = isTaskEligible(task)
+    ? choreSessionButtonHtml(sessionAddActionLabel(target, sessionPicks.isPicked(id)))
+    : ''
+  const readinessAction = !isTaskEligible(task) && isAsNeededTask(task)
+    ? '<button type="button" class="btn btn-quiet ready-btn">Mark ready</button>'
+    : ''
   const choice = await openSheet({
     title: 'Edit chore',
-    headerActionHtml: choreDoneButtonHtml() +
-      choreSessionButtonHtml(sessionAddActionLabel(target, sessionPicks.isPicked(id))),
+    headerActionHtml: choreDoneButtonHtml() + sessionAction + readinessAction,
     bodyHtml: editModalHtml(task, snapshot),
     actions: [
       { label: 'Cancel', value: null, className: 'btn btn-ghost' },
@@ -937,11 +1234,15 @@ async function openChoreEditor (id) {
 
   ledger.openTaskId = null
   const body = sheetBody()
-  if (choice === 'session') return addChoreToSession(task, target)
+  if (choice === 'session') return addChoreToSession(task, target, origin)
+  if (choice === 'ready') {
+    const today = localDateFromDate(new Date(tasksViewNow()))
+    return updateAsNeededTaskOptimistically(task, () => markReadyFields(today))
+  }
   if (choice === 'done') {
     const result = await markChoreRecentlyDone(task)
     if (!result.ok) {
-      showChoresFailure(completionFailureMessage(result))
+      showEditorFailure(completionFailureMessage(result), origin)
     }
     return result
   }
@@ -950,7 +1251,7 @@ async function openChoreEditor (id) {
       replace: replaceCachedTask,
       clearEditing: () => {},
       render: renderTasks,
-      showFailure: showChoresFailure,
+      showFailure: message => showEditorFailure(message, origin),
       pending: pendingTaskArchives
     })
   }
@@ -965,12 +1266,9 @@ async function openChoreEditor (id) {
     estimatedDuration: edit.estimatedDuration
   }
 
-  try {
-    await saveTaskEditorFields(task._id, fields)
-    renderLedger()
-  } catch {
-    showChoresFailure("Couldn't save that. The chore is unchanged.")
-  }
+  return saveChoreEditorFields(task, fields, {
+    showFailure: message => showEditorFailure(message, origin)
+  })
 }
 
 // The chore actions live inside the editor, so they close it: pressing them is
@@ -992,6 +1290,7 @@ function handleEditorClick (evt) {
     if (!armOrConfirmDone(done)) return
     return closeSheetWith('done')
   }
+  if (evt.target.closest('.ready-btn')) return closeSheetWith('ready')
   if (evt.target.closest('.session-btn')) return closeSheetWith('session')
   if (evt.target.closest('.archive-btn')) return closeSheetWith('archive')
 
@@ -1025,7 +1324,104 @@ function handleEditorChange (evt) {
 function handleLedgerClick (evt) {
   const card = evt.target.closest('.ledger-row')
   if (!card || !evt.target.closest('.ledger-row-summary')) return
-  openChoreEditor(card.dataset.id)
+  openChoreEditor(card.dataset.id, 'chores')
+}
+
+function showAsNeededDateFailure (saveButton) {
+  const prompt = saveButton.closest('.as-needed-date-prompt')
+  if (!prompt) return
+  let status = prompt.querySelector('.as-needed-date-message')
+  if (!status) {
+    status = document.createElement('p')
+    status.className = 'as-needed-date-message'
+    status.setAttribute('role', 'status')
+    prompt.appendChild(status)
+  }
+  status.textContent = 'Choose a valid date.'
+}
+
+function handleAsNeededInput (evt) {
+  const input = evt.target.closest?.('.as-needed-date')
+  if (!input || asNeededState.datePrompt?.taskId !== input.dataset.id ||
+    asNeededState.datePrompt?.action !== input.dataset.action) return
+  asNeededState.datePrompt = { ...asNeededState.datePrompt, value: input.value }
+}
+
+async function handleAsNeededClick (evt) {
+  const edit = evt.target.closest('.as-needed-edit')
+  if (edit) {
+    const card = edit.closest('.as-needed-row')
+    if (card) return openChoreEditor(card.dataset.id, 'as-needed')
+    return
+  }
+
+  const ready = evt.target.closest('.as-needed-ready')
+  const later = evt.target.closest('.as-needed-later')
+  const notReady = evt.target.closest('.as-needed-not-ready')
+  const dateSave = evt.target.closest('.as-needed-date-save')
+  const dateCancel = evt.target.closest('.as-needed-date-cancel')
+  const done = evt.target.closest('.as-needed-done')
+  const action = ready || later || notReady || dateSave || dateCancel || done
+  if (!action) return
+
+  const card = action.closest('.as-needed-row')
+  const id = action.dataset.id || card?.dataset.id
+  const task = tasksCache.find(item => item._id === id)
+  if (!task) return
+
+  if (dateCancel) {
+    asNeededState.datePrompt = null
+    renderAsNeeded()
+    return
+  }
+
+  const actionTime = new Date(tasksViewNow())
+  const today = localDateFromDate(actionTime)
+  if (ready) {
+    return updateAsNeededTaskOptimistically(task, () => markReadyFields(today))
+  }
+
+  if (later || notReady) {
+    const promptAction = later ? 'later' : 'not-ready'
+    const fields = deferReadinessFields(task, today)
+    if (!fields) {
+      asNeededState.datePrompt = { taskId: task._id, action: promptAction }
+      renderAsNeeded()
+      return
+    }
+    return updateAsNeededTaskOptimistically(task, current =>
+      deferReadinessFields(current, today))
+  }
+
+  if (dateSave) {
+    const prompt = dateSave.closest('.as-needed-date-prompt')
+    const input = prompt?.querySelector('.as-needed-date') || card?.querySelector('.as-needed-date')
+    const selectedDate = input?.value
+    const fields = deferReadinessFields(task, today, selectedDate)
+    if (!fields) {
+      showAsNeededDateFailure(dateSave)
+      return
+    }
+    const result = await updateAsNeededTaskOptimistically(task, current =>
+      deferReadinessFields(current, today, selectedDate))
+    if (result.ok && asNeededState.datePrompt?.taskId === task._id) {
+      asNeededState.datePrompt = null
+      renderAsNeeded()
+    }
+    return result
+  }
+
+  if (!armOrConfirmDone(done)) {
+    asNeededState.confirmingDoneId = task._id
+    renderAsNeeded()
+    return
+  }
+
+  const result = await markChoreRecentlyDone(task, { nowMs: actionTime.getTime() })
+  if (!result.ok) {
+    showEditorFailure(completionFailureMessage(result), 'as-needed')
+  }
+  return result
 }
 
 async function handleArchivedClick (evt) {

@@ -49,5 +49,13 @@ test('completion failures retain the useful underlying cause', () => {
     }),
     "Recorded, but couldn't refresh the chores. Reason: connection reset."
   )
+  assert.equal(
+    completionFailureMessage({
+      ok: false,
+      stage: 'validation',
+      message: 'That chore is no longer in this list. Nothing was changed.'
+    }),
+    'That chore is no longer in this list. Nothing was changed.'
+  )
   assert.equal(completionFailureMessage({ ok: true }), '')
 })
